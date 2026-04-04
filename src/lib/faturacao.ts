@@ -1,0 +1,248 @@
+import { Aula, Aluno, Explicador, precosDisciplinas } from "@/data/mockData";
+
+export function formatCurrency(value: number): string {
+  return value.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+}
+
+export function parseDurationHours(horaInicio: string, horaFim: string): number {
+  const [h1, m1] = horaInicio.split(":").map(Number);
+  const [h2, m2] = horaFim.split(":").map(Number);
+  return (h2 * 60 + m2 - h1 * 60 - m1) / 60;
+}
+
+export function formatDuration(hours: number): string {
+  const h = Math.floor(hours);
+  const m = Math.round((hours - h) * 60);
+  if (h === 0) return `${m}min`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${String(m).padStart(2, "0")}min`;
+}
+
+export function getAulaPrecoAluno(aula: Aula): number {
+  const preco = precosDisciplinas[aula.disciplina];
+  if (!preco) return 0;
+  const rate = aula.tipo === "individual" ? preco.individual : preco.grupo;
+  return parseDurationHours(aula.horaInicio, aula.horaFim) * rate;
+}
+
+export function getAulaPrecoExplicador(aula: Aula, explicador: Explicador): number {
+  return parseDurationHours(aula.horaInicio, aula.horaFim) * explicador.valorHora;
+}
+
+export interface AulaFaturacaoAluno {
+  aula: Aula;
+  presenca: "presente" | "falta_justificada" | "falta_injustificada" | null;
+  duracao: number;
+  precoHora: number;
+  valorSessao: number;
+  cobrar: boolean;
+}
+
+export interface ResumoAluno {
+  aluno: Aluno;
+  aulas: AulaFaturacaoAluno[];
+  aulasRealizadas: number;
+  horasTotais: number;
+  valorTotal: number;
+}
+
+export function calcularCobrancaAlunos(
+  aulas: Aula[],
+  alunos: Aluno[],
+  dataInicio: string,
+  dataFim: string
+): ResumoAluno[] {
+  const aulasFiltradas = aulas.filter(
+    a => a.data >= dataInicio && a.data <= dataFim
+  );
+
+  const alunoMap = new Map(alunos.map(a => [a.id, a]));
+  const resultado = new Map<string, AulaFaturacaoAluno[]>();
+
+  for (const aula of aulasFiltradas) {
+    for (const alunoId of aula.alunoIds) {
+      const presenca = aula.presencas[alunoId] ?? null;
+      const duracao = parseDurationHours(aula.horaInicio, aula.horaFim);
+      const preco = precosDisciplinas[aula.disciplina];
+      const precoHora = preco ? (aula.tipo === "individual" ? preco.individual : preco.grupo) : 0;
+      const cobrar = presenca === "presente";
+      const valorSessao = duracao * precoHora;
+
+      if (!resultado.has(alunoId)) resultado.set(alunoId, []);
+      resultado.get(alunoId)!.push({ aula, presenca, duracao, precoHora, valorSessao, cobrar });
+    }
+  }
+
+  return Array.from(resultado.entries())
+    .map(([alunoId, aulasAluno]) => {
+      const aluno = alunoMap.get(alunoId);
+      if (!aluno) return null;
+      const aulasCobradas = aulasAluno.filter(a => a.cobrar);
+      return {
+        aluno,
+        aulas: aulasAluno,
+        aulasRealizadas: aulasCobradas.length,
+        horasTotais: aulasCobradas.reduce((s, a) => s + a.duracao, 0),
+        valorTotal: aulasCobradas.reduce((s, a) => s + a.valorSessao, 0),
+      };
+    })
+    .filter((r): r is ResumoAluno => r !== null && r.aulas.length > 0)
+    .sort((a, b) => a.aluno.nome.localeCompare(b.aluno.nome));
+}
+
+export interface AulaFaturacaoExplicador {
+  aula: Aula;
+  alunosPresentes: boolean;
+  duracao: number;
+  valorHora: number;
+  valorSessao: number;
+  contabilizado: boolean;
+}
+
+export interface ResumoExplicador {
+  explicador: Explicador;
+  disciplinasLecionadas: string[];
+  aulas: AulaFaturacaoExplicador[];
+  aulasRealizadas: number;
+  horasTotais: number;
+  totalPagar: number;
+}
+
+export function calcularPagamentoExplicadores(
+  aulas: Aula[],
+  explicadores: Explicador[],
+  dataInicio: string,
+  dataFim: string
+): ResumoExplicador[] {
+  const aulasFiltradas = aulas.filter(
+    a => a.data >= dataInicio && a.data <= dataFim
+  );
+
+  const expMap = new Map(explicadores.map(e => [e.id, e]));
+  const resultado = new Map<string, AulaFaturacaoExplicador[]>();
+
+  for (const aula of aulasFiltradas) {
+    const explicador = expMap.get(aula.explicadorId);
+    if (!explicador) continue;
+
+    const alunosPresentes = aula.alunoIds.some(id => aula.presencas[id] === "presente");
+    const duracao = parseDurationHours(aula.horaInicio, aula.horaFim);
+    const contabilizado = alunosPresentes;
+
+    if (!resultado.has(aula.explicadorId)) resultado.set(aula.explicadorId, []);
+    resultado.get(aula.explicadorId)!.push({
+      aula,
+      alunosPresentes,
+      duracao,
+      valorHora: explicador.valorHora,
+      valorSessao: duracao * explicador.valorHora,
+      contabilizado,
+    });
+  }
+
+  return Array.from(resultado.entries())
+    .map(([expId, aulasExp]) => {
+      const explicador = expMap.get(expId);
+      if (!explicador) return null;
+      const contabilizadas = aulasExp.filter(a => a.contabilizado);
+      const disciplinasSet = new Set(aulasExp.map(a => a.aula.disciplina));
+      return {
+        explicador,
+        disciplinasLecionadas: Array.from(disciplinasSet),
+        aulas: aulasExp,
+        aulasRealizadas: contabilizadas.length,
+        horasTotais: contabilizadas.reduce((s, a) => s + a.duracao, 0),
+        totalPagar: contabilizadas.reduce((s, a) => s + a.valorSessao, 0),
+      };
+    })
+    .filter((r): r is ResumoExplicador => r !== null && r.aulas.length > 0)
+    .sort((a, b) => a.explicador.nome.localeCompare(b.explicador.nome));
+}
+
+// CSV export utilities
+function csvLine(fields: string[]): string {
+  return fields.map(f => `"${String(f).replace(/"/g, '""')}"`).join(";") + "\n";
+}
+
+function downloadCsv(filename: string, content: string) {
+  const bom = "\uFEFF";
+  const blob = new Blob([bom + content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function exportCobrancaDetalhada(resumos: ResumoAluno[], explicadores: Explicador[], periodo: string) {
+  const expMap = new Map(explicadores.map(e => [e.id, e]));
+  let csv = csvLine(["Aluno", "Encarregado de Educação", "Email Encarregado", "Data", "Hora Início", "Hora Fim", "Disciplina", "Tipo", "Explicador", "Duração (min)", "Preço/Hora (€)", "Valor Sessão (€)", "Presença", "Cobrar"]);
+  let totalGeral = 0;
+
+  for (const r of resumos) {
+    for (const a of r.aulas) {
+      const exp = expMap.get(a.aula.explicadorId);
+      const presLabel = a.presenca === "presente" ? "Presente" : a.presenca === "falta_justificada" ? "Falta Justificada" : a.presenca === "falta_injustificada" ? "Falta Injustificada" : "Não registada";
+      csv += csvLine([
+        r.aluno.nome, r.aluno.encarregado.nome, r.aluno.encarregado.email,
+        a.aula.data.split("-").reverse().join("/"), a.aula.horaInicio, a.aula.horaFim,
+        a.aula.disciplina, a.aula.tipo === "individual" ? "Individual" : "Grupo",
+        exp?.nome ?? "", String(Math.round(a.duracao * 60)),
+        a.precoHora.toFixed(2), a.valorSessao.toFixed(2), presLabel, a.cobrar ? "Sim" : "Não"
+      ]);
+    }
+    csv += csvLine([`SUBTOTAL ${r.aluno.nome}`, "", "", "", "", "", "", "", "", "", "", r.valorTotal.toFixed(2), "", ""]);
+    csv += "\n";
+    totalGeral += r.valorTotal;
+  }
+  csv += csvLine(["TOTAL GERAL", "", "", "", "", "", "", "", "", "", "", totalGeral.toFixed(2), "", ""]);
+  downloadCsv(`cobranca_alunos_${periodo}.csv`, csv);
+}
+
+export function exportCobrancaResumo(resumos: ResumoAluno[], periodo: string) {
+  let csv = csvLine(["Aluno", "Encarregado de Educação", "Email Encarregado", "Telefone Encarregado", "Nº Aulas Realizadas", "Horas Totais", "Valor Total (€)"]);
+  let total = 0;
+  for (const r of resumos) {
+    csv += csvLine([r.aluno.nome, r.aluno.encarregado.nome, r.aluno.encarregado.email, r.aluno.encarregado.telefone, String(r.aulasRealizadas), formatDuration(r.horasTotais), r.valorTotal.toFixed(2)]);
+    total += r.valorTotal;
+  }
+  csv += csvLine(["TOTAL GERAL", "", "", "", "", "", total.toFixed(2)]);
+  downloadCsv(`resumo_cobranca_${periodo}.csv`, csv);
+}
+
+export function exportPagamentoDetalhado(resumos: ResumoExplicador[], alunos: Aluno[], periodo: string) {
+  const alunoMap = new Map(alunos.map(a => [a.id, a]));
+  let csv = csvLine(["Explicador", "Email", "Data", "Hora Início", "Hora Fim", "Disciplina", "Aluno(s)", "Tipo", "Duração (min)", "Valor/Hora (€)", "Valor Sessão (€)", "Presença Aluno", "Contabilizado"]);
+  let totalGeral = 0;
+
+  for (const r of resumos) {
+    for (const a of r.aulas) {
+      const alunoNomes = a.aula.alunoIds.map(id => alunoMap.get(id)?.nome ?? id).join(", ");
+      csv += csvLine([
+        r.explicador.nome, r.explicador.email, a.aula.data.split("-").reverse().join("/"),
+        a.aula.horaInicio, a.aula.horaFim, a.aula.disciplina, alunoNomes,
+        a.aula.tipo === "individual" ? "Individual" : "Grupo",
+        String(Math.round(a.duracao * 60)), a.valorHora.toFixed(2), a.valorSessao.toFixed(2),
+        a.alunosPresentes ? "Presente" : "Falta", a.contabilizado ? "Sim" : "Não"
+      ]);
+    }
+    const subtotal = r.aulas.filter(a => a.contabilizado).reduce((s, a) => s + a.valorSessao, 0);
+    csv += csvLine([`SUBTOTAL ${r.explicador.nome}`, "", "", "", "", "", "", "", "", "", subtotal.toFixed(2), "", ""]);
+    csv += "\n";
+    totalGeral += subtotal;
+  }
+  csv += csvLine(["TOTAL GERAL", "", "", "", "", "", "", "", "", "", totalGeral.toFixed(2), "", ""]);
+  downloadCsv(`pagamento_explicadores_${periodo}.csv`, csv);
+}
+
+export function exportPagamentoResumo(resumos: ResumoExplicador[], periodo: string) {
+  let csv = csvLine(["Explicador", "Email", "Telefone", "Nº Aulas", "Horas Totais", "Valor/Hora (€)", "Total a Pagar (€)"]);
+  let total = 0;
+  for (const r of resumos) {
+    csv += csvLine([r.explicador.nome, r.explicador.email, r.explicador.telefone, String(r.aulasRealizadas), formatDuration(r.horasTotais), r.explicador.valorHora.toFixed(2), r.totalPagar.toFixed(2)]);
+    total += r.totalPagar;
+  }
+  csv += csvLine(["TOTAL GERAL", "", "", "", "", "", total.toFixed(2)]);
+  downloadCsv(`resumo_pagamentos_${periodo}.csv`, csv);
+}
