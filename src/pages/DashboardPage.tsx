@@ -51,6 +51,8 @@ export default function DashboardPage() {
     { label: "Receita Estimada", value: `${stats.receita}€`, icon: TrendingUp, change: "+8%", positive: true, color: "text-success" },
   ];
 
+  const [sheetTipo, setSheetTipo] = useState<"pagamentos" | "pre-inscricao" | "presencas" | null>(null);
+
   return (
     <div className="space-y-6 animate-fade-in">
       <h1 className="text-2xl font-bold">Dashboard</h1>
