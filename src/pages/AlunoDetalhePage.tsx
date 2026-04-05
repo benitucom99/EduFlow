@@ -76,7 +76,14 @@ export default function AlunoDetalhePage() {
               <p className="text-sm font-medium">{aluno.encarregado.nome}</p>
               <p className="text-xs text-muted-foreground">{aluno.encarregado.email}</p>
               <p className="text-xs text-muted-foreground">{aluno.encarregado.telefone}</p>
+              {aluno.nifEncarregado && <p className="text-xs text-muted-foreground">NIF: {aluno.nifEncarregado}</p>}
             </div>
+            {explicadorAtribuido && (
+              <div className="pt-4 border-t">
+                <p className="text-xs text-muted-foreground mb-2">Explicador Atribuído</p>
+                <p className="text-sm font-medium">{explicadorAtribuido.nome}</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
