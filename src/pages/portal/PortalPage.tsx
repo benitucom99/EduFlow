@@ -4,7 +4,7 @@ import { useData } from "@/contexts/DataContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CalendarPlus, Clock, BookOpen, User, X } from "lucide-react";
+import { CalendarPlus, Clock, BookOpen, User, X, GraduationCap } from "lucide-react";
 import { format, parseISO, isAfter, startOfDay } from "date-fns";
 import { pt } from "date-fns/locale";
 import MarcarAulaModal from "@/components/portal/MarcarAulaModal";
@@ -49,6 +49,8 @@ export default function PortalPage() {
           .sort((a, b) => a.data.localeCompare(b.data) || a.horaInicio.localeCompare(b.horaInicio))
           .slice(0, 5);
 
+        const explicadorAtribuido = explicadores.find(e => e.id === aluno.explicadorId);
+
         return (
           <Card key={aluno.id}>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -58,6 +60,12 @@ export default function PortalPage() {
                   {aluno.nome}
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">{aluno.escola} — {aluno.anoLetivo}º ano</p>
+                {explicadorAtribuido && (
+                  <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-1">
+                    <GraduationCap className="h-3.5 w-3.5" />
+                    Explicador: <span className="font-medium text-foreground">{explicadorAtribuido.nome}</span>
+                  </p>
+                )}
               </div>
               <Button onClick={() => openMarcar(aluno.id)}>
                 <CalendarPlus className="mr-2 h-4 w-4" /> Marcar Aula
