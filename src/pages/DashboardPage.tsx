@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useData } from "@/contexts/DataContext";
+import AcoesPendentesSheet from "@/components/dashboard/AcoesPendentesSheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Users, CalendarDays, DoorOpen, TrendingUp, ArrowUpRight, ArrowDownRight } from "lucide-react";
