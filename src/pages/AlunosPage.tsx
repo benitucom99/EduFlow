@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useData } from "@/contexts/DataContext";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,7 @@ const estadoBadge = (estado: string) => {
 };
 
 export default function AlunosPage() {
-  const { alunos, setAlunos } = useData();
+  const { alunos, setAlunos, explicadores } = useData();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
@@ -124,9 +124,10 @@ export default function AlunosPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
-                  <TableHead>Ano</TableHead>
+                  <TableHead>Ano Escolar</TableHead>
                   <TableHead className="hidden md:table-cell">Disciplinas</TableHead>
                   <TableHead className="hidden lg:table-cell">Encarregado</TableHead>
+                  <TableHead className="hidden lg:table-cell">Valor/Hora</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -155,6 +156,7 @@ export default function AlunosPage() {
                       </div>
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-sm">{aluno.encarregado.nome}</TableCell>
+                    <TableCell className="hidden lg:table-cell text-sm">{aluno.valorHora != null ? `${aluno.valorHora}€` : "—"}</TableCell>
                     <TableCell>{estadoBadge(aluno.estado)}</TableCell>
                     <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
@@ -195,17 +197,23 @@ export default function AlunosPage() {
       )}
 
       {/* Create/Edit Modal */}
-      <AlunoModal open={modalOpen} onClose={() => setModalOpen(false)} aluno={editingAluno} onSave={(data) => {
-        if (editingAluno) {
-          setAlunos(prev => prev.map(a => a.id === editingAluno.id ? { ...a, ...data } : a));
-          toast({ title: "Aluno atualizado com sucesso" });
-        } else {
-          const newAluno: Aluno = { ...data, id: `a${Date.now()}`, estado: "ativo", dataInscricao: new Date().toISOString().split("T")[0] };
-          setAlunos(prev => [...prev, newAluno]);
-          toast({ title: "Aluno criado com sucesso" });
-        }
-        setModalOpen(false);
-      }} />
+      <AlunoModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        aluno={editingAluno}
+        explicadores={explicadores}
+        onSave={(data) => {
+          if (editingAluno) {
+            setAlunos(prev => prev.map(a => a.id === editingAluno.id ? { ...a, ...data } : a));
+            toast({ title: "Aluno atualizado com sucesso" });
+          } else {
+            const newAluno: Aluno = { ...data, id: `a${Date.now()}`, estado: "ativo", dataInscricao: new Date().toISOString().split("T")[0] };
+            setAlunos(prev => [...prev, newAluno]);
+            toast({ title: "Aluno criado com sucesso" });
+          }
+          setModalOpen(false);
+        }}
+      />
 
       {/* Delete confirmation */}
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
@@ -224,39 +232,52 @@ export default function AlunosPage() {
   );
 }
 
-function AlunoModal({ open, onClose, aluno, onSave }: { open: boolean; onClose: () => void; aluno: Aluno | null; onSave: (data: any) => void }) {
-  const [nome, setNome] = useState(aluno?.nome || "");
-  const [email, setEmail] = useState(aluno?.email || "");
-  const [telefone, setTelefone] = useState(aluno?.telefone || "");
-  const [escola, setEscola] = useState(aluno?.escola || "");
-  const [anoLetivo, setAnoLetivo] = useState(String(aluno?.anoLetivo || "10"));
-  const [selectedDisc, setSelectedDisc] = useState<string[]>(aluno?.disciplinas || []);
-  const [encNome, setEncNome] = useState(aluno?.encarregado?.nome || "");
-  const [encEmail, setEncEmail] = useState(aluno?.encarregado?.email || "");
-  const [encTelefone, setEncTelefone] = useState(aluno?.encarregado?.telefone || "");
+function AlunoModal({ open, onClose, aluno, explicadores, onSave }: {
+  open: boolean;
+  onClose: () => void;
+  aluno: Aluno | null;
+  explicadores: { id: string; nome: string; estado: string }[];
+  onSave: (data: any) => void;
+}) {
+  const [nome, setNome] = useState("");
+  const [email, setEmail] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [escola, setEscola] = useState("");
+  const [anoLetivo, setAnoLetivo] = useState("10");
+  const [selectedDisc, setSelectedDisc] = useState<string[]>([]);
+  const [encNome, setEncNome] = useState("");
+  const [encEmail, setEncEmail] = useState("");
+  const [encTelefone, setEncTelefone] = useState("");
+  const [valorHora, setValorHora] = useState("");
+  const [explicadorId, setExplicadorId] = useState("");
+  const [nifEncarregado, setNifEncarregado] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Reset when aluno changes
-  useState(() => {
+  // Reset all fields when modal opens or aluno changes
+  useEffect(() => {
     if (open) {
       setNome(aluno?.nome || "");
       setEmail(aluno?.email || "");
       setTelefone(aluno?.telefone || "");
       setEscola(aluno?.escola || "");
-      setAnoLetivo(String(aluno?.anoLetivo || "10"));
+      setAnoLetivo(String(aluno?.anoLetivo || 10));
       setSelectedDisc(aluno?.disciplinas || []);
       setEncNome(aluno?.encarregado?.nome || "");
       setEncEmail(aluno?.encarregado?.email || "");
       setEncTelefone(aluno?.encarregado?.telefone || "");
+      setValorHora(aluno?.valorHora != null ? String(aluno.valorHora) : "");
+      setExplicadorId(aluno?.explicadorId || "");
+      setNifEncarregado(aluno?.nifEncarregado || "");
       setErrors({});
     }
-  });
+  }, [open, aluno]);
 
   const handleSave = () => {
     const e: Record<string, string> = {};
     if (!nome.trim()) e.nome = "Obrigatório";
     if (!encNome.trim()) e.encNome = "Obrigatório";
     if (!encEmail.trim()) e.encEmail = "Obrigatório";
+    if (nifEncarregado && !/^\d{9}$/.test(nifEncarregado)) e.nifEncarregado = "NIF deve ter 9 dígitos";
     setErrors(e);
     if (Object.keys(e).length > 0) return;
 
@@ -265,8 +286,13 @@ function AlunoModal({ open, onClose, aluno, onSave }: { open: boolean; onClose: 
       anoLetivo: parseInt(anoLetivo),
       disciplinas: selectedDisc,
       encarregado: { nome: encNome, email: encEmail, telefone: encTelefone },
+      valorHora: valorHora ? parseFloat(valorHora) : undefined,
+      explicadorId: explicadorId || undefined,
+      nifEncarregado: nifEncarregado || undefined,
     });
   };
+
+  const explicadoresAtivos = explicadores.filter(e => e.estado === "ativo");
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -292,10 +318,26 @@ function AlunoModal({ open, onClose, aluno, onSave }: { open: boolean; onClose: 
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Escola</Label><Input value={escola} onChange={e => setEscola(e.target.value)} /></div>
               <div>
-                <Label>Ano Letivo</Label>
+                <Label>Ano Escolar</Label>
                 <Select value={anoLetivo} onValueChange={setAnoLetivo}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>{[7, 8, 9, 10, 11, 12].map(a => <SelectItem key={a} value={String(a)}>{a}º ano</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Valor/Hora (€)</Label>
+                <Input type="number" min="0" step="0.5" value={valorHora} onChange={e => setValorHora(e.target.value)} placeholder="Ex: 20" />
+              </div>
+              <div>
+                <Label>Explicador Atribuído</Label>
+                <Select value={explicadorId} onValueChange={setExplicadorId}>
+                  <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Nenhum</SelectItem>
+                    {explicadoresAtivos.map(e => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
+                  </SelectContent>
                 </Select>
               </div>
             </div>
@@ -324,9 +366,25 @@ function AlunoModal({ open, onClose, aluno, onSave }: { open: boolean; onClose: 
               <Input value={encEmail} onChange={e => setEncEmail(e.target.value)} />
               {errors.encEmail && <p className="text-xs text-destructive mt-1">{errors.encEmail}</p>}
             </div>
-            <div>
-              <Label>Telefone</Label>
-              <Input value={encTelefone} onChange={e => setEncTelefone(e.target.value)} />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Telefone</Label>
+                <Input value={encTelefone} onChange={e => setEncTelefone(e.target.value)} />
+              </div>
+              <div>
+                <Label>NIF</Label>
+                <Input
+                  value={nifEncarregado}
+                  onChange={e => {
+                    const v = e.target.value.replace(/\D/g, "").slice(0, 9);
+                    setNifEncarregado(v);
+                  }}
+                  placeholder="123456789"
+                  maxLength={9}
+                  inputMode="numeric"
+                />
+                {errors.nifEncarregado && <p className="text-xs text-destructive mt-1">{errors.nifEncarregado}</p>}
+              </div>
             </div>
           </TabsContent>
         </Tabs>
