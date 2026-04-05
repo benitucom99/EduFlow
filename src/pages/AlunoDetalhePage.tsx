@@ -20,6 +20,7 @@ export default function AlunoDetalhePage() {
   const navigate = useNavigate();
   const { alunos, aulas, explicadores } = useData();
   const aluno = alunos.find(a => a.id === id);
+  const explicadorAtribuido = explicadores.find(e => e.id === aluno?.explicadorId);
 
   const aulasDoAluno = useMemo(() => {
     return aulas.filter(a => a.alunoIds.includes(id!)).sort((a, b) => b.data.localeCompare(a.data));
