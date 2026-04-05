@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useData } from "@/contexts/DataContext";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Eye, LayoutGrid, LayoutList } from "lucide-react";
+import { Plus, Search, Eye, Pencil, LayoutGrid, LayoutList } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Explicador, disciplinas, Disponibilidade } from "@/data/mockData";
 
@@ -87,7 +87,10 @@ export default function ExplicadoresPage() {
                   <TableCell className="font-medium">{exp.valorHora}€</TableCell>
                   <TableCell><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${exp.estado === "ativo" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>{exp.estado}</span></TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => navigate(`/explicadores/${exp.id}`)}><Eye className="h-4 w-4" /></Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/explicadores/${exp.id}`)}><Eye className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditing(exp); setModalOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -108,7 +111,10 @@ export default function ExplicadoresPage() {
                 </div>
                 <div className="flex flex-wrap gap-1 mb-3">{exp.disciplinas.map(d => <Badge key={d} variant="secondary" className="text-xs">{d}</Badge>)}</div>
                 <p className="text-2xl font-bold text-primary mb-4">{exp.valorHora}€<span className="text-sm font-normal text-muted-foreground">/hora</span></p>
-                <Button variant="outline" className="w-full" onClick={() => navigate(`/explicadores/${exp.id}`)}>Ver perfil</Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => navigate(`/explicadores/${exp.id}`)}>Ver perfil</Button>
+                  <Button variant="outline" size="icon" onClick={() => { setEditing(exp); setModalOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -130,34 +136,47 @@ export default function ExplicadoresPage() {
 }
 
 function ExplicadorModal({ open, onClose, explicador, onSave }: { open: boolean; onClose: () => void; explicador: Explicador | null; onSave: (data: any) => void }) {
-  const [nome, setNome] = useState(explicador?.nome || "");
-  const [email, setEmail] = useState(explicador?.email || "");
-  const [telefone, setTelefone] = useState(explicador?.telefone || "");
-  const [habilitacoes, setHabilitacoes] = useState(explicador?.habilitacoes || "");
-  const [valorHora, setValorHora] = useState(String(explicador?.valorHora || "15"));
-  const [selectedDisc, setSelectedDisc] = useState<string[]>(explicador?.disciplinas || []);
-  const [disp, setDisp] = useState<Disponibilidade[]>(explicador?.disponibilidade || []);
+  const [nome, setNome] = useState("");
+  const [email, setEmail] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [habilitacoes, setHabilitacoes] = useState("");
+  const [valorHora, setValorHora] = useState("15");
+  const [selectedDisc, setSelectedDisc] = useState<string[]>([]);
+  const [disp, setDisp] = useState<Disponibilidade[]>([]);
+  const [iban, setIban] = useState("");
+  const [nif, setNif] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  useState(() => {
+  useEffect(() => {
     if (open) {
       setNome(explicador?.nome || "");
       setEmail(explicador?.email || "");
       setTelefone(explicador?.telefone || "");
       setHabilitacoes(explicador?.habilitacoes || "");
-      setValorHora(String(explicador?.valorHora || "15"));
+      setValorHora(String(explicador?.valorHora || 15));
       setSelectedDisc(explicador?.disciplinas || []);
       setDisp(explicador?.disponibilidade || []);
+      setIban(explicador?.iban || "");
+      setNif(explicador?.nif || "");
+      setErrors({});
     }
-  });
+  }, [open, explicador]);
 
   const handleSave = () => {
     const e: Record<string, string> = {};
     if (!nome.trim()) e.nome = "Obrigatório";
     if (selectedDisc.length === 0) e.disc = "Selecione pelo menos 1";
+    if (nif && !/^\d{9}$/.test(nif)) e.nif = "NIF deve ter 9 dígitos";
     setErrors(e);
     if (Object.keys(e).length > 0) return;
-    onSave({ nome, email, telefone, habilitacoes, valorHora: parseFloat(valorHora), disciplinas: selectedDisc, disponibilidade: disp });
+    onSave({
+      nome, email, telefone, habilitacoes,
+      valorHora: parseFloat(valorHora),
+      disciplinas: selectedDisc,
+      disponibilidade: disp,
+      iban: iban || undefined,
+      nif: nif || undefined,
+    });
   };
 
   return (
@@ -165,7 +184,11 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: { open: boolean;
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{explicador ? "Editar Explicador" : "Novo Explicador"}</DialogTitle></DialogHeader>
         <Tabs defaultValue="dados">
-          <TabsList className="w-full"><TabsTrigger value="dados" className="flex-1">Dados</TabsTrigger><TabsTrigger value="disponibilidade" className="flex-1">Disponibilidade</TabsTrigger></TabsList>
+          <TabsList className="w-full">
+            <TabsTrigger value="dados" className="flex-1">Dados</TabsTrigger>
+            <TabsTrigger value="financeiro" className="flex-1">Financeiro</TabsTrigger>
+            <TabsTrigger value="disponibilidade" className="flex-1">Disponibilidade</TabsTrigger>
+          </TabsList>
           <TabsContent value="dados" className="space-y-4 mt-4">
             <div><Label>Nome *</Label><Input value={nome} onChange={e => setNome(e.target.value)} />{errors.nome && <p className="text-xs text-destructive mt-1">{errors.nome}</p>}</div>
             <div className="grid grid-cols-2 gap-3">
@@ -178,6 +201,26 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: { open: boolean;
               <div className="grid grid-cols-2 gap-2 mt-2">{disciplinas.map(d => (
                 <div key={d} className="flex items-center gap-2"><Checkbox checked={selectedDisc.includes(d)} onCheckedChange={c => setSelectedDisc(prev => c ? [...prev, d] : prev.filter(x => x !== d))} /><span className="text-sm">{d}</span></div>
               ))}</div>
+            </div>
+          </TabsContent>
+          <TabsContent value="financeiro" className="space-y-4 mt-4">
+            <div>
+              <Label>IBAN</Label>
+              <Input value={iban} onChange={e => setIban(e.target.value.toUpperCase())} placeholder="PT50..." maxLength={25} />
+            </div>
+            <div>
+              <Label>NIF</Label>
+              <Input
+                value={nif}
+                onChange={e => {
+                  const v = e.target.value.replace(/\D/g, "").slice(0, 9);
+                  setNif(v);
+                }}
+                placeholder="123456789"
+                maxLength={9}
+                inputMode="numeric"
+              />
+              {errors.nif && <p className="text-xs text-destructive mt-1">{errors.nif}</p>}
             </div>
           </TabsContent>
           <TabsContent value="disponibilidade" className="mt-4">
@@ -203,7 +246,7 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: { open: boolean;
                           const dayDispsLocal = disp.filter(x => x.diaSemana === day);
                           const removeIdx = dayDispsLocal.indexOf(d);
                           let count = 0;
-                          setDisp(prev => prev.filter((x, i) => {
+                          setDisp(prev => prev.filter((x) => {
                             if (x.diaSemana === day) { if (count === removeIdx) { count++; return false; } count++; }
                             return true;
                           }));
