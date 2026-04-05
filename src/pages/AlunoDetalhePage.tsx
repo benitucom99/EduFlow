@@ -53,8 +53,11 @@ export default function AlunoDetalhePage() {
               <h2 className="text-xl font-bold">{aluno.nome}</h2>
               <div className="flex justify-center gap-2 mt-2">
                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${estadoMap[aluno.estado]}`}>{aluno.estado}</span>
-                <Badge variant="outline">{aluno.anoLetivo}º ano</Badge>
+                <Badge variant="outline">{aluno.anoLetivo}º ano escolar</Badge>
               </div>
+              {aluno.valorHora != null && (
+                <p className="text-sm text-muted-foreground mt-1">Valor/Hora: <span className="font-medium text-foreground">{aluno.valorHora}€</span></p>
+              )}
             </div>
             <div className="space-y-3 pt-4 border-t">
               <div className="flex items-center gap-3 text-sm"><Mail className="h-4 w-4 text-muted-foreground" /> {aluno.email}</div>
