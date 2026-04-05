@@ -7,8 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, Loader2 } from "lucide-react";
-import { format, getDay, parseISO, addDays, addWeeks } from "date-fns";
+import { CalendarIcon, Loader2, Users, Eye } from "lucide-react";
+import { format, getDay, addWeeks } from "date-fns";
 import { pt } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -30,18 +30,26 @@ export default function MarcarAulaModal({ open, onOpenChange, preSelectedAlunoId
   const [tipo, setTipo] = useState<TipoAula>("individual");
   const [data, setData] = useState<Date | undefined>();
   const [slot, setSlot] = useState("");
-  const [recorrencia, setRecorrencia] = useState<"unica" | "semanal" | "quinzenal">("unica");
+  const [recorrencia, setRecorrencia] = useState<"unica" | "semanal" | "quinzenal" | "ano_letivo">("unica");
   const [saving, setSaving] = useState(false);
+  const [showOtherTeachers, setShowOtherTeachers] = useState(false);
 
   const educandos = alunos.filter(a => educandoIds.includes(a.id));
   const selectedAluno = alunos.find(a => a.id === alunoId);
+  const assignedExplicador = explicadores.find(e => e.id === selectedAluno?.explicadorId);
 
   const disciplinasDisponiveis = selectedAluno?.disciplinas || [];
 
+  // Explicadores filtered by discipline + teacher mode
   const explicadoresDisponiveis = useMemo(() => {
     if (!disciplina) return [];
-    return explicadores.filter(e => e.estado === "ativo" && e.disciplinas.includes(disciplina));
-  }, [disciplina, explicadores]);
+    const allForDisciplina = explicadores.filter(e => e.estado === "ativo" && e.disciplinas.includes(disciplina));
+
+    if (!showOtherTeachers && assignedExplicador && allForDisciplina.some(e => e.id === assignedExplicador.id)) {
+      return [assignedExplicador];
+    }
+    return allForDisciplina;
+  }, [disciplina, explicadores, showOtherTeachers, assignedExplicador]);
 
   const salasDisponiveis = useMemo(() => {
     return salas.filter(s => s.estado === "disponível");
@@ -107,6 +115,7 @@ export default function MarcarAulaModal({ open, onOpenChange, preSelectedAlunoId
     setData(undefined);
     setSlot("");
     setRecorrencia("unica");
+    setShowOtherTeachers(false);
   };
 
   const handleSubmit = () => {
@@ -122,6 +131,8 @@ export default function MarcarAulaModal({ open, onOpenChange, preSelectedAlunoId
       for (let i = 1; i <= 11; i++) dates.push(addWeeks(data, i));
     } else if (recorrencia === "quinzenal") {
       for (let i = 1; i <= 5; i++) dates.push(addWeeks(data, i * 2));
+    } else if (recorrencia === "ano_letivo") {
+      for (let i = 1; i <= 35; i++) dates.push(addWeeks(data, i));
     }
 
     const newAulas: Aula[] = dates.map((d, i) => ({
@@ -136,7 +147,7 @@ export default function MarcarAulaModal({ open, onOpenChange, preSelectedAlunoId
       tipo,
       estado: "agendada" as const,
       presencas: {},
-      recorrencia,
+      recorrencia: recorrencia === "ano_letivo" ? "semanal" : recorrencia,
     }));
 
     setTimeout(() => {
@@ -154,6 +165,13 @@ export default function MarcarAulaModal({ open, onOpenChange, preSelectedAlunoId
   const selectedSlotInfo = slotsDisponiveis.find(s => `${s.hora}-${s.explicadorId}` === slot);
   const expName = selectedSlotInfo ? explicadores.find(e => e.id === selectedSlotInfo.explicadorId)?.nome : null;
 
+  const recurrenceLabel: Record<string, string> = {
+    unica: "",
+    semanal: "12 sessões semanais",
+    quinzenal: "6 sessões quinzenais",
+    ano_letivo: "~36 sessões (ano letivo)",
+  };
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v); }}>
       <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
@@ -165,7 +183,7 @@ export default function MarcarAulaModal({ open, onOpenChange, preSelectedAlunoId
           {educandos.length > 1 && (
             <div className="space-y-2">
               <Label>Educando</Label>
-              <Select value={alunoId} onValueChange={v => { setAlunoId(v); setDisciplina(""); setSlot(""); }}>
+              <Select value={alunoId} onValueChange={v => { setAlunoId(v); setDisciplina(""); setSlot(""); setShowOtherTeachers(false); }}>
                 <SelectTrigger><SelectValue placeholder="Selecione o educando" /></SelectTrigger>
                 <SelectContent>
                   {educandos.map(a => (
@@ -173,6 +191,33 @@ export default function MarcarAulaModal({ open, onOpenChange, preSelectedAlunoId
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+
+          {/* Assigned teacher info */}
+          {alunoId && assignedExplicador && (
+            <div className="rounded-md border bg-muted/50 p-3">
+              <div className="flex items-center justify-between">
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Explicador atribuído: </span>
+                  <span className="font-medium">{assignedExplicador.nome}</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs h-7"
+                  onClick={() => { setShowOtherTeachers(!showOtherTeachers); setSlot(""); }}
+                >
+                  <Eye className="h-3 w-3 mr-1" />
+                  {showOtherTeachers ? "Apenas o meu explicador" : "Ver outros explicadores"}
+                </Button>
+              </div>
+              {showOtherTeachers && (
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  <Users className="h-3 w-3 inline mr-1" />
+                  A mostrar horários de todos os explicadores disponíveis
+                </p>
+              )}
             </div>
           )}
 
@@ -247,12 +292,25 @@ export default function MarcarAulaModal({ open, onOpenChange, preSelectedAlunoId
             <div className="space-y-2">
               <Label>Horário disponível</Label>
               {slotsDisponiveis.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Sem horários disponíveis neste dia.</p>
+                <p className="text-sm text-muted-foreground">
+                  Sem horários disponíveis neste dia.
+                  {!showOtherTeachers && assignedExplicador && (
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="text-xs h-auto p-0 ml-1"
+                      onClick={() => { setShowOtherTeachers(true); setSlot(""); }}
+                    >
+                      Ver outros explicadores?
+                    </Button>
+                  )}
+                </p>
               ) : (
                 <div className="grid grid-cols-3 gap-2">
                   {slotsDisponiveis.map(s => {
                     const key = `${s.hora}-${s.explicadorId}`;
                     const exp = explicadores.find(e => e.id === s.explicadorId);
+                    const isAssigned = exp?.id === assignedExplicador?.id;
                     return (
                       <Button
                         key={key}
@@ -262,7 +320,10 @@ export default function MarcarAulaModal({ open, onOpenChange, preSelectedAlunoId
                         onClick={() => setSlot(key)}
                       >
                         <span className="font-medium">{s.hora}–{s.horaFim}</span>
-                        <span className="text-xs opacity-70">{exp?.nome.split(" ")[0]}</span>
+                        <span className="text-xs opacity-70">
+                          {exp?.nome.split(" ")[0]}
+                          {showOtherTeachers && isAssigned && " ★"}
+                        </span>
                       </Button>
                     );
                   })}
@@ -279,6 +340,7 @@ export default function MarcarAulaModal({ open, onOpenChange, preSelectedAlunoId
                 <SelectItem value="unica">Sessão única</SelectItem>
                 <SelectItem value="semanal">Semanal (12 semanas)</SelectItem>
                 <SelectItem value="quinzenal">Quinzenal (6 sessões)</SelectItem>
+                <SelectItem value="ano_letivo">Ano letivo (~36 semanas)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -290,7 +352,7 @@ export default function MarcarAulaModal({ open, onOpenChange, preSelectedAlunoId
               <p>{data && format(data, "EEEE, d MMMM", { locale: pt })} às {selectedSlotInfo.hora}</p>
               {recorrencia !== "unica" && (
                 <Badge variant="secondary" className="mt-1">
-                  {recorrencia === "semanal" ? "12 sessões semanais" : "6 sessões quinzenais"}
+                  {recurrenceLabel[recorrencia]}
                 </Badge>
               )}
             </div>
