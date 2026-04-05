@@ -166,6 +166,12 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <AcoesPendentesSheet
+        open={sheetTipo !== null}
+        onOpenChange={(open) => { if (!open) setSheetTipo(null); }}
+        tipo={sheetTipo}
+      />
     </div>
   );
 }
