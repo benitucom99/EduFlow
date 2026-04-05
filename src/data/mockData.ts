@@ -48,6 +48,9 @@ export interface Aluno {
   encarregado: Encarregado;
   estado: EstadoAluno;
   dataInscricao: string;
+  valorHora?: number;
+  explicadorId?: string;
+  nifEncarregado?: string;
 }
 
 export const disciplinas = [
