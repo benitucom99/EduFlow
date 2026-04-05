@@ -287,7 +287,7 @@ function AlunoModal({ open, onClose, aluno, explicadores, onSave }: {
       disciplinas: selectedDisc,
       encarregado: { nome: encNome, email: encEmail, telefone: encTelefone },
       valorHora: valorHora ? parseFloat(valorHora) : undefined,
-      explicadorId: explicadorId || undefined,
+      explicadorId: explicadorId && explicadorId !== "none" ? explicadorId : undefined,
       nifEncarregado: nifEncarregado || undefined,
     });
   };
