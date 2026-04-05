@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useData } from "@/contexts/DataContext";
+import AcoesPendentesSheet from "@/components/dashboard/AcoesPendentesSheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Users, CalendarDays, DoorOpen, TrendingUp, ArrowUpRight, ArrowDownRight } from "lucide-react";
@@ -49,6 +50,8 @@ export default function DashboardPage() {
     { label: "Taxa de Ocupação", value: `${stats.ocupacao}%`, icon: DoorOpen, change: "-3%", positive: false, color: "text-warning" },
     { label: "Receita Estimada", value: `${stats.receita}€`, icon: TrendingUp, change: "+8%", positive: true, color: "text-success" },
   ];
+
+  const [sheetTipo, setSheetTipo] = useState<"pagamentos" | "pre-inscricao" | "presencas" | null>(null);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -146,11 +149,15 @@ export default function DashboardPage() {
           <CardContent>
             <div className="space-y-3">
               {[
-                { label: "Pagamentos em atraso", count: 3, color: "bg-destructive" },
-                { label: "Pré-inscrição por confirmar", count: 1, color: "bg-warning" },
-                { label: "Aulas sem presença registada", count: 2, color: "bg-secondary" },
+                { label: "Pagamentos em atraso", count: 3, color: "bg-destructive", tipo: "pagamentos" as const },
+                { label: "Pré-inscrição por confirmar", count: 1, color: "bg-warning", tipo: "pre-inscricao" as const },
+                { label: "Aulas sem presença registada", count: 2, color: "bg-secondary", tipo: "presencas" as const },
               ].map(item => (
-                <div key={item.label} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted cursor-pointer transition-colors">
+                <div
+                  key={item.label}
+                  className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted cursor-pointer transition-colors"
+                  onClick={() => setSheetTipo(item.tipo)}
+                >
                   <span className="text-sm">{item.label}</span>
                   <span className={`${item.color} text-primary-foreground text-xs font-bold px-2 py-0.5 rounded-full`}>{item.count}</span>
                 </div>
@@ -159,6 +166,12 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <AcoesPendentesSheet
+        open={sheetTipo !== null}
+        onOpenChange={(open) => { if (!open) setSheetTipo(null); }}
+        tipo={sheetTipo}
+      />
     </div>
   );
 }
