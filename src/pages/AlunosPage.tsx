@@ -335,7 +335,7 @@ function AlunoModal({ open, onClose, aluno, explicadores, onSave }: {
                 <Select value={explicadorId} onValueChange={setExplicadorId}>
                   <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
+                    <SelectItem value="none">Nenhum</SelectItem>
                     {explicadoresAtivos.map(e => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
