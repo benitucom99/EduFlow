@@ -20,6 +20,7 @@ import FaturacaoPage from "@/pages/FaturacaoPage";
 import NotFound from "@/pages/NotFound";
 import PortalLoginPage from "@/pages/portal/PortalLoginPage";
 import PortalPage from "@/pages/portal/PortalPage";
+import PortalExerciciosPage from "@/pages/portal/PortalExerciciosPage";
 import PortalLayout from "@/components/portal/PortalLayout";
 import PortalProtectedRoute from "@/components/portal/PortalProtectedRoute";
 
@@ -50,6 +51,7 @@ const App = () => (
               <Route path="/portal/login" element={<PortalLoginPage />} />
               <Route element={<PortalProtectedRoute><PortalLayout /></PortalProtectedRoute>}>
                 <Route path="/portal" element={<PortalPage />} />
+                <Route path="/portal/exercicios" element={<PortalExerciciosPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
