@@ -241,6 +241,39 @@ export default function CalendarioPage() {
         </Card>
       )}
 
+      {/* Aula Detail Popup (week view) */}
+      <Dialog open={!!detailAula} onOpenChange={() => setDetailAula(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Detalhes da Aula</DialogTitle></DialogHeader>
+          {detailAula && (() => {
+            const exp = explicadores.find(e => e.id === detailAula.explicadorId);
+            const sala = salas.find(s => s.id === detailAula.salaId);
+            const alunosList = detailAula.alunoIds.map(id => alunos.find(a => a.id === id)?.nome).filter(Boolean);
+            return (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Badge style={{ backgroundColor: `${disciplinaHslColors[detailAula.disciplina]}20`, color: disciplinaHslColors[detailAula.disciplina], border: `1px solid ${disciplinaHslColors[detailAula.disciplina]}` }}>{detailAula.disciplina}</Badge>
+                  <Badge variant="outline" className="capitalize">{detailAula.tipo}</Badge>
+                  <Badge variant="secondary" className="capitalize">{detailAula.estado}</Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div><span className="text-muted-foreground">Data:</span> {format(parseISO(detailAula.data), "dd/MM/yyyy")}</div>
+                  <div><span className="text-muted-foreground">Horário:</span> {detailAula.horaInicio}–{detailAula.horaFim}</div>
+                  <div><span className="text-muted-foreground">Professor:</span> {exp?.nome}</div>
+                  <div><span className="text-muted-foreground">Sala:</span> {sala?.nome}</div>
+                </div>
+                <div className="text-sm"><span className="text-muted-foreground">Aluno(s):</span> {alunosList.join(", ")}</div>
+                {detailAula.notas && <div className="text-sm"><span className="text-muted-foreground">Notas:</span> {detailAula.notas}</div>}
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => setDetailAula(null)}>Fechar</Button>
+                  <Button onClick={() => { setEditingAula(detailAula); setModalOpen(true); setDetailAula(null); }}>Editar</Button>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
       {/* New/Edit Lesson Modal */}
       <AulaModal open={modalOpen} onClose={() => { setModalOpen(false); setEditingAula(null); }} aula={editingAula} onSave={(data) => {
         if (editingAula) {
