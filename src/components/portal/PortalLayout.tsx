@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { LogOut, GraduationCap, CalendarDays, BookOpen, Menu, X } from "lucide-react";
+import { LogOut, GraduationCap, CalendarDays, BookOpen, Menu, X, TrendingUp } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 const menuItems = [
   { label: "Horários", to: "/portal", icon: CalendarDays },
   { label: "Exercícios", to: "/portal/exercicios", icon: BookOpen },
+  { label: "Evolução", to: "/portal/evolucao", icon: TrendingUp },
 ];
 
 export default function PortalLayout() {

@@ -132,7 +132,11 @@ export default function MarcarAulaModal({ open, onOpenChange, preSelectedAlunoId
     } else if (recorrencia === "quinzenal") {
       for (let i = 1; i <= 5; i++) dates.push(addWeeks(data, i * 2));
     } else if (recorrencia === "ano_letivo") {
-      for (let i = 1; i <= 35; i++) dates.push(addWeeks(data, i));
+      // Calculate weeks from selected date until end of school year (June 30)
+      const schoolYearEnd = new Date(data.getMonth() >= 8 ? data.getFullYear() + 1 : data.getFullYear(), 5, 30);
+      const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+      const weeksRemaining = Math.max(1, Math.floor((schoolYearEnd.getTime() - data.getTime()) / msPerWeek));
+      for (let i = 1; i < weeksRemaining; i++) dates.push(addWeeks(data, i));
     }
 
     const newAulas: Aula[] = dates.map((d, i) => ({
@@ -169,7 +173,7 @@ export default function MarcarAulaModal({ open, onOpenChange, preSelectedAlunoId
     unica: "",
     semanal: "12 sessões semanais",
     quinzenal: "6 sessões quinzenais",
-    ano_letivo: "~36 sessões (ano letivo)",
+    ano_letivo: "Até ao final do ano letivo",
   };
 
   return (

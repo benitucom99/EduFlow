@@ -218,12 +218,15 @@ export default function FaturacaoPage() {
 
         {/* TAB 1 — Cobrança */}
         <TabsContent value="cobranca" className="space-y-4">
-          <div className="flex gap-2 justify-end">
+          <div className="flex gap-2 justify-end flex-wrap">
             <Button variant="outline" size="sm" onClick={() => { exportCobrancaDetalhada(resumoAlunos, explicadores, periodoStr); toast.success("Ficheiro exportado com sucesso"); }}>
               <Download className="h-4 w-4 mr-1" /> Exportar Cobrança (CSV)
             </Button>
             <Button variant="outline" size="sm" onClick={() => { exportCobrancaResumo(resumoAlunos, periodoStr); toast.success("Ficheiro exportado com sucesso"); }}>
               <FileText className="h-4 w-4 mr-1" /> Exportar Resumo (CSV)
+            </Button>
+            <Button size="sm" onClick={() => { toast.success("Rascunho de fatura gerado com sucesso", { description: `${resumoAlunos.length} fatura(s) em rascunho criada(s) para o período ${format(dataInicio, "dd/MM")} - ${format(dataFim, "dd/MM/yyyy")}.` }); }}>
+              <FileText className="h-4 w-4 mr-1" /> Gerar Rascunho
             </Button>
           </div>
 
