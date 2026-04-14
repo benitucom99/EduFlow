@@ -33,6 +33,8 @@ export default function CalendarioPage() {
   const [discFilter, setDiscFilter] = useState("todas");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAula, setEditingAula] = useState<Aula | null>(null);
+  const [diaGroupBy, setDiaGroupBy] = useState<"sala" | "professor">("sala");
+  const [detailAula, setDetailAula] = useState<Aula | null>(null);
 
   const navigate = (dir: number) => {
     if (view === "semana") setCurrentDate(d => dir > 0 ? addWeeks(d, 1) : subWeeks(d, 1));
@@ -108,7 +110,7 @@ export default function CalendarioPage() {
                                 <div
                                   className="rounded p-1 text-[10px] leading-tight cursor-pointer hover:opacity-80 mb-0.5"
                                   style={{ backgroundColor: `${disciplinaHslColors[aula.disciplina] || "hsl(var(--primary))"}20`, borderLeft: `3px solid ${disciplinaHslColors[aula.disciplina] || "hsl(var(--primary))"}` }}
-                                  onClick={() => { setEditingAula(aula); setModalOpen(true); }}
+                                  onClick={() => setDetailAula(aula)}
                                 >
                                   <p className="font-medium truncate">{aula.tipo === "grupo" ? `Grupo (${aula.alunoIds.length})` : al?.nome}</p>
                                   <p className="truncate text-muted-foreground">{aula.disciplina}</p>
@@ -134,35 +136,76 @@ export default function CalendarioPage() {
       {view === "dia" && (
         <Card>
           <CardContent className="p-0 overflow-x-auto">
-            <div className="min-w-[500px]">
-              <div className="grid border-b" style={{ gridTemplateColumns: `60px repeat(${salas.filter(s => s.estado === "disponível").length}, 1fr)` }}>
-                <div className="p-2" />
-                {salas.filter(s => s.estado === "disponível").map(s => (
-                  <div key={s.id} className="p-2 text-center text-sm font-medium border-l">{s.nome}</div>
-                ))}
+            <div className="flex items-center gap-2 p-3 border-b">
+              <span className="text-sm font-medium">Agrupar por:</span>
+              <div className="flex border rounded-lg overflow-hidden">
+                <button onClick={() => setDiaGroupBy("sala")} className={`px-3 py-1 text-xs font-medium ${diaGroupBy === "sala" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>Sala</button>
+                <button onClick={() => setDiaGroupBy("professor")} className={`px-3 py-1 text-xs font-medium ${diaGroupBy === "professor" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>Professor</button>
               </div>
-              {Array.from({ length: 13 }, (_, i) => i + 8).map(hour => (
-                <div key={hour} className="grid border-b min-h-[50px]" style={{ gridTemplateColumns: `60px repeat(${salas.filter(s => s.estado === "disponível").length}, 1fr)` }}>
-                  <div className="p-1 text-xs text-muted-foreground text-right pr-2 pt-1">{String(hour).padStart(2, "0")}:00</div>
-                  {salas.filter(s => s.estado === "disponível").map(sala => {
-                    const dateStr = format(currentDate, "yyyy-MM-dd");
-                    const dayAulas = getAulasForDate(dateStr).filter(a => a.salaId === sala.id && a.horaInicio === `${String(hour).padStart(2, "0")}:00`);
-                    return (
-                      <div key={sala.id} className="border-l p-0.5">
-                        {dayAulas.map(aula => {
-                          const al = alunos.find(a => a.id === aula.alunoIds[0]);
-                          return (
-                            <div key={aula.id} className="rounded p-1 text-[10px] cursor-pointer" style={{ backgroundColor: `${disciplinaHslColors[aula.disciplina]}20`, borderLeft: `3px solid ${disciplinaHslColors[aula.disciplina]}` }} onClick={() => { setEditingAula(aula); setModalOpen(true); }}>
-                              <p className="font-medium truncate">{al?.nome}</p>
-                              <p className="truncate text-muted-foreground">{aula.disciplina}</p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
+            </div>
+            <div className="min-w-[500px]">
+              {diaGroupBy === "sala" ? (() => {
+                const cols = salas.filter(s => s.estado === "disponível");
+                return (<>
+                  <div className="grid border-b" style={{ gridTemplateColumns: `60px repeat(${cols.length}, 1fr)` }}>
+                    <div className="p-2" />
+                    {cols.map(s => <div key={s.id} className="p-2 text-center text-sm font-medium border-l">{s.nome}</div>)}
+                  </div>
+                  {Array.from({ length: 13 }, (_, i) => i + 8).map(hour => (
+                    <div key={hour} className="grid border-b min-h-[50px]" style={{ gridTemplateColumns: `60px repeat(${cols.length}, 1fr)` }}>
+                      <div className="p-1 text-xs text-muted-foreground text-right pr-2 pt-1">{String(hour).padStart(2, "0")}:00</div>
+                      {cols.map(sala => {
+                        const dateStr = format(currentDate, "yyyy-MM-dd");
+                        const dayAulas = getAulasForDate(dateStr).filter(a => a.salaId === sala.id && a.horaInicio === `${String(hour).padStart(2, "0")}:00`);
+                        return (
+                          <div key={sala.id} className="border-l p-0.5">
+                            {dayAulas.map(aula => {
+                              const al = alunos.find(a => a.id === aula.alunoIds[0]);
+                              return (
+                                <div key={aula.id} className="rounded p-1 text-[10px] cursor-pointer hover:opacity-80" style={{ backgroundColor: `${disciplinaHslColors[aula.disciplina]}20`, borderLeft: `3px solid ${disciplinaHslColors[aula.disciplina]}` }} onClick={() => { setEditingAula(aula); setModalOpen(true); }}>
+                                  <p className="font-medium truncate">{al?.nome}</p>
+                                  <p className="truncate text-muted-foreground">{aula.disciplina}</p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </>);
+              })() : (() => {
+                const cols = explicadores.filter(e => e.estado === "ativo");
+                return (<>
+                  <div className="grid border-b" style={{ gridTemplateColumns: `60px repeat(${cols.length}, 1fr)` }}>
+                    <div className="p-2" />
+                    {cols.map(e => <div key={e.id} className="p-2 text-center text-sm font-medium border-l">{e.nome}</div>)}
+                  </div>
+                  {Array.from({ length: 13 }, (_, i) => i + 8).map(hour => (
+                    <div key={hour} className="grid border-b min-h-[50px]" style={{ gridTemplateColumns: `60px repeat(${cols.length}, 1fr)` }}>
+                      <div className="p-1 text-xs text-muted-foreground text-right pr-2 pt-1">{String(hour).padStart(2, "0")}:00</div>
+                      {cols.map(exp => {
+                        const dateStr = format(currentDate, "yyyy-MM-dd");
+                        const dayAulas = getAulasForDate(dateStr).filter(a => a.explicadorId === exp.id && a.horaInicio === `${String(hour).padStart(2, "0")}:00`);
+                        return (
+                          <div key={exp.id} className="border-l p-0.5">
+                            {dayAulas.map(aula => {
+                              const al = alunos.find(a => a.id === aula.alunoIds[0]);
+                              const sala = salas.find(s => s.id === aula.salaId);
+                              return (
+                                <div key={aula.id} className="rounded p-1 text-[10px] cursor-pointer hover:opacity-80" style={{ backgroundColor: `${disciplinaHslColors[aula.disciplina]}20`, borderLeft: `3px solid ${disciplinaHslColors[aula.disciplina]}` }} onClick={() => { setEditingAula(aula); setModalOpen(true); }}>
+                                  <p className="font-medium truncate">{al?.nome}</p>
+                                  <p className="truncate text-muted-foreground">{aula.disciplina} · {sala?.nome}</p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </>);
+              })()}
             </div>
           </CardContent>
         </Card>
@@ -197,6 +240,39 @@ export default function CalendarioPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Aula Detail Popup (week view) */}
+      <Dialog open={!!detailAula} onOpenChange={() => setDetailAula(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Detalhes da Aula</DialogTitle></DialogHeader>
+          {detailAula && (() => {
+            const exp = explicadores.find(e => e.id === detailAula.explicadorId);
+            const sala = salas.find(s => s.id === detailAula.salaId);
+            const alunosList = detailAula.alunoIds.map(id => alunos.find(a => a.id === id)?.nome).filter(Boolean);
+            return (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Badge style={{ backgroundColor: `${disciplinaHslColors[detailAula.disciplina]}20`, color: disciplinaHslColors[detailAula.disciplina], border: `1px solid ${disciplinaHslColors[detailAula.disciplina]}` }}>{detailAula.disciplina}</Badge>
+                  <Badge variant="outline" className="capitalize">{detailAula.tipo}</Badge>
+                  <Badge variant="secondary" className="capitalize">{detailAula.estado}</Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div><span className="text-muted-foreground">Data:</span> {format(parseISO(detailAula.data), "dd/MM/yyyy")}</div>
+                  <div><span className="text-muted-foreground">Horário:</span> {detailAula.horaInicio}–{detailAula.horaFim}</div>
+                  <div><span className="text-muted-foreground">Professor:</span> {exp?.nome}</div>
+                  <div><span className="text-muted-foreground">Sala:</span> {sala?.nome}</div>
+                </div>
+                <div className="text-sm"><span className="text-muted-foreground">Aluno(s):</span> {alunosList.join(", ")}</div>
+                {detailAula.notas && <div className="text-sm"><span className="text-muted-foreground">Notas:</span> {detailAula.notas}</div>}
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => setDetailAula(null)}>Fechar</Button>
+                  <Button onClick={() => { setEditingAula(detailAula); setModalOpen(true); setDetailAula(null); }}>Editar</Button>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
 
       {/* New/Edit Lesson Modal */}
       <AulaModal open={modalOpen} onClose={() => { setModalOpen(false); setEditingAula(null); }} aula={editingAula} onSave={(data) => {
