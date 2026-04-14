@@ -33,6 +33,8 @@ export default function CalendarioPage() {
   const [discFilter, setDiscFilter] = useState("todas");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAula, setEditingAula] = useState<Aula | null>(null);
+  const [diaGroupBy, setDiaGroupBy] = useState<"sala" | "professor">("sala");
+  const [detailAula, setDetailAula] = useState<Aula | null>(null);
 
   const navigate = (dir: number) => {
     if (view === "semana") setCurrentDate(d => dir > 0 ? addWeeks(d, 1) : subWeeks(d, 1));
