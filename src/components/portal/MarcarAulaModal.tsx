@@ -173,7 +173,7 @@ export default function MarcarAulaModal({ open, onOpenChange, preSelectedAlunoId
     unica: "",
     semanal: "12 sessões semanais",
     quinzenal: "6 sessões quinzenais",
-    ano_letivo: "~36 sessões (ano letivo)",
+    ano_letivo: "Até ao final do ano letivo",
   };
 
   return (
