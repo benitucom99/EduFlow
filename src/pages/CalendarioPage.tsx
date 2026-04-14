@@ -110,7 +110,7 @@ export default function CalendarioPage() {
                                 <div
                                   className="rounded p-1 text-[10px] leading-tight cursor-pointer hover:opacity-80 mb-0.5"
                                   style={{ backgroundColor: `${disciplinaHslColors[aula.disciplina] || "hsl(var(--primary))"}20`, borderLeft: `3px solid ${disciplinaHslColors[aula.disciplina] || "hsl(var(--primary))"}` }}
-                                  onClick={() => { setEditingAula(aula); setModalOpen(true); }}
+                                  onClick={() => setDetailAula(aula)}
                                 >
                                   <p className="font-medium truncate">{aula.tipo === "grupo" ? `Grupo (${aula.alunoIds.length})` : al?.nome}</p>
                                   <p className="truncate text-muted-foreground">{aula.disciplina}</p>
