@@ -21,8 +21,10 @@ import NotFound from "@/pages/NotFound";
 import PortalLoginPage from "@/pages/portal/PortalLoginPage";
 import PortalPage from "@/pages/portal/PortalPage";
 import PortalExerciciosPage from "@/pages/portal/PortalExerciciosPage";
+import PortalEvolucaoPage from "@/pages/portal/PortalEvolucaoPage";
 import PortalLayout from "@/components/portal/PortalLayout";
 import PortalProtectedRoute from "@/components/portal/PortalProtectedRoute";
+import ServicosPage from "@/pages/ServicosPage";
 
 const queryClient = new QueryClient();
 
@@ -47,11 +49,13 @@ const App = () => (
                 <Route path="/presencas" element={<PresencasPage />} />
                 <Route path="/configuracoes" element={<ConfiguracoesPage />} />
                 <Route path="/faturacao" element={<FaturacaoPage />} />
+                <Route path="/servicos" element={<ServicosPage />} />
               </Route>
               <Route path="/portal/login" element={<PortalLoginPage />} />
               <Route element={<PortalProtectedRoute><PortalLayout /></PortalProtectedRoute>}>
                 <Route path="/portal" element={<PortalPage />} />
                 <Route path="/portal/exercicios" element={<PortalExerciciosPage />} />
+                <Route path="/portal/evolucao" element={<PortalEvolucaoPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
