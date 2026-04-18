@@ -1,4 +1,5 @@
 import { Aula, Aluno, Explicador, precosDisciplinas } from "@/data/mockData";
+import { resolveRate } from "@/lib/servicos";
 
 export function formatCurrency(value: number): string {
   return value.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -18,10 +19,8 @@ export function formatDuration(hours: number): string {
   return `${h}h ${String(m).padStart(2, "0")}min`;
 }
 
-export function getAulaPrecoAluno(aula: Aula): number {
-  const preco = precosDisciplinas[aula.disciplina];
-  if (!preco) return 0;
-  const rate = aula.tipo === "individual" ? preco.individual : preco.grupo;
+export function getAulaPrecoAluno(aula: Aula, numClassesAlunoServico = 1): number {
+  const rate = resolveRate(aula.disciplina, aula.tipo, numClassesAlunoServico);
   return parseDurationHours(aula.horaInicio, aula.horaFim) * rate;
 }
 
@@ -59,12 +58,23 @@ export function calcularCobrancaAlunos(
   const alunoMap = new Map(alunos.map(a => [a.id, a]));
   const resultado = new Map<string, AulaFaturacaoAluno[]>();
 
+  // Pre-compute per (aluno, disciplina, tipo) class counts in the period.
+  // Tier rate depends on how many classes of that service the student attends.
+  const countKey = (alunoId: string, disc: string, tipo: string) => `${alunoId}|${disc}|${tipo}`;
+  const counts = new Map<string, number>();
+  for (const aula of aulasFiltradas) {
+    for (const alunoId of aula.alunoIds) {
+      const k = countKey(alunoId, aula.disciplina, aula.tipo);
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+  }
+
   for (const aula of aulasFiltradas) {
     for (const alunoId of aula.alunoIds) {
       const presenca = aula.presencas[alunoId] ?? null;
       const duracao = parseDurationHours(aula.horaInicio, aula.horaFim);
-      const preco = precosDisciplinas[aula.disciplina];
-      const precoHora = preco ? (aula.tipo === "individual" ? preco.individual : preco.grupo) : 0;
+      const numClasses = counts.get(countKey(alunoId, aula.disciplina, aula.tipo)) ?? 1;
+      const precoHora = resolveRate(aula.disciplina, aula.tipo, numClasses);
       const cobrar = presenca === "presente";
       const valorSessao = duracao * precoHora;
 

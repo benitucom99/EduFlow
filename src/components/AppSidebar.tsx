@@ -3,7 +3,8 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   LayoutDashboard, Users, GraduationCap, DoorOpen, CalendarDays,
-  ClipboardCheck, Receipt, Settings, LogOut, ChevronLeft, ChevronRight, Menu
+  ClipboardCheck, Receipt, Settings, LogOut, ChevronLeft, ChevronRight, Menu,
+  Inbox, BookOpen
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -13,11 +14,12 @@ const navItems = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "rececionista", "explicador"] },
   { path: "/alunos", label: "Alunos", icon: Users, roles: ["admin", "rececionista"] },
   { path: "/explicadores", label: "Explicadores", icon: GraduationCap, roles: ["admin", "rececionista"] },
+  { path: "/servicos", label: "Serviços", icon: BookOpen, roles: ["admin"] },
   { path: "/salas", label: "Salas", icon: DoorOpen, roles: ["admin", "rececionista"] },
   { path: "/calendario", label: "Calendário", icon: CalendarDays, roles: ["admin", "rececionista", "explicador"] },
-  { path: "/presencas", label: "Presenças", icon: ClipboardCheck, roles: ["admin", "rececionista", "explicador"] },
+  { path: "/gestao-aluno", label: "Gestão do Aluno", icon: ClipboardCheck, roles: ["admin", "rececionista", "explicador"] },
+  { path: "/inscricoes", label: "Inscrições", icon: Inbox, roles: ["admin", "rececionista"] },
   { path: "/faturacao", label: "Faturação", icon: Receipt, roles: ["admin"] },
-  { path: "/servicos", label: "Serviços", icon: GraduationCap, roles: ["admin"] },
   { path: "/configuracoes", label: "Configurações", icon: Settings, roles: ["admin"] },
 ];
 
