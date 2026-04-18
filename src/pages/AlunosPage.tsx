@@ -127,7 +127,6 @@ export default function AlunosPage() {
                   <TableHead>Ano Escolar</TableHead>
                   <TableHead className="hidden md:table-cell">Disciplinas</TableHead>
                   <TableHead className="hidden lg:table-cell">Encarregado</TableHead>
-                  <TableHead className="hidden lg:table-cell">Valor/Hora</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -156,7 +155,6 @@ export default function AlunosPage() {
                       </div>
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-sm">{aluno.encarregado.nome}</TableCell>
-                    <TableCell className="hidden lg:table-cell text-sm">{aluno.valorHora != null ? `${aluno.valorHora}€` : "—"}</TableCell>
                     <TableCell>{estadoBadge(aluno.estado)}</TableCell>
                     <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
@@ -248,7 +246,6 @@ function AlunoModal({ open, onClose, aluno, explicadores, onSave }: {
   const [encNome, setEncNome] = useState("");
   const [encEmail, setEncEmail] = useState("");
   const [encTelefone, setEncTelefone] = useState("");
-  const [valorHora, setValorHora] = useState("");
   const [explicadorId, setExplicadorId] = useState("");
   const [nifEncarregado, setNifEncarregado] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -265,7 +262,6 @@ function AlunoModal({ open, onClose, aluno, explicadores, onSave }: {
       setEncNome(aluno?.encarregado?.nome || "");
       setEncEmail(aluno?.encarregado?.email || "");
       setEncTelefone(aluno?.encarregado?.telefone || "");
-      setValorHora(aluno?.valorHora != null ? String(aluno.valorHora) : "");
       setExplicadorId(aluno?.explicadorId || "");
       setNifEncarregado(aluno?.nifEncarregado || "");
       setErrors({});
@@ -286,7 +282,6 @@ function AlunoModal({ open, onClose, aluno, explicadores, onSave }: {
       anoLetivo: parseInt(anoLetivo),
       disciplinas: selectedDisc,
       encarregado: { nome: encNome, email: encEmail, telefone: encTelefone },
-      valorHora: valorHora ? parseFloat(valorHora) : undefined,
       explicadorId: explicadorId && explicadorId !== "none" ? explicadorId : undefined,
       nifEncarregado: nifEncarregado || undefined,
     });
@@ -325,21 +320,15 @@ function AlunoModal({ open, onClose, aluno, explicadores, onSave }: {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Valor/Hora (€)</Label>
-                <Input type="number" min="0" step="0.5" value={valorHora} onChange={e => setValorHora(e.target.value)} placeholder="Ex: 20" />
-              </div>
-              <div>
-                <Label>Explicador Atribuído</Label>
-                <Select value={explicadorId} onValueChange={setExplicadorId}>
-                  <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
-                    {explicadoresAtivos.map(e => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div>
+              <Label>Explicador Atribuído</Label>
+              <Select value={explicadorId} onValueChange={setExplicadorId}>
+                <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhum</SelectItem>
+                  {explicadoresAtivos.map(e => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>Disciplinas</Label>
