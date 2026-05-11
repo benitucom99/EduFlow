@@ -298,7 +298,7 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: { open: boolean; o
   const [disciplina, setDisciplina] = useState(aula?.disciplina || "");
   const [alunoIds, setAlunoIds] = useState<string[]>(aula?.alunoIds || []);
   const [explicadorId, setExplicadorId] = useState(aula?.explicadorId || "");
-  const [salaId, setSalaId] = useState(aula?.salaId || "");
+  const [salaId, setSalaId] = useState(aula?.salaId || "auto");
   const [data, setData] = useState(aula?.data || format(new Date(), "yyyy-MM-dd"));
   const [horaInicio, setHoraInicio] = useState(aula?.horaInicio || "09:00");
   const [duracao, setDuracao] = useState("60");
@@ -311,7 +311,7 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: { open: boolean; o
       setDisciplina(aula?.disciplina || "");
       setAlunoIds(aula?.alunoIds || []);
       setExplicadorId(aula?.explicadorId || "");
-      setSalaId(aula?.salaId || "");
+      setSalaId(aula?.salaId || "auto");
       setData(aula?.data || format(new Date(), "yyyy-MM-dd"));
       setHoraInicio(aula?.horaInicio || "09:00");
       setNotas(aula?.notas || "");
@@ -319,7 +319,21 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: { open: boolean; o
   });
 
   const expsFiltrados = disciplina ? explicadores.filter(e => e.disciplinas.includes(disciplina) && e.estado === "ativo") : explicadores.filter(e => e.estado === "ativo");
-  const salasFiltradas = salas.filter(s => s.estado === "disponível" && (tipo === "individual" || s.capacidade >= alunoIds.length));
+  const capacidadeMin = tipo === "individual" ? 1 : Math.max(alunoIds.length, 1);
+  const salasFiltradas = salas.filter(s => s.estado === "disponível" && s.capacidade >= capacidadeMin);
+
+  // Auto-pick first available sala (smallest capacity that fits, not occupied)
+  const autoSalaId = (() => {
+    if (!data || !horaInicio) return "";
+    const candidates = [...salasFiltradas].sort((a, b) => a.capacidade - b.capacidade);
+    for (const s of candidates) {
+      const ocupada = aulas.find(a => a.id !== aula?.id && a.salaId === s.id && a.data === data && a.horaInicio === horaInicio && a.estado !== "cancelada");
+      if (!ocupada) return s.id;
+    }
+    return "";
+  })();
+  const resolvedSalaId = salaId === "auto" ? autoSalaId : salaId;
+  const autoSalaNome = salas.find(s => s.id === autoSalaId)?.nome;
 
   // Conflict checks
   const conflicts: string[] = [];
@@ -330,7 +344,9 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: { open: boolean; o
       conflicts.push(`⚠️ O explicador já tem aula neste horário (${existing.horaInicio} com ${al?.nome})`);
     }
   }
-  if (salaId && data && horaInicio) {
+  if (salaId === "auto" && !autoSalaId && data && horaInicio) {
+    conflicts.push(`⚠️ Sem salas disponíveis para este horário`);
+  } else if (salaId !== "auto" && salaId && data && horaInicio) {
     const existing = aulas.find(a => a.id !== aula?.id && a.salaId === salaId && a.data === data && a.horaInicio === horaInicio && a.estado !== "cancelada");
     if (existing) conflicts.push(`⚠️ A sala já está ocupada neste horário`);
   }
@@ -351,8 +367,8 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: { open: boolean; o
   };
 
   const handleSave = () => {
-    if (!disciplina || alunoIds.length === 0 || !explicadorId || !salaId) return;
-    onSave({ tipo, disciplina, alunoIds, explicadorId, salaId, data, horaInicio, horaFim: endHour(), recorrencia, notas });
+    if (!disciplina || alunoIds.length === 0 || !explicadorId || !resolvedSalaId) return;
+    onSave({ tipo, disciplina, alunoIds, explicadorId, salaId: resolvedSalaId, data, horaInicio, horaFim: endHour(), recorrencia, notas });
   };
 
   return (
@@ -387,7 +403,16 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: { open: boolean; o
           </div>
           <div>
             <Label>Sala *</Label>
-            <Select value={salaId} onValueChange={setSalaId}><SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger><SelectContent>{salasFiltradas.map(s => <SelectItem key={s.id} value={s.id}>{s.nome} (cap. {s.capacidade})</SelectItem>)}</SelectContent></Select>
+            <Select value={salaId} onValueChange={setSalaId}>
+              <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Automática{autoSalaNome ? ` (${autoSalaNome})` : ""}</SelectItem>
+                {salasFiltradas.map(s => <SelectItem key={s.id} value={s.id}>{s.nome} (cap. {s.capacidade})</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {salaId === "auto" && autoSalaNome && (
+              <p className="text-xs text-muted-foreground mt-1">Sala atribuída: {autoSalaNome}</p>
+            )}
           </div>
           <div><Label>Data</Label><Input type="date" value={data} onChange={e => setData(e.target.value)} /></div>
           <div><Label>Hora Início</Label>
