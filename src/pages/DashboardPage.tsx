@@ -79,7 +79,7 @@ export default function DashboardPage() {
                 const sala = salas.find(s => s.id === aula.salaId);
                 return (
                   <div key={aula.id} className="flex items-center gap-4 py-3">
-                    <span className="text-sm font-bold text-primary font-mono w-12 shrink-0">
+                    <span className="text-sm font-bold text-primary font-sans tabular-nums w-12 shrink-0">
                       {aula.horaInicio}
                     </span>
                     <div className="border-l-[3px] border-primary pl-3 flex-1 min-w-0">

@@ -91,7 +91,7 @@ export default function PresencasPage() {
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <span className="font-mono font-medium">{aula.horaInicio} - {aula.horaFim}</span>
+                      <span className="font-sans font-medium tabular-nums">{aula.horaInicio} - {aula.horaFim}</span>
                       <Badge style={{ backgroundColor: `${disciplinaHslColors[aula.disciplina]}20`, color: disciplinaHslColors[aula.disciplina], border: "none" }}>{aula.disciplina}</Badge>
                       <span className="text-sm text-muted-foreground">{sala?.nome}</span>
                     </div>
