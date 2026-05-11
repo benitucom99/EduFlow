@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useData } from "@/contexts/DataContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, CalendarDays, DoorOpen, TrendingUp } from "lucide-react";
+import { Users, BookOpen, Wallet, CheckCircle2 } from "lucide-react";
 import { isToday, parseISO } from "date-fns";
 
 export default function DashboardPage() {
@@ -10,16 +10,16 @@ export default function DashboardPage() {
 
   const stats = useMemo(() => {
     const ativos = alunos.filter(a => a.estado === "ativo").length;
-    const aulasEstaSemana = aulas.filter(a => a.estado !== "cancelada").length;
+    const aulasAtivas = aulas.filter(a => a.estado !== "cancelada").length;
     const salasDisp = salas.filter(s => s.estado === "disponível").length;
-    const ocupacao = salasDisp > 0 ? Math.round((aulasEstaSemana / (salasDisp * 5 * 8)) * 100) : 0;
+    const ocupacao = salasDisp > 0 ? Math.round((aulasAtivas / (salasDisp * 5 * 8)) * 100) : 0;
     const receita = aulas
       .filter(a => a.estado !== "cancelada")
       .reduce((sum, a) => {
         const exp = explicadores.find(e => e.id === a.explicadorId);
         return sum + (exp?.valorHora || 0);
       }, 0);
-    return { ativos, aulasEstaSemana, ocupacao: Math.min(ocupacao, 100), receita };
+    return { ativos, aulasAtivas, ocupacao: Math.min(ocupacao, 100), receita };
   }, [alunos, aulas, explicadores, salas]);
 
   const aulasHoje = useMemo(() => {
@@ -31,11 +31,14 @@ export default function DashboardPage() {
       .slice(0, 5);
   }, [aulas]);
 
+  const formatReceita = (v: number) =>
+    v >= 1000 ? `${(v / 1000).toFixed(1)}k €` : `${v} €`;
+
   const kpis = [
-    { label: "Alunos Ativos", value: stats.ativos, icon: Users, color: "text-primary" },
-    { label: "Aulas Esta Semana", value: stats.aulasEstaSemana, icon: CalendarDays, color: "text-secondary" },
-    { label: "Taxa de Ocupação", value: `${stats.ocupacao}%`, icon: DoorOpen, color: "text-warning" },
-    { label: "Receita Estimada", value: `${stats.receita}€`, icon: TrendingUp, color: "text-success" },
+    { label: "Total de Alunos", value: stats.ativos.toLocaleString("pt-PT"), icon: Users, iconBg: "bg-slate-100", iconColor: "text-slate-600" },
+    { label: "Aulas Ativas", value: stats.aulasAtivas, icon: BookOpen, iconBg: "bg-amber-100", iconColor: "text-amber-500" },
+    { label: "Receita Mensal", value: formatReceita(stats.receita), icon: Wallet, iconBg: "bg-emerald-100", iconColor: "text-emerald-500" },
+    { label: "Taxa de Assiduidade", value: `${stats.ocupacao}%`, icon: CheckCircle2, iconBg: "bg-violet-100", iconColor: "text-violet-500" },
   ];
 
   return (
@@ -44,15 +47,15 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {kpis.map(kpi => (
-          <Card key={kpi.label}>
+          <Card key={kpi.label} className="rounded-2xl shadow-sm">
             <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">{kpi.label}</p>
-                  <p className="text-3xl font-bold mt-1">{kpi.value}</p>
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm text-muted-foreground font-sans">{kpi.label}</p>
+                  <p className="font-heading font-bold text-3xl mt-2 tracking-tight">{kpi.value}</p>
                 </div>
-                <div className={`h-12 w-12 rounded-lg bg-accent flex items-center justify-center ${kpi.color}`}>
-                  <kpi.icon className="h-6 w-6" />
+                <div className={`h-11 w-11 shrink-0 rounded-xl flex items-center justify-center ${kpi.iconBg} ${kpi.iconColor}`}>
+                  <kpi.icon className="h-5 w-5" strokeWidth={2.25} />
                 </div>
               </div>
             </CardContent>
