@@ -36,7 +36,7 @@ export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean
       {/* Logo */}
       <div className="flex items-center gap-2 px-4 h-16 border-b border-sidebar-border">
         <GraduationCap className="h-7 w-7 shrink-0" />
-        {!collapsed && <span className="font-bold text-lg tracking-tight">ExplicaCenter</span>}
+        {!collapsed && <span className="font-bold text-lg tracking-tight">EduFlow</span>}
       </div>
 
       {/* Navigation */}

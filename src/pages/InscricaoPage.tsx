@@ -94,7 +94,7 @@ export default function InscricaoPage() {
         <div className="text-center">
           <div className="inline-flex items-center gap-2 mb-3">
             <GraduationCap className="h-8 w-8 text-primary" />
-            <span className="text-2xl font-bold">ExplicaCenter</span>
+            <span className="text-2xl font-bold">EduFlow</span>
           </div>
           <h1 className="text-3xl font-bold">Pré-inscrição</h1>
           <p className="text-muted-foreground mt-2">

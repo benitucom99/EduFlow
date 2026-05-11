@@ -12,18 +12,18 @@ export interface MockUser {
 }
 
 export const mockUsers: MockUser[] = [
-  { id: "u1", nome: "Ana Silva", email: "admin@explicacenter.pt", role: "admin", centro: "ExplicaCenter Lisboa" },
-  { id: "u2", nome: "Maria Santos", email: "recepcao@explicacenter.pt", role: "rececionista", centro: "ExplicaCenter Lisboa" },
-  { id: "u3", nome: "João Ferreira", email: "explicador@explicacenter.pt", role: "explicador", centro: "ExplicaCenter Lisboa" },
-  { id: "u4", nome: "Carla Martins", email: "carla.m@email.com", role: "encarregado", centro: "ExplicaCenter Lisboa", alunoIds: ["a1"] },
-  { id: "u5", nome: "Rui Costa", email: "rui.c@email.com", role: "encarregado", centro: "ExplicaCenter Lisboa", alunoIds: ["a2"] },
-  { id: "u6", nome: "Ana Ferreira", email: "ana.f@email.com", role: "encarregado", centro: "ExplicaCenter Lisboa", alunoIds: ["a3"] },
+  { id: "u1", nome: "Ana Silva", email: "admin@eduflow.pt", role: "admin", centro: "EduFlow Lisboa" },
+  { id: "u2", nome: "Maria Santos", email: "recepcao@eduflow.pt", role: "rececionista", centro: "EduFlow Lisboa" },
+  { id: "u3", nome: "João Ferreira", email: "explicador@eduflow.pt", role: "explicador", centro: "EduFlow Lisboa" },
+  { id: "u4", nome: "Carla Martins", email: "carla.m@email.com", role: "encarregado", centro: "EduFlow Lisboa", alunoIds: ["a1"] },
+  { id: "u5", nome: "Rui Costa", email: "rui.c@email.com", role: "encarregado", centro: "EduFlow Lisboa", alunoIds: ["a2"] },
+  { id: "u6", nome: "Ana Ferreira", email: "ana.f@email.com", role: "encarregado", centro: "EduFlow Lisboa", alunoIds: ["a3"] },
 ];
 
 export const mockPasswords: Record<string, string> = {
-  "admin@explicacenter.pt": "admin123",
-  "recepcao@explicacenter.pt": "recepcao123",
-  "explicador@explicacenter.pt": "explicador123",
+  "admin@eduflow.pt": "admin123",
+  "recepcao@eduflow.pt": "recepcao123",
+  "explicador@eduflow.pt": "explicador123",
   "carla.m@email.com": "encarregado123",
   "rui.c@email.com": "encarregado123",
   "ana.f@email.com": "encarregado123",
@@ -118,12 +118,12 @@ export interface Explicador {
 }
 
 export const initialExplicadores: Explicador[] = [
-  { id: "e1", nome: "João Ferreira", email: "joao.f@explicacenter.pt", telefone: "931111111", disciplinas: ["Matemática", "Física e Química"], valorHora: 20, habilitacoes: "Mestrado em Engenharia Física", estado: "ativo", iban: "PT50000201231234567890154", nif: "211234567", disponibilidade: [{ diaSemana: 1, horaInicio: "09:00", horaFim: "13:00" }, { diaSemana: 1, horaInicio: "14:00", horaFim: "18:00" }, { diaSemana: 2, horaInicio: "09:00", horaFim: "13:00" }, { diaSemana: 3, horaInicio: "14:00", horaFim: "19:00" }, { diaSemana: 4, horaInicio: "09:00", horaFim: "13:00" }, { diaSemana: 5, horaInicio: "09:00", horaFim: "12:00" }] },
-  { id: "e2", nome: "Maria Lopes", email: "maria.l@explicacenter.pt", telefone: "932222222", disciplinas: ["Português", "História"], valorHora: 18, habilitacoes: "Licenciatura em Letras", estado: "ativo", iban: "PT50000201239876543210987", nif: "222345678", disponibilidade: [{ diaSemana: 1, horaInicio: "10:00", horaFim: "17:00" }, { diaSemana: 2, horaInicio: "10:00", horaFim: "17:00" }, { diaSemana: 3, horaInicio: "10:00", horaFim: "17:00" }, { diaSemana: 4, horaInicio: "10:00", horaFim: "17:00" }] },
-  { id: "e3", nome: "Carlos Ribeiro", email: "carlos.r@explicacenter.pt", telefone: "933333333", disciplinas: ["Inglês"], valorHora: 15, habilitacoes: "Cambridge Certificate C2, Licenciatura em Línguas", estado: "ativo", nif: "233456789", disponibilidade: [{ diaSemana: 1, horaInicio: "14:00", horaFim: "20:00" }, { diaSemana: 2, horaInicio: "14:00", horaFim: "20:00" }, { diaSemana: 3, horaInicio: "14:00", horaFim: "20:00" }, { diaSemana: 5, horaInicio: "09:00", horaFim: "13:00" }] },
-  { id: "e4", nome: "Rita Gomes", email: "rita.g@explicacenter.pt", telefone: "934444444", disciplinas: ["Biologia e Geologia", "Física e Química"], valorHora: 22, habilitacoes: "Doutoramento em Bioquímica", estado: "ativo", iban: "PT50000201231111222233344", nif: "244567890", disponibilidade: [{ diaSemana: 1, horaInicio: "08:00", horaFim: "12:00" }, { diaSemana: 2, horaInicio: "08:00", horaFim: "12:00" }, { diaSemana: 3, horaInicio: "08:00", horaFim: "12:00" }, { diaSemana: 4, horaInicio: "14:00", horaFim: "18:00" }, { diaSemana: 5, horaInicio: "14:00", horaFim: "18:00" }] },
-  { id: "e5", nome: "Bruno Tavares", email: "bruno.t@explicacenter.pt", telefone: "935555555", disciplinas: ["Economia", "Matemática"], valorHora: 25, habilitacoes: "Mestrado em Economia, MBA", estado: "ativo", iban: "PT50000201235555666677788", nif: "255678901", disponibilidade: [{ diaSemana: 2, horaInicio: "09:00", horaFim: "13:00" }, { diaSemana: 3, horaInicio: "09:00", horaFim: "13:00" }, { diaSemana: 4, horaInicio: "09:00", horaFim: "13:00" }, { diaSemana: 4, horaInicio: "14:00", horaFim: "17:00" }] },
-  { id: "e6", nome: "Helena Dias", email: "helena.d@explicacenter.pt", telefone: "936666666", disciplinas: ["Geometria Descritiva", "Matemática"], valorHora: 12, habilitacoes: "Licenciatura em Arquitetura", estado: "inativo", nif: "266789012", disponibilidade: [{ diaSemana: 1, horaInicio: "15:00", horaFim: "19:00" }, { diaSemana: 3, horaInicio: "15:00", horaFim: "19:00" }] },
+  { id: "e1", nome: "João Ferreira", email: "joao.f@eduflow.pt", telefone: "931111111", disciplinas: ["Matemática", "Física e Química"], valorHora: 20, habilitacoes: "Mestrado em Engenharia Física", estado: "ativo", iban: "PT50000201231234567890154", nif: "211234567", disponibilidade: [{ diaSemana: 1, horaInicio: "09:00", horaFim: "13:00" }, { diaSemana: 1, horaInicio: "14:00", horaFim: "18:00" }, { diaSemana: 2, horaInicio: "09:00", horaFim: "13:00" }, { diaSemana: 3, horaInicio: "14:00", horaFim: "19:00" }, { diaSemana: 4, horaInicio: "09:00", horaFim: "13:00" }, { diaSemana: 5, horaInicio: "09:00", horaFim: "12:00" }] },
+  { id: "e2", nome: "Maria Lopes", email: "maria.l@eduflow.pt", telefone: "932222222", disciplinas: ["Português", "História"], valorHora: 18, habilitacoes: "Licenciatura em Letras", estado: "ativo", iban: "PT50000201239876543210987", nif: "222345678", disponibilidade: [{ diaSemana: 1, horaInicio: "10:00", horaFim: "17:00" }, { diaSemana: 2, horaInicio: "10:00", horaFim: "17:00" }, { diaSemana: 3, horaInicio: "10:00", horaFim: "17:00" }, { diaSemana: 4, horaInicio: "10:00", horaFim: "17:00" }] },
+  { id: "e3", nome: "Carlos Ribeiro", email: "carlos.r@eduflow.pt", telefone: "933333333", disciplinas: ["Inglês"], valorHora: 15, habilitacoes: "Cambridge Certificate C2, Licenciatura em Línguas", estado: "ativo", nif: "233456789", disponibilidade: [{ diaSemana: 1, horaInicio: "14:00", horaFim: "20:00" }, { diaSemana: 2, horaInicio: "14:00", horaFim: "20:00" }, { diaSemana: 3, horaInicio: "14:00", horaFim: "20:00" }, { diaSemana: 5, horaInicio: "09:00", horaFim: "13:00" }] },
+  { id: "e4", nome: "Rita Gomes", email: "rita.g@eduflow.pt", telefone: "934444444", disciplinas: ["Biologia e Geologia", "Física e Química"], valorHora: 22, habilitacoes: "Doutoramento em Bioquímica", estado: "ativo", iban: "PT50000201231111222233344", nif: "244567890", disponibilidade: [{ diaSemana: 1, horaInicio: "08:00", horaFim: "12:00" }, { diaSemana: 2, horaInicio: "08:00", horaFim: "12:00" }, { diaSemana: 3, horaInicio: "08:00", horaFim: "12:00" }, { diaSemana: 4, horaInicio: "14:00", horaFim: "18:00" }, { diaSemana: 5, horaInicio: "14:00", horaFim: "18:00" }] },
+  { id: "e5", nome: "Bruno Tavares", email: "bruno.t@eduflow.pt", telefone: "935555555", disciplinas: ["Economia", "Matemática"], valorHora: 25, habilitacoes: "Mestrado em Economia, MBA", estado: "ativo", iban: "PT50000201235555666677788", nif: "255678901", disponibilidade: [{ diaSemana: 2, horaInicio: "09:00", horaFim: "13:00" }, { diaSemana: 3, horaInicio: "09:00", horaFim: "13:00" }, { diaSemana: 4, horaInicio: "09:00", horaFim: "13:00" }, { diaSemana: 4, horaInicio: "14:00", horaFim: "17:00" }] },
+  { id: "e6", nome: "Helena Dias", email: "helena.d@eduflow.pt", telefone: "936666666", disciplinas: ["Geometria Descritiva", "Matemática"], valorHora: 12, habilitacoes: "Licenciatura em Arquitetura", estado: "inativo", nif: "266789012", disponibilidade: [{ diaSemana: 1, horaInicio: "15:00", horaFim: "19:00" }, { diaSemana: 3, horaInicio: "15:00", horaFim: "19:00" }] },
 ];
 
 export type EstadoSala = "disponível" | "manutenção";

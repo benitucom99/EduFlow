@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("admin@explicacenter.pt");
+  const [email, setEmail] = useState("admin@eduflow.pt");
   const [password, setPassword] = useState("admin123");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -45,7 +45,7 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-3">
             <GraduationCap className="h-10 w-10 text-primary" />
-            <span className="text-2xl font-bold text-primary">ExplicaCenter</span>
+            <span className="text-2xl font-bold text-primary">EduFlow</span>
           </div>
           <p className="text-muted-foreground text-sm">Gestão inteligente para o seu centro de explicações</p>
         </div>
@@ -89,7 +89,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-xs text-muted-foreground text-center mt-6">
-          Dica: admin@explicacenter.pt / admin123
+          Dica: admin@eduflow.pt / admin123
         </p>
       </div>
     </div>
