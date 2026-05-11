@@ -1,8 +1,9 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import { useData } from "@/contexts/DataContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Users, BookOpen, Wallet, CheckCircle2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Users, BookOpen, Wallet, CheckCircle2, CalendarDays, UserRound, MapPin } from "lucide-react";
 import { isToday, parseISO } from "date-fns";
 
 export default function DashboardPage() {
@@ -63,32 +64,47 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      <Card>
-        <CardHeader><CardTitle className="text-base">Próximas Aulas Hoje</CardTitle></CardHeader>
-        <CardContent>
+      <Card className="rounded-2xl shadow-sm">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-base font-bold">Horário de Hoje</CardTitle>
+          <CalendarDays className="h-5 w-5 text-muted-foreground" />
+        </CardHeader>
+        <CardContent className="pt-0">
           {aulasHoje.length === 0 ? (
             <p className="text-sm text-muted-foreground py-8 text-center">Sem aulas agendadas para hoje</p>
           ) : (
-            <div className="space-y-3">
+            <div className="divide-y divide-border">
               {aulasHoje.map(aula => {
-                const aluno = alunos.find(a => a.id === aula.alunoIds[0]);
                 const exp = explicadores.find(e => e.id === aula.explicadorId);
                 const sala = salas.find(s => s.id === aula.salaId);
                 return (
-                  <div key={aula.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-mono font-medium">{aula.horaInicio}</span>
-                      <div>
-                        <p className="text-sm font-medium">{aula.tipo === "grupo" ? `Grupo (${aula.alunoIds.length})` : aluno?.nome}</p>
-                        <p className="text-xs text-muted-foreground">{exp?.nome} · {sala?.nome}</p>
+                  <div key={aula.id} className="flex items-center gap-4 py-3">
+                    <span className="text-sm font-bold text-primary font-mono w-12 shrink-0">
+                      {aula.horaInicio}
+                    </span>
+                    <div className="border-l-[3px] border-primary pl-3 flex-1 min-w-0">
+                      <p className="text-sm font-bold font-heading truncate">{aula.disciplina}</p>
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <UserRound className="h-3 w-3 shrink-0" />
+                          {exp?.nome ?? "—"}
+                        </span>
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <MapPin className="h-3 w-3 shrink-0" />
+                          {sala?.nome ?? "—"}
+                        </span>
                       </div>
                     </div>
-                    <Badge variant="outline" className="text-xs">{aula.disciplina}</Badge>
                   </div>
                 );
               })}
             </div>
           )}
+          <div className="mt-4 pt-3 border-t border-border">
+            <Button variant="outline" className="w-full font-medium" asChild>
+              <Link to="/calendario">Ver Calendário Completo</Link>
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
