@@ -15,19 +15,18 @@ import ExplicadoresPage from "@/pages/ExplicadoresPage";
 import ExplicadorDetalhePage from "@/pages/ExplicadorDetalhePage";
 import SalasPage from "@/pages/SalasPage";
 import CalendarioPage from "@/pages/CalendarioPage";
-import GestaoAlunoPage from "@/pages/GestaoAlunoPage";
+import PresencasPage from "@/pages/PresencasPage";
 import ConfiguracoesPage from "@/pages/ConfiguracoesPage";
 import FaturacaoPage from "@/pages/FaturacaoPage";
 import NotFound from "@/pages/NotFound";
-import PortalLoginPage from "@/pages/portal/PortalLoginPage";
-import PortalPage from "@/pages/portal/PortalPage";
-import PortalExerciciosPage from "@/pages/portal/PortalExerciciosPage";
-import PortalEvolucaoPage from "@/pages/portal/PortalEvolucaoPage";
-import PortalLayout from "@/components/portal/PortalLayout";
-import PortalProtectedRoute from "@/components/portal/PortalProtectedRoute";
 import ServicosPage from "@/pages/ServicosPage";
-import InscricaoPage from "@/pages/InscricaoPage";
-import InscricoesPage from "@/pages/InscricoesPage";
+
+// NOTE: The following pages are intentionally not routed (feature disabled),
+// but their source files are preserved for future re-enablement:
+// - src/pages/GestaoAlunoPage.tsx
+// - src/pages/InscricaoPage.tsx
+// - src/pages/InscricoesPage.tsx
+// - src/pages/portal/* (Portal do Encarregado)
 
 const queryClient = new QueryClient();
 
@@ -41,7 +40,6 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route path="/login" element={<LoginPage />} />
-                <Route path="/inscricao" element={<InscricaoPage />} />
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
                   <Route path="/dashboard" element={<DashboardPage />} />
@@ -52,19 +50,16 @@ const App = () => (
                   <Route path="/servicos" element={<ServicosPage />} />
                   <Route path="/salas" element={<SalasPage />} />
                   <Route path="/calendario" element={<CalendarioPage />} />
-                  <Route path="/gestao-aluno" element={<GestaoAlunoPage />} />
-                  {/* Backwards-compat: old /presencas route redirects */}
-                  <Route path="/presencas" element={<Navigate to="/gestao-aluno" replace />} />
-                  <Route path="/inscricoes" element={<InscricoesPage />} />
+                  <Route path="/presencas" element={<PresencasPage />} />
                   <Route path="/configuracoes" element={<ConfiguracoesPage />} />
                   <Route path="/faturacao" element={<FaturacaoPage />} />
+                  {/* Disabled routes — redirect to dashboard */}
+                  <Route path="/gestao-aluno" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/inscricoes" element={<Navigate to="/dashboard" replace />} />
                 </Route>
-                <Route path="/portal/login" element={<PortalLoginPage />} />
-                <Route element={<PortalProtectedRoute><PortalLayout /></PortalProtectedRoute>}>
-                  <Route path="/portal" element={<PortalPage />} />
-                  <Route path="/portal/exercicios" element={<PortalExerciciosPage />} />
-                  <Route path="/portal/evolucao" element={<PortalEvolucaoPage />} />
-                </Route>
+                {/* Disabled public routes */}
+                <Route path="/inscricao" element={<Navigate to="/login" replace />} />
+                <Route path="/portal/*" element={<Navigate to="/login" replace />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
