@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   LayoutDashboard, Users, GraduationCap, DoorOpen, CalendarDays,
   ClipboardCheck, Receipt, Settings, LogOut, ChevronLeft, ChevronRight, Menu,
-  Inbox, BookOpen
+  BookOpen
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -17,8 +17,7 @@ const navItems = [
   { path: "/servicos", label: "Serviços", icon: BookOpen, roles: ["admin"] },
   { path: "/salas", label: "Salas", icon: DoorOpen, roles: ["admin", "rececionista"] },
   { path: "/calendario", label: "Calendário", icon: CalendarDays, roles: ["admin", "rececionista", "explicador"] },
-  { path: "/gestao-aluno", label: "Gestão do Aluno", icon: ClipboardCheck, roles: ["admin", "rececionista", "explicador"] },
-  { path: "/inscricoes", label: "Inscrições", icon: Inbox, roles: ["admin", "rececionista"] },
+  { path: "/presencas", label: "Presenças", icon: ClipboardCheck, roles: ["admin", "rececionista", "explicador"] },
   { path: "/faturacao", label: "Faturação", icon: Receipt, roles: ["admin"] },
   { path: "/configuracoes", label: "Configurações", icon: Settings, roles: ["admin"] },
 ];
