@@ -1,158 +1,193 @@
 import { useState, useMemo } from "react";
 import { useData } from "@/contexts/DataContext";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
-import { Progress } from "@/components/ui/progress";
-import { Check, AlertTriangle, X, Calendar } from "lucide-react";
-import { format, parseISO, isToday, subDays } from "date-fns";
-import { pt } from "date-fns/locale";
-import { useToast } from "@/hooks/use-toast";
-import { Presenca, disciplinaHslColors } from "@/data/mockData";
+import { CalendarDays, ChevronDown, ChevronUp } from "lucide-react";
+import { format } from "date-fns";
+import { Presenca } from "@/data/mockData";
+import { cn } from "@/lib/utils";
 
 export default function PresencasPage() {
-  const { aulas, setAulas, alunos, explicadores, salas } = useData();
-  const { toast } = useToast();
+  const { aulas, setAulas, alunos, explicadores } = useData();
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [expFilter, setExpFilter] = useState("todos");
-  const [discFilter, setDiscFilter] = useState("todas");
-  const [motivos, setMotivos] = useState<Record<string, string>>({});
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  const aulasDodia = useMemo(() => {
-    return aulas
+  const aulasDoDia = useMemo(() =>
+    aulas
       .filter(a => a.data === selectedDate && a.estado !== "cancelada")
-      .filter(a => expFilter === "todos" || a.explicadorId === expFilter)
-      .filter(a => discFilter === "todas" || a.disciplina === discFilter)
-      .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
-  }, [aulas, selectedDate, expFilter, discFilter]);
-
-  const resumo = useMemo(() => {
-    const total = aulasDodia.length;
-    const registadas = aulasDodia.filter(a => Object.values(a.presencas).some(p => p !== null)).length;
-    const todosAlunos = aulasDodia.flatMap(a => a.alunoIds);
-    const presentes = aulasDodia.reduce((sum, a) => sum + a.alunoIds.filter(id => a.presencas[id] === "presente").length, 0);
-    const fi = aulasDodia.reduce((sum, a) => sum + a.alunoIds.filter(id => a.presencas[id] === "falta_injustificada").length, 0);
-    return { total, registadas, taxa: todosAlunos.length > 0 ? Math.round((presentes / todosAlunos.length) * 100) : 0, fi };
-  }, [aulasDodia]);
+      .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio)),
+    [aulas, selectedDate]
+  );
 
   const updatePresenca = (aulaId: string, alunoId: string, presenca: Presenca) => {
-    setAulas(prev => prev.map(a => a.id === aulaId ? { ...a, presencas: { ...a.presencas, [alunoId]: presenca } } : a));
+    setAulas(prev => prev.map(a =>
+      a.id === aulaId ? { ...a, presencas: { ...a.presencas, [alunoId]: presenca } } : a
+    ));
   };
 
-  const historico = useMemo(() => {
-    return aulas
-      .filter(a => a.estado === "realizada" && Object.values(a.presencas).some(p => p !== null))
-      .sort((a, b) => b.data.localeCompare(a.data))
-      .slice(0, 30);
-  }, [aulas]);
+  const toggle = (aulaId: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(aulaId) ? next.delete(aulaId) : next.add(aulaId);
+      return next;
+    });
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <h1 className="text-2xl font-bold">Registo de Presenças</h1>
-
-      <div className="flex flex-wrap gap-3 items-center">
-        <Input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-[180px]" />
-        <Select value={expFilter} onValueChange={setExpFilter}><SelectTrigger className="w-[160px]"><SelectValue placeholder="Explicador" /></SelectTrigger><SelectContent><SelectItem value="todos">Todos</SelectItem>{explicadores.map(e => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}</SelectContent></Select>
-        <Select value={discFilter} onValueChange={setDiscFilter}><SelectTrigger className="w-[160px]"><SelectValue placeholder="Disciplina" /></SelectTrigger><SelectContent><SelectItem value="todas">Todas</SelectItem>{["Matemática", "Português", "Inglês", "Física e Química", "Biologia e Geologia", "Economia"].map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <h1 className="text-2xl font-bold">Presenças</h1>
+        <div className="relative">
+          <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            type="date"
+            value={selectedDate}
+            onChange={e => setSelectedDate(e.target.value)}
+            className="pl-9 w-[180px] h-9"
+          />
+        </div>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{resumo.total}</p><p className="text-xs text-muted-foreground">Total aulas</p></CardContent></Card>
-        <Card><CardContent className="p-4 text-center">
-          <p className="text-2xl font-bold">{resumo.registadas}/{resumo.total}</p>
-          <Progress value={resumo.total > 0 ? (resumo.registadas / resumo.total) * 100 : 0} className="mt-2 h-1.5" />
-          <p className="text-xs text-muted-foreground mt-1">Registadas</p>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{resumo.taxa}%</p><p className="text-xs text-muted-foreground">Taxa presença</p></CardContent></Card>
-        <Card><CardContent className="p-4 text-center"><p className={`text-2xl font-bold ${resumo.fi > 0 ? "text-destructive" : ""}`}>{resumo.fi}</p><p className="text-xs text-muted-foreground">F. Injustificadas</p></CardContent></Card>
-      </div>
-
-      <Tabs defaultValue="hoje">
-        <TabsList><TabsTrigger value="hoje">Aulas do Dia</TabsTrigger><TabsTrigger value="historico">Histórico</TabsTrigger></TabsList>
-
-        <TabsContent value="hoje" className="space-y-4">
-          {aulasDodia.length === 0 ? (
-            <Card><CardContent className="py-16 text-center">
-              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">Sem aulas para esta data</p>
-            </CardContent></Card>
-          ) : aulasDodia.map(aula => {
+      {/* Lesson list */}
+      <div className="border rounded-xl overflow-hidden bg-card shadow-sm">
+        {aulasDoDia.length === 0 ? (
+          <div className="py-16 text-center">
+            <CalendarDays className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">Sem aulas para esta data.</p>
+          </div>
+        ) : (
+          aulasDoDia.map((aula, idx) => {
             const exp = explicadores.find(e => e.id === aula.explicadorId);
-            const sala = salas.find(s => s.id === aula.salaId);
-            const allMarked = aula.alunoIds.every(id => aula.presencas[id] !== null && aula.presencas[id] !== undefined);
+            const isGroup = aula.tipo === "grupo";
+            const isExpanded = expanded.has(aula.id);
+            const marcadas = aula.alunoIds.filter(id => aula.presencas[id]).length;
+
             return (
-              <Card key={aula.id}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="font-sans font-medium tabular-nums">{aula.horaInicio} - {aula.horaFim}</span>
-                      <Badge style={{ backgroundColor: `${disciplinaHslColors[aula.disciplina]}20`, color: disciplinaHslColors[aula.disciplina], border: "none" }}>{aula.disciplina}</Badge>
-                      <span className="text-sm text-muted-foreground">{sala?.nome}</span>
-                    </div>
-                    <Badge variant={allMarked ? "default" : "secondary"} className={allMarked ? "bg-success text-success-foreground" : ""}>
-                      {allMarked ? "Registadas ✓" : "Pendente"}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{exp?.nome} · {aula.tipo === "grupo" ? "Grupo" : "Individual"}</p>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {aula.alunoIds.map(alunoId => {
+              <div key={aula.id} className={idx > 0 ? "border-t" : ""}>
+                {!isGroup ? (
+                  /* Individual lesson — single row */
+                  (() => {
+                    const alunoId = aula.alunoIds[0];
                     const al = alunos.find(a => a.id === alunoId);
-                    const p = aula.presencas[alunoId];
-                    const bgMap: Record<string, string> = { presente: "bg-success/5", falta_justificada: "bg-warning/5", falta_injustificada: "bg-destructive/5" };
                     return (
-                      <div key={alunoId} className={`flex items-center justify-between p-3 rounded-lg ${p ? bgMap[p] || "bg-muted/30" : "bg-muted/30"}`}>
-                        <span className="text-sm font-medium">{al?.nome}</span>
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => updatePresenca(aula.id, alunoId, "presente")} className={`p-2 rounded-lg transition-colors ${p === "presente" ? "bg-success text-success-foreground" : "bg-muted hover:bg-muted/80"}`}><Check className="h-4 w-4" /></button>
-                          <button onClick={() => updatePresenca(aula.id, alunoId, "falta_justificada")} className={`p-2 rounded-lg transition-colors ${p === "falta_justificada" ? "bg-warning text-warning-foreground" : "bg-muted hover:bg-muted/80"}`}><AlertTriangle className="h-4 w-4" /></button>
-                          <button onClick={() => updatePresenca(aula.id, alunoId, "falta_injustificada")} className={`p-2 rounded-lg transition-colors ${p === "falta_injustificada" ? "bg-destructive text-destructive-foreground" : "bg-muted hover:bg-muted/80"}`}><X className="h-4 w-4" /></button>
+                      <div className="flex items-center gap-4 px-4 py-3 hover:bg-muted/20 transition-colors flex-wrap sm:flex-nowrap">
+                        <TimeCell hora={aula.horaInicio} fim={aula.horaFim} />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-heading font-bold truncate">{al?.nome ?? "—"}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {aula.disciplina} · {exp?.nome}
+                          </p>
                         </div>
+                        <PresencaButtons
+                          presenca={aula.presencas[alunoId]}
+                          onChange={p => updatePresenca(aula.id, alunoId, p)}
+                        />
                       </div>
                     );
-                  })}
-                  <Button size="sm" className="mt-2" onClick={() => toast({ title: "Presenças guardadas" })}>Guardar Presenças</Button>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </TabsContent>
+                  })()
+                ) : (
+                  /* Group lesson — header + expandable students */
+                  <>
+                    <button
+                      onClick={() => toggle(aula.id)}
+                      className="w-full flex items-center gap-4 px-4 py-3 hover:bg-muted/20 transition-colors text-left"
+                    >
+                      <TimeCell hora={aula.horaInicio} fim={aula.horaFim} />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-heading font-bold truncate">
+                          Grupo ({aula.alunoIds.length} alunos)
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {aula.disciplina} · {exp?.nome}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs text-muted-foreground tabular-nums">
+                          {marcadas}/{aula.alunoIds.length}
+                        </span>
+                        {isExpanded
+                          ? <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                          : <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        }
+                      </div>
+                    </button>
 
-        <TabsContent value="historico">
-          <Card><CardContent className="p-0">
-            <Table>
-              <TableHeader><TableRow>
-                <TableHead>Data</TableHead><TableHead>Hora</TableHead><TableHead>Aluno</TableHead><TableHead>Disciplina</TableHead><TableHead>Explicador</TableHead><TableHead>Presença</TableHead>
-              </TableRow></TableHeader>
-              <TableBody>
-                {historico.flatMap(aula => aula.alunoIds.map(alunoId => {
-                  const al = alunos.find(a => a.id === alunoId);
-                  const exp = explicadores.find(e => e.id === aula.explicadorId);
-                  const p = aula.presencas[alunoId];
-                  const pLabel: Record<string, string> = { presente: "Presente", falta_justificada: "F. Justificada", falta_injustificada: "F. Injustificada" };
-                  const pColor: Record<string, string> = { presente: "bg-success/10 text-success", falta_justificada: "bg-warning/10 text-warning", falta_injustificada: "bg-destructive/10 text-destructive" };
-                  return (
-                    <TableRow key={`${aula.id}-${alunoId}`}>
-                      <TableCell className="text-sm">{aula.data}</TableCell>
-                      <TableCell className="text-sm">{aula.horaInicio}</TableCell>
-                      <TableCell className="text-sm">{al?.nome}</TableCell>
-                      <TableCell><Badge variant="outline" className="text-xs">{aula.disciplina}</Badge></TableCell>
-                      <TableCell className="text-sm">{exp?.nome}</TableCell>
-                      <TableCell>{p ? <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${pColor[p]}`}>{pLabel[p]}</span> : "—"}</TableCell>
-                    </TableRow>
-                  );
-                })).slice(0, 30)}
-              </TableBody>
-            </Table>
-          </CardContent></Card>
-        </TabsContent>
-      </Tabs>
+                    {isExpanded && (
+                      <div className="bg-muted/20 border-t">
+                        {aula.alunoIds.map(alunoId => {
+                          const al = alunos.find(a => a.id === alunoId);
+                          return (
+                            <div
+                              key={alunoId}
+                              className="flex items-center gap-4 px-4 py-2.5 pl-4 sm:pl-32 border-b last:border-b-0 border-border/50 flex-wrap sm:flex-nowrap"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">{al?.nome ?? "—"}</p>
+                              </div>
+                              <PresencaButtons
+                                presenca={aula.presencas[alunoId]}
+                                onChange={p => updatePresenca(aula.id, alunoId, p)}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TimeCell({ hora, fim }: { hora: string; fim: string }) {
+  return (
+    <div className="w-24 shrink-0 text-sm tabular-nums text-muted-foreground font-medium">
+      {hora} – {fim}
+    </div>
+  );
+}
+
+const BUTTON_BASE = "px-3 py-1.5 rounded-md text-xs font-medium border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const BUTTON_INACTIVE = "bg-background border-border text-muted-foreground hover:bg-muted hover:text-foreground";
+
+function PresencaButtons({ presenca, onChange }: {
+  presenca?: Presenca;
+  onChange: (p: Presenca) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1 shrink-0">
+      <button
+        type="button"
+        onClick={() => onChange("presente")}
+        className={cn(BUTTON_BASE, presenca === "presente"
+          ? "bg-success border-success text-success-foreground"
+          : BUTTON_INACTIVE)}
+      >
+        Presente
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("falta_justificada")}
+        className={cn(BUTTON_BASE, presenca === "falta_justificada"
+          ? "bg-warning border-warning text-warning-foreground"
+          : BUTTON_INACTIVE)}
+      >
+        F. Just.
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("falta_injustificada")}
+        className={cn(BUTTON_BASE, presenca === "falta_injustificada"
+          ? "bg-destructive border-destructive text-destructive-foreground"
+          : BUTTON_INACTIVE)}
+      >
+        F. Injust.
+      </button>
     </div>
   );
 }
