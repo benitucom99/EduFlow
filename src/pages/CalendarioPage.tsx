@@ -9,7 +9,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ChevronLeft, ChevronRight, Plus, AlertTriangle, UserRound, MapPin, Clock, Users } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Switch } from "@/components/ui/switch";
 import { addDays, startOfWeek, format, isToday, addWeeks, subWeeks, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
@@ -37,6 +36,19 @@ const PROFESSOR_COLORS = [
 function getProfPalette(expId: string, allExplicadores: { id: string }[]) {
   const idx = allExplicadores.findIndex(e => e.id === expId);
   return PROFESSOR_COLORS[(idx < 0 ? 0 : idx) % PROFESSOR_COLORS.length];
+}
+
+/**
+ * Fim do ano letivo (30 de Junho) consoante a data inicial.
+ *  - Set–Dez (mês ≥ 8): ano letivo termina em 30 de Junho do ano seguinte
+ *  - Jan–Jun (mês ≤ 5): ano letivo termina em 30 de Junho do mesmo ano
+ *  - Jul–Ago (interregno): assume o ano letivo que está prestes a começar → Jun do ano seguinte
+ */
+function getSchoolYearEnd(startDate: Date): Date {
+  const month = startDate.getMonth();
+  const year = startDate.getFullYear();
+  if (month <= 5) return new Date(year, 5, 30);     // Jan-Jun → Jun mesmo ano
+  return new Date(year + 1, 5, 30);                 // Jul-Dez → Jun ano seguinte
 }
 
 // ─── Overlap layout ───────────────────────────────────────────────────────────
@@ -365,13 +377,22 @@ export default function CalendarioPage() {
         open={modalOpen}
         onClose={() => { setModalOpen(false); setEditingAula(null); }}
         aula={editingAula}
-        onSave={(data) => {
+        onSave={(aulasToCreate) => {
           if (editingAula) {
-            setAulas(prev => prev.map(a => a.id === editingAula.id ? { ...a, ...data } : a));
+            setAulas(prev => prev.map(a => a.id === editingAula.id ? { ...a, ...aulasToCreate[0] } : a));
             toast({ title: "Aula atualizada" });
           } else {
-            setAulas(prev => [...prev, { ...data, id: `aula${Date.now()}`, estado: "agendada" as const, presencas: {} }]);
-            toast({ title: "Aula agendada com sucesso" });
+            const baseId = Date.now();
+            const novas = aulasToCreate.map((d: any, i: number) => ({
+              ...d,
+              id: `aula${baseId}-${i}`,
+              estado: "agendada" as const,
+              presencas: {},
+            }));
+            setAulas(prev => [...prev, ...novas]);
+            toast({
+              title: novas.length > 1 ? `${novas.length} aulas agendadas` : "Aula agendada com sucesso",
+            });
           }
           setModalOpen(false); setEditingAula(null);
         }}
@@ -393,7 +414,7 @@ const horaOptions = Array.from({ length: 26 }, (_, i) => {
 
 function AulaModal({ open, onClose, aula, onSave, onCancel }: {
   open: boolean; onClose: () => void; aula: Aula | null;
-  onSave: (data: any) => void; onCancel?: () => void;
+  onSave: (aulas: any[]) => void; onCancel?: () => void;
 }) {
   const { alunos, explicadores, salas, aulas } = useData();
   const [tipo, setTipo] = useState<"individual" | "grupo">(aula?.tipo || "individual");
@@ -479,7 +500,25 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: {
 
   const handleSave = () => {
     if (!disciplina || alunoIds.length === 0 || !explicadorId || !resolvedSalaId) return;
-    onSave({ tipo, disciplina, alunoIds, explicadorId, salaId: resolvedSalaId, data, horaInicio, horaFim: endHour(), recorrencia, notas });
+    const base = {
+      tipo, disciplina, alunoIds, explicadorId,
+      salaId: resolvedSalaId, horaInicio, horaFim: endHour(), recorrencia, notas,
+    };
+    // Em edição ou aula única → só uma instância. Quinzenal / Ano letivo → várias.
+    if (aula || recorrencia === "unica") {
+      onSave([{ ...base, data }]);
+      return;
+    }
+    const startDate = parseISO(data);
+    const endDate = getSchoolYearEnd(startDate);
+    const interval = recorrencia === "quinzenal" ? 14 : 7;
+    const aulasToCreate: any[] = [];
+    let current = startDate;
+    while (current <= endDate) {
+      aulasToCreate.push({ ...base, data: format(current, "yyyy-MM-dd") });
+      current = addDays(current, interval);
+    }
+    onSave(aulasToCreate);
   };
 
   const alunosAtivos = alunos.filter(a => a.estado === "ativo");
@@ -594,11 +633,12 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: {
           <section className="space-y-4 pt-6 border-t">
             <h3 className="text-base font-bold font-heading">Agendamento</h3>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <Label className="text-sm">Data</Label>
-                <Input type="date" value={data} onChange={e => setData(e.target.value)} />
-              </div>
+            <div>
+              <Label className="text-sm">Data</Label>
+              <Input type="date" value={data} onChange={e => setData(e.target.value)} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-sm">Hora Início</Label>
                 <Select value={horaInicio} onValueChange={setHoraInicio}>
@@ -620,24 +660,30 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: {
               </div>
             </div>
 
-            {/* Recorrência toggle */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm">Recorrência</Label>
-                <Switch
-                  checked={recorrencia !== "unica"}
-                  onCheckedChange={c => setRecorrencia(c ? "semanal" : "unica")}
-                />
-              </div>
-              {recorrencia !== "unica" && (
-                <Select value={recorrencia} onValueChange={setRecorrencia}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="semanal">Semanal</SelectItem>
-                    <SelectItem value="quinzenal">Quinzenal</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
+            {/* Recorrência: única | quinzenal | ano letivo */}
+            <div>
+              <Label className="text-sm">Recorrência</Label>
+              <Select value={recorrencia} onValueChange={setRecorrencia}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unica">Única</SelectItem>
+                  <SelectItem value="quinzenal">Quinzenal (a cada 2 semanas)</SelectItem>
+                  <SelectItem value="ano_letivo">Ano letivo (semanal)</SelectItem>
+                </SelectContent>
+              </Select>
+              {recorrencia !== "unica" && data && (() => {
+                const start = parseISO(data);
+                const end = getSchoolYearEnd(start);
+                const interval = recorrencia === "quinzenal" ? 14 : 7;
+                let count = 0;
+                let current = start;
+                while (current <= end) { count++; current = addDays(current, interval); }
+                return (
+                  <p className="text-xs text-muted-foreground mt-1.5">
+                    Serão criadas <strong>{count} aulas</strong> até {format(end, "d 'de' MMMM 'de' yyyy", { locale: pt })}.
+                  </p>
+                );
+              })()}
             </div>
           </section>
 

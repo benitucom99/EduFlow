@@ -161,7 +161,7 @@ export interface Aula {
   estado: EstadoAula;
   presencas: Record<string, Presenca>;
   notas?: string;
-  recorrencia?: "unica" | "semanal" | "quinzenal";
+  recorrencia?: "unica" | "semanal" | "quinzenal" | "ano_letivo";
 }
 
 function generateAulas(): Aula[] {
