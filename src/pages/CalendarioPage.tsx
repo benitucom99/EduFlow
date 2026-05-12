@@ -7,8 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronLeft, ChevronRight, Plus, AlertTriangle, UserRound, MapPin, Clock, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, AlertTriangle, UserRound, MapPin, Clock, Users, ChevronsUpDown, Check, Search } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 import { addDays, startOfWeek, format, isToday, addWeeks, subWeeks, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
@@ -427,6 +430,8 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: {
   const [duracao, setDuracao] = useState("60");
   const [recorrencia, setRecorrencia] = useState<string>(aula?.recorrencia || "unica");
   const [notas, setNotas] = useState(aula?.notas || "");
+  const [alunoPopoverOpen, setAlunoPopoverOpen] = useState(false);
+  const [alunoSearch, setAlunoSearch] = useState("");
 
   useState(() => {
     if (open) {
@@ -564,26 +569,81 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: {
             {/* Aluno(s) */}
             <div>
               <Label className="text-sm">Aluno(s) <span className="text-destructive">*</span></Label>
-              {tipo === "individual" ? (
-                <Select value={alunoIds[0] || ""} onValueChange={v => setAlunoIds([v])}>
-                  <SelectTrigger><SelectValue placeholder="Selecionar aluno" /></SelectTrigger>
-                  <SelectContent>
-                    {alunosAtivos.map(a => <SelectItem key={a.id} value={a.id}>{a.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <div className="grid grid-cols-2 gap-1 mt-2 max-h-40 overflow-y-auto border rounded-md p-2">
-                  {alunosAtivos.map(a => (
-                    <div key={a.id} className="flex items-center gap-2">
-                      <Checkbox
-                        checked={alunoIds.includes(a.id)}
-                        onCheckedChange={c => setAlunoIds(prev => c ? [...prev, a.id] : prev.filter(x => x !== a.id))}
+              {tipo === "individual" ? (() => {
+                const selected = alunosAtivos.find(a => a.id === alunoIds[0]);
+                return (
+                  <Popover open={alunoPopoverOpen} onOpenChange={setAlunoPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={alunoPopoverOpen}
+                        className="w-full justify-between font-normal"
+                      >
+                        <span className={selected ? "" : "text-muted-foreground"}>
+                          {selected ? selected.nome : "Pesquisar aluno..."}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Pesquisar aluno..." />
+                        <CommandList>
+                          <CommandEmpty>Nenhum aluno encontrado.</CommandEmpty>
+                          <CommandGroup>
+                            {alunosAtivos.map(a => (
+                              <CommandItem
+                                key={a.id}
+                                value={a.nome}
+                                onSelect={() => {
+                                  setAlunoIds([a.id]);
+                                  setAlunoPopoverOpen(false);
+                                }}
+                              >
+                                <Check className={cn("mr-2 h-4 w-4", alunoIds[0] === a.id ? "opacity-100" : "opacity-0")} />
+                                {a.nome}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                );
+              })() : (() => {
+                const filtered = alunosAtivos.filter(a =>
+                  a.nome.toLowerCase().includes(alunoSearch.toLowerCase())
+                );
+                return (
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Pesquisar aluno..."
+                        value={alunoSearch}
+                        onChange={e => setAlunoSearch(e.target.value)}
+                        className="pl-9 h-9"
                       />
-                      <span className="text-sm">{a.nome}</span>
                     </div>
-                  ))}
-                </div>
-              )}
+                    <div className="grid grid-cols-2 gap-1 max-h-40 overflow-y-auto border rounded-md p-2">
+                      {filtered.length === 0 ? (
+                        <p className="text-sm text-muted-foreground col-span-2 text-center py-2">
+                          Nenhum aluno encontrado.
+                        </p>
+                      ) : filtered.map(a => (
+                        <div key={a.id} className="flex items-center gap-2">
+                          <Checkbox
+                            checked={alunoIds.includes(a.id)}
+                            onCheckedChange={c => setAlunoIds(prev => c ? [...prev, a.id] : prev.filter(x => x !== a.id))}
+                          />
+                          <span className="text-sm truncate">{a.nome}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Disciplina */}
