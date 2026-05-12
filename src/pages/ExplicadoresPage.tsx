@@ -8,15 +8,23 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Eye, Pencil, LayoutGrid, LayoutList } from "lucide-react";
+import { Plus, Search, Eye, Pencil, LayoutGrid, LayoutList, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Explicador, disciplinas, Disponibilidade } from "@/data/mockData";
 
-const dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const DIAS_SEMANA = [
+  { label: "D", full: "Domingo", day: 0 },
+  { label: "S", full: "Segunda", day: 1 },
+  { label: "T", full: "Terça", day: 2 },
+  { label: "Q", full: "Quarta", day: 3 },
+  { label: "Q", full: "Quinta", day: 4 },
+  { label: "S", full: "Sexta", day: 5 },
+  { label: "S", full: "Sábado", day: 6 },
+];
 
 export default function ExplicadoresPage() {
   const { explicadores, setExplicadores } = useData();
@@ -28,6 +36,7 @@ export default function ExplicadoresPage() {
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Explicador | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Explicador | null>(null);
 
   const filtered = useMemo(() => {
     return explicadores.filter(e => {
@@ -38,6 +47,13 @@ export default function ExplicadoresPage() {
     });
   }, [explicadores, search, discFilter, estadoFilter]);
 
+  const handleDelete = () => {
+    if (!deleteTarget) return;
+    setExplicadores(prev => prev.filter(e => e.id !== deleteTarget.id));
+    toast({ title: "Explicador eliminado" });
+    setDeleteTarget(null);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -45,7 +61,7 @@ export default function ExplicadoresPage() {
         <div className="flex gap-2">
           <Button variant={viewMode === "table" ? "default" : "outline"} size="icon" onClick={() => setViewMode("table")}><LayoutList className="h-4 w-4" /></Button>
           <Button variant={viewMode === "cards" ? "default" : "outline"} size="icon" onClick={() => setViewMode("cards")}><LayoutGrid className="h-4 w-4" /></Button>
-          <Button onClick={() => { setEditing(null); setModalOpen(true); }}><Plus className="h-4 w-4" /> Novo Explicador</Button>
+          <Button onClick={() => { setEditing(null); setModalOpen(true); }}><Plus className="h-4 w-4" /> Adicionar Explicador</Button>
         </div>
       </div>
 
@@ -90,6 +106,7 @@ export default function ExplicadoresPage() {
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/explicadores/${exp.id}`)}><Eye className="h-4 w-4" /></Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditing(exp); setModalOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(exp)}><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -114,6 +131,7 @@ export default function ExplicadoresPage() {
                 <div className="flex gap-2">
                   <Button variant="outline" className="flex-1" onClick={() => navigate(`/explicadores/${exp.id}`)}>Ver perfil</Button>
                   <Button variant="outline" size="icon" onClick={() => { setEditing(exp); setModalOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+                  <Button variant="outline" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeleteTarget(exp)}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </CardContent>
             </Card>
@@ -121,25 +139,51 @@ export default function ExplicadoresPage() {
         </div>
       )}
 
-      <ExplicadorModal open={modalOpen} onClose={() => setModalOpen(false)} explicador={editing} onSave={(data) => {
-        if (editing) {
-          setExplicadores(prev => prev.map(e => e.id === editing.id ? { ...e, ...data } : e));
-          toast({ title: "Explicador atualizado" });
-        } else {
-          setExplicadores(prev => [...prev, { ...data, id: `e${Date.now()}`, estado: "ativo" as const }]);
-          toast({ title: "Explicador criado" });
-        }
-        setModalOpen(false);
-      }} />
+      <ExplicadorModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        explicador={editing}
+        onSave={(data) => {
+          if (editing) {
+            setExplicadores(prev => prev.map(e => e.id === editing.id ? { ...e, ...data } : e));
+            toast({ title: "Explicador atualizado" });
+          } else {
+            setExplicadores(prev => [...prev, { ...data, id: `e${Date.now()}`, estado: "ativo" as const }]);
+            toast({ title: "Explicador adicionado" });
+          }
+          setModalOpen(false);
+        }}
+      />
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={open => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar explicador?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem a certeza que quer eliminar <strong>{deleteTarget?.nome}</strong>? Esta ação não pode ser revertida.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
 
-function ExplicadorModal({ open, onClose, explicador, onSave }: { open: boolean; onClose: () => void; explicador: Explicador | null; onSave: (data: any) => void }) {
+function ExplicadorModal({ open, onClose, explicador, onSave }: {
+  open: boolean;
+  onClose: () => void;
+  explicador: Explicador | null;
+  onSave: (data: any) => void;
+}) {
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
-  const [habilitacoes, setHabilitacoes] = useState("");
   const [valorHora, setValorHora] = useState("15");
   const [selectedDisc, setSelectedDisc] = useState<string[]>([]);
   const [disp, setDisp] = useState<Disponibilidade[]>([]);
@@ -152,7 +196,6 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: { open: boolean;
       setNome(explicador?.nome || "");
       setEmail(explicador?.email || "");
       setTelefone(explicador?.telefone || "");
-      setHabilitacoes(explicador?.habilitacoes || "");
       setValorHora(String(explicador?.valorHora || 15));
       setSelectedDisc(explicador?.disciplinas || []);
       setDisp(explicador?.disponibilidade || []);
@@ -162,6 +205,37 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: { open: boolean;
     }
   }, [open, explicador]);
 
+  const activeDays = useMemo(() => [...new Set(disp.map(d => d.diaSemana))].sort((a, b) => a - b), [disp]);
+
+  const toggleDay = (day: number) => {
+    if (activeDays.includes(day)) {
+      setDisp(prev => prev.filter(d => d.diaSemana !== day));
+    } else {
+      setDisp(prev => [...prev, { diaSemana: day, horaInicio: "09:00", horaFim: "13:00" }]);
+    }
+  };
+
+  const addBloco = (day: number) => {
+    setDisp(prev => [...prev, { diaSemana: day, horaInicio: "14:00", horaFim: "18:00" }]);
+  };
+
+  const removeBloco = (day: number, idx: number) => {
+    let count = 0;
+    setDisp(prev => prev.filter(d => {
+      if (d.diaSemana !== day) return true;
+      return count++ !== idx;
+    }));
+  };
+
+  const updateBloco = (day: number, idx: number, field: "horaInicio" | "horaFim", value: string) => {
+    let count = 0;
+    setDisp(prev => prev.map(d => {
+      if (d.diaSemana !== day) return d;
+      const i = count++;
+      return i === idx ? { ...d, [field]: value } : d;
+    }));
+  };
+
   const handleSave = () => {
     const e: Record<string, string> = {};
     if (!nome.trim()) e.nome = "Obrigatório";
@@ -170,7 +244,8 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: { open: boolean;
     setErrors(e);
     if (Object.keys(e).length > 0) return;
     onSave({
-      nome, email, telefone, habilitacoes,
+      nome, email, telefone,
+      habilitacoes: explicador?.habilitacoes || "",
       valorHora: parseFloat(valorHora),
       disciplinas: selectedDisc,
       disponibilidade: disp,
@@ -182,27 +257,44 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: { open: boolean;
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>{explicador ? "Editar Explicador" : "Novo Explicador"}</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>{explicador ? "Editar Explicador" : "Adicionar Explicador"}</DialogTitle>
+        </DialogHeader>
         <Tabs defaultValue="dados">
           <TabsList className="w-full">
             <TabsTrigger value="dados" className="flex-1">Dados</TabsTrigger>
             <TabsTrigger value="financeiro" className="flex-1">Financeiro</TabsTrigger>
             <TabsTrigger value="disponibilidade" className="flex-1">Disponibilidade</TabsTrigger>
           </TabsList>
+
           <TabsContent value="dados" className="space-y-4 mt-4">
-            <div><Label>Nome *</Label><Input value={nome} onChange={e => setNome(e.target.value)} />{errors.nome && <p className="text-xs text-destructive mt-1">{errors.nome}</p>}</div>
+            <div>
+              <Label>Nome *</Label>
+              <Input value={nome} onChange={e => setNome(e.target.value)} />
+              {errors.nome && <p className="text-xs text-destructive mt-1">{errors.nome}</p>}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Email</Label><Input value={email} onChange={e => setEmail(e.target.value)} /></div>
               <div><Label>Telefone</Label><Input value={telefone} onChange={e => setTelefone(e.target.value)} /></div>
             </div>
-            <div><Label>Habilitações</Label><Textarea value={habilitacoes} onChange={e => setHabilitacoes(e.target.value)} /></div>
-            <div><Label>Valor/Hora (€)</Label><Input type="number" value={valorHora} onChange={e => setValorHora(e.target.value)} /></div>
-            <div><Label>Disciplinas *</Label>{errors.disc && <p className="text-xs text-destructive">{errors.disc}</p>}
-              <div className="grid grid-cols-2 gap-2 mt-2">{disciplinas.map(d => (
-                <div key={d} className="flex items-center gap-2"><Checkbox checked={selectedDisc.includes(d)} onCheckedChange={c => setSelectedDisc(prev => c ? [...prev, d] : prev.filter(x => x !== d))} /><span className="text-sm">{d}</span></div>
-              ))}</div>
+            <div>
+              <Label>Valor/Hora (€)</Label>
+              <Input type="number" value={valorHora} onChange={e => setValorHora(e.target.value)} />
+            </div>
+            <div>
+              <Label>Disciplinas *</Label>
+              {errors.disc && <p className="text-xs text-destructive">{errors.disc}</p>}
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                {disciplinas.map(d => (
+                  <div key={d} className="flex items-center gap-2">
+                    <Checkbox checked={selectedDisc.includes(d)} onCheckedChange={c => setSelectedDisc(prev => c ? [...prev, d] : prev.filter(x => x !== d))} />
+                    <span className="text-sm">{d}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </TabsContent>
+
           <TabsContent value="financeiro" className="space-y-4 mt-4">
             <div>
               <Label>IBAN</Label>
@@ -212,10 +304,7 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: { open: boolean;
               <Label>NIF</Label>
               <Input
                 value={nif}
-                onChange={e => {
-                  const v = e.target.value.replace(/\D/g, "").slice(0, 9);
-                  setNif(v);
-                }}
+                onChange={e => setNif(e.target.value.replace(/\D/g, "").slice(0, 9))}
                 placeholder="123456789"
                 maxLength={9}
                 inputMode="numeric"
@@ -223,43 +312,87 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: { open: boolean;
               {errors.nif && <p className="text-xs text-destructive mt-1">{errors.nif}</p>}
             </div>
           </TabsContent>
-          <TabsContent value="disponibilidade" className="mt-4">
-            <div className="space-y-3">
-              {[1, 2, 3, 4, 5].map(day => {
-                const dayDisps = disp.filter(d => d.diaSemana === day);
-                return (
-                  <div key={day} className="border rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium text-sm">{dias[day]}</span>
-                      <Button variant="ghost" size="sm" onClick={() => setDisp(prev => [...prev, { diaSemana: day, horaInicio: "09:00", horaFim: "13:00" }])}>+ Bloco</Button>
-                    </div>
-                    {dayDisps.map((d, idx) => (
-                      <div key={idx} className="flex items-center gap-2 mb-1">
-                        <Input type="time" value={d.horaInicio} className="w-28" onChange={e => {
-                          setDisp(prev => prev.map((dd, i) => dd.diaSemana === day && i === prev.filter(x => x.diaSemana === day).indexOf(d) ? { ...dd, horaInicio: e.target.value } : dd));
-                        }} />
-                        <span className="text-sm">—</span>
-                        <Input type="time" value={d.horaFim} className="w-28" onChange={e => {
-                          setDisp(prev => prev.map((dd, i) => dd.diaSemana === day && i === prev.filter(x => x.diaSemana === day).indexOf(d) ? { ...dd, horaFim: e.target.value } : dd));
-                        }} />
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => {
-                          const dayDispsLocal = disp.filter(x => x.diaSemana === day);
-                          const removeIdx = dayDispsLocal.indexOf(d);
-                          let count = 0;
-                          setDisp(prev => prev.filter((x) => {
-                            if (x.diaSemana === day) { if (count === removeIdx) { count++; return false; } count++; }
-                            return true;
-                          }));
-                        }}>×</Button>
-                      </div>
-                    ))}
-                    {dayDisps.length === 0 && <p className="text-xs text-muted-foreground">Sem disponibilidade</p>}
-                  </div>
-                );
-              })}
+
+          <TabsContent value="disponibilidade" className="mt-4 space-y-4">
+            {/* Step 1: day selection */}
+            <div>
+              <p className="text-sm font-medium mb-3">Seleciona os dias disponíveis</p>
+              <div className="flex gap-2 flex-wrap">
+                {DIAS_SEMANA.map(({ label, full, day }) => {
+                  const active = activeDays.includes(day);
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      title={full}
+                      onClick={() => toggleDay(day)}
+                      className={`h-9 w-9 rounded-full text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring
+                        ${active
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+
+            {/* Step 2: time blocks per selected day */}
+            {activeDays.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-sm font-medium">Blocos de horário</p>
+                {activeDays.map(day => {
+                  const dayName = DIAS_SEMANA.find(d => d.day === day)?.full ?? "";
+                  const blocos = disp.filter(d => d.diaSemana === day);
+                  return (
+                    <div key={day} className="border rounded-lg p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-primary">{dayName}</span>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => addBloco(day)}>
+                          + Bloco
+                        </Button>
+                      </div>
+                      {blocos.map((b, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <Input
+                            type="time"
+                            value={b.horaInicio}
+                            className="w-28"
+                            onChange={e => updateBloco(day, idx, "horaInicio", e.target.value)}
+                          />
+                          <span className="text-sm text-muted-foreground">—</span>
+                          <Input
+                            type="time"
+                            value={b.horaFim}
+                            className="w-28"
+                            onChange={e => updateBloco(day, idx, "horaFim", e.target.value)}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
+                            onClick={() => removeBloco(day, idx)}
+                          >
+                            ×
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {activeDays.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                Seleciona pelo menos um dia para configurar os horários.
+              </p>
+            )}
           </TabsContent>
         </Tabs>
+
         <div className="flex justify-end gap-3 mt-4">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button onClick={handleSave}>Guardar</Button>

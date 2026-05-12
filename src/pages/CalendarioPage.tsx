@@ -343,6 +343,16 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: { open: boolean; o
       const al = alunos.find(a => a.id === existing.alunoIds[0]);
       conflicts.push(`⚠️ O explicador já tem aula neste horário (${existing.horaInicio} com ${al?.nome})`);
     }
+    // Check explicador availability
+    const exp = explicadores.find(e => e.id === explicadorId);
+    if (exp && exp.disponibilidade.length > 0) {
+      const diaSemana = new Date(data + "T00:00:00").getDay() || 7; // 1=Mon…7=Sun → align with stored 1-6
+      const corrigido = diaSemana === 7 ? 0 : diaSemana;
+      const disponivel = exp.disponibilidade.some(d =>
+        d.diaSemana === corrigido && horaInicio >= d.horaInicio && horaInicio < d.horaFim
+      );
+      if (!disponivel) conflicts.push(`⚠️ ${exp.nome} não tem disponibilidade marcada para este dia/horário`);
+    }
   }
   if (salaId === "auto" && !autoSalaId && data && horaInicio) {
     conflicts.push(`⚠️ Sem salas disponíveis para este horário`);
