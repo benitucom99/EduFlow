@@ -1,8 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useData } from "@/contexts/DataContext";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -10,238 +8,323 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ChevronLeft, ChevronRight, Plus, AlertTriangle } from "lucide-react";
-import { addDays, subDays, startOfWeek, format, parseISO, isToday, addWeeks, subWeeks, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameMonth, isSameDay } from "date-fns";
+import { ChevronLeft, ChevronRight, Plus, AlertTriangle, UserRound, MapPin } from "lucide-react";
+import { addDays, startOfWeek, format, isToday, addWeeks, subWeeks, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
-import { disciplinas, disciplinaHslColors, Aula } from "@/data/mockData";
+import { disciplinas, Aula } from "@/data/mockData";
 
-const hours = Array.from({ length: 26 }, (_, i) => {
-  const h = Math.floor(i / 2) + 8;
+// ─── Layout constants ────────────────────────────────────────────────────────
+const HOUR_HEIGHT = 64; // px per hour
+const START_HOUR = 8;
+const END_HOUR = 20;
+const TOTAL_HOURS = END_HOUR - START_HOUR;
+
+const hours = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => i + START_HOUR);
+
+const HALF_HOURS = Array.from({ length: TOTAL_HOURS * 2 }, (_, i) => {
+  const h = START_HOUR + Math.floor(i / 2);
   const m = i % 2 === 0 ? "00" : "30";
   return `${String(h).padStart(2, "0")}:${m}`;
 });
 
+// ─── Professor colour palette ─────────────────────────────────────────────────
+const PROF_COLORS = [
+  "#4f46e5", "#0891b2", "#059669", "#d97706",
+  "#dc2626", "#7c3aed", "#db2777", "#0284c7",
+  "#16a34a", "#ea580c",
+];
+
+function getProfColor(expId: string, allExplicadores: { id: string }[]) {
+  const idx = allExplicadores.findIndex(e => e.id === expId);
+  return PROF_COLORS[(idx < 0 ? 0 : idx) % PROF_COLORS.length];
+}
+
+function getTextColor(hex: string) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.55 ? "#111827" : "#ffffff";
+}
+
+// ─── Overlap layout ───────────────────────────────────────────────────────────
+function timeToMin(t: string) {
+  const [h, m] = (t || "00:00").split(":").map(Number);
+  return h * 60 + m;
+}
+
+function layoutAulas(aulas: Aula[]) {
+  const sorted = [...aulas].sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
+  const colEnds: string[] = [];
+  const placements: Array<{ aula: Aula; col: number }> = [];
+
+  for (const aula of sorted) {
+    let col = colEnds.findIndex(end => end <= aula.horaInicio);
+    if (col === -1) col = colEnds.length;
+    colEnds[col] = aula.horaFim || "23:59";
+    placements.push({ aula, col });
+  }
+
+  const totalCols = Math.max(colEnds.length, 1);
+  return placements.map(p => ({ ...p, totalCols }));
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
 export default function CalendarioPage() {
   const { aulas, setAulas, alunos, explicadores, salas } = useData();
   const { toast } = useToast();
-  const [view, setView] = useState<"dia" | "semana" | "mes">("semana");
+  const [view, setView] = useState<"semana" | "dia">("semana");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [expFilter, setExpFilter] = useState("todos");
   const [salaFilter, setSalaFilter] = useState("todas");
-  const [discFilter, setDiscFilter] = useState("todas");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAula, setEditingAula] = useState<Aula | null>(null);
-  const [diaGroupBy, setDiaGroupBy] = useState<"sala" | "professor">("sala");
   const [detailAula, setDetailAula] = useState<Aula | null>(null);
+  const [now, setNow] = useState(new Date());
 
-  const navigate = (dir: number) => {
-    if (view === "semana") setCurrentDate(d => dir > 0 ? addWeeks(d, 1) : subWeeks(d, 1));
-    else if (view === "dia") setCurrentDate(d => addDays(d, dir));
-    else setCurrentDate(d => new Date(d.getFullYear(), d.getMonth() + dir, 1));
-  };
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
 
-  const filteredAulas = useMemo(() => {
-    return aulas.filter(a => {
-      if (a.estado === "cancelada") return false;
-      if (expFilter !== "todos" && a.explicadorId !== expFilter) return false;
-      if (salaFilter !== "todas" && a.salaId !== salaFilter) return false;
-      if (discFilter !== "todas" && a.disciplina !== discFilter) return false;
-      return true;
-    });
-  }, [aulas, expFilter, salaFilter, discFilter]);
+  const navigate = (dir: number) => {
+    if (view === "semana") setCurrentDate(d => dir > 0 ? addWeeks(d, 1) : subWeeks(d, 1));
+    else setCurrentDate(d => addDays(d, dir));
+  };
+
+  const filteredAulas = useMemo(() => aulas.filter(a => {
+    if (a.estado === "cancelada") return false;
+    if (expFilter !== "todos" && a.explicadorId !== expFilter) return false;
+    if (salaFilter !== "todas" && a.salaId !== salaFilter) return false;
+    return true;
+  }), [aulas, expFilter, salaFilter]);
 
   const getAulasForDate = (dateStr: string) => filteredAulas.filter(a => a.data === dateStr);
 
+  // Current time position
+  const nowMin = (now.getHours() - START_HOUR) * 60 + now.getMinutes();
+  const nowTop = nowMin * (HOUR_HEIGHT / 60);
+  const nowVisible = nowMin >= 0 && nowMin <= TOTAL_HOURS * 60;
+
+  // View days
+  const viewDays = view === "semana" ? weekDays : [currentDate];
+
+  const dateLabel = view === "semana"
+    ? `${format(weekDays[0], "d MMM", { locale: pt })} – ${format(weekDays[4], "d MMM yyyy", { locale: pt })}`
+    : format(currentDate, "EEEE, d MMMM yyyy", { locale: pt });
+
+  function AulaCard({ aula }: { aula: Aula }) {
+    const bgColor = getProfColor(aula.explicadorId, explicadores);
+    const color = getTextColor(bgColor);
+    const exp = explicadores.find(e => e.id === aula.explicadorId);
+    const aluno = alunos.find(a => a.id === aula.alunoIds[0]);
+    const sala = salas.find(s => s.id === aula.salaId);
+
+    const topPx = (timeToMin(aula.horaInicio) - START_HOUR * 60) * (HOUR_HEIGHT / 60);
+    const endMin = aula.horaFim ? timeToMin(aula.horaFim) : timeToMin(aula.horaInicio) + 60;
+    const heightPx = Math.max((endMin - timeToMin(aula.horaInicio)) * (HOUR_HEIGHT / 60) - 3, 20);
+
+    return { topPx, heightPx, bgColor, color, exp, aluno, sala };
+  }
+
   return (
-    <div className="space-y-4 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">Calendário</h1>
+    <div className="flex flex-col gap-4 animate-fade-in h-full">
+      {/* ── Header ─────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Calendário</h1>
+          <p className="text-sm text-muted-foreground capitalize">{dateLabel}</p>
+        </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="outline" size="icon" onClick={() => navigate(-1)}><ChevronLeft className="h-4 w-4" /></Button>
-          <Button variant="outline" size="sm" onClick={() => setCurrentDate(new Date())}>Hoje</Button>
-          <Button variant="outline" size="icon" onClick={() => navigate(1)}><ChevronRight className="h-4 w-4" /></Button>
-          <span className="text-sm font-medium min-w-[180px] text-center">
-            {view === "mes" ? format(currentDate, "MMMM yyyy", { locale: pt }) : view === "semana" ? `${format(weekDays[0], "dd/MM")} — ${format(weekDays[4], "dd/MM/yyyy")}` : format(currentDate, "EEEE, dd MMMM yyyy", { locale: pt })}
-          </span>
-          <div className="flex border rounded-lg overflow-hidden">
-            {(["dia", "semana", "mes"] as const).map(v => (
-              <button key={v} onClick={() => setView(v)} className={`px-3 py-1.5 text-xs font-medium capitalize ${view === v ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>{v}</button>
+          {/* Navigation */}
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="icon" onClick={() => navigate(-1)}><ChevronLeft className="h-4 w-4" /></Button>
+            <Button variant="outline" size="sm" className="px-3" onClick={() => setCurrentDate(new Date())}>Hoje</Button>
+            <Button variant="outline" size="icon" onClick={() => navigate(1)}><ChevronRight className="h-4 w-4" /></Button>
+          </div>
+
+          {/* View selector */}
+          <div className="flex border rounded-lg overflow-hidden text-sm">
+            {(["semana", "dia"] as const).map(v => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`px-3 py-1.5 font-medium capitalize transition-colors ${view === v ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+              >
+                {v.charAt(0).toUpperCase() + v.slice(1)}
+              </button>
             ))}
           </div>
-          <Select value={expFilter} onValueChange={setExpFilter}><SelectTrigger className="w-[140px]"><SelectValue placeholder="Explicador" /></SelectTrigger><SelectContent><SelectItem value="todos">Todos</SelectItem>{explicadores.map(e => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}</SelectContent></Select>
-          <Select value={salaFilter} onValueChange={setSalaFilter}><SelectTrigger className="w-[120px]"><SelectValue placeholder="Sala" /></SelectTrigger><SelectContent><SelectItem value="todas">Todas</SelectItem>{salas.map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}</SelectContent></Select>
-          <Button onClick={() => { setEditingAula(null); setModalOpen(true); }}><Plus className="h-4 w-4" /> Nova Aula</Button>
+
+          {/* Filters */}
+          <Select value={expFilter} onValueChange={setExpFilter}>
+            <SelectTrigger className="w-[140px] h-9"><SelectValue placeholder="Explicador" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              {explicadores.map(e => (
+                <SelectItem key={e.id} value={e.id}>
+                  <span className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: getProfColor(e.id, explicadores) }} />
+                    {e.nome}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={salaFilter} onValueChange={setSalaFilter}>
+            <SelectTrigger className="w-[110px] h-9"><SelectValue placeholder="Sala" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas</SelectItem>
+              {salas.map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          <Button size="sm" onClick={() => { setEditingAula(null); setModalOpen(true); }}>
+            <Plus className="h-4 w-4 mr-1" /> Nova Aula
+          </Button>
         </div>
       </div>
 
-      {view === "semana" && (
-        <Card>
-          <CardContent className="p-0 overflow-x-auto">
-            <div className="min-w-[700px]">
-              {/* Header */}
-              <div className="grid grid-cols-[60px_repeat(5,1fr)] border-b">
-                <div className="p-2" />
-                {weekDays.map(d => (
-                  <div key={d.toISOString()} className={`p-2 text-center text-sm font-medium border-l ${isToday(d) ? "bg-primary/5" : ""}`}>
-                    {format(d, "EEE dd/MM", { locale: pt })}
-                  </div>
-                ))}
-              </div>
-              {/* Time slots */}
-              {Array.from({ length: 13 }, (_, i) => i + 8).map(hour => (
-                <div key={hour} className="grid grid-cols-[60px_repeat(5,1fr)] border-b min-h-[50px]">
-                  <div className="p-1 text-xs text-muted-foreground text-right pr-2 pt-1">{String(hour).padStart(2, "0")}:00</div>
-                  {weekDays.map(d => {
-                    const dateStr = format(d, "yyyy-MM-dd");
-                    const dayAulas = getAulasForDate(dateStr).filter(a => a.horaInicio === `${String(hour).padStart(2, "0")}:00`);
+      {/* ── Calendar grid ──────────────────────────────────────────── */}
+      <div className="flex flex-col border rounded-xl overflow-hidden bg-card shadow-sm flex-1 min-h-0">
+        {/* Day header row */}
+        <div className="flex border-b bg-card shrink-0 z-10">
+          <div className="w-14 shrink-0 border-r" />
+          {viewDays.map(d => (
+            <div
+              key={d.toISOString()}
+              className={`flex-1 py-2 text-center border-r last:border-r-0 ${isToday(d) ? "bg-primary/5" : ""}`}
+            >
+              <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                {format(d, "EEE", { locale: pt })}
+              </p>
+              <p className={`text-lg font-bold mt-0.5 leading-none w-8 h-8 flex items-center justify-center rounded-full mx-auto ${isToday(d) ? "bg-primary text-primary-foreground" : ""}`}>
+                {format(d, "d")}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* Scrollable time grid */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="flex relative" style={{ height: TOTAL_HOURS * HOUR_HEIGHT }}>
+
+            {/* Time labels */}
+            <div className="w-14 shrink-0 border-r relative">
+              {hours.slice(0, -1).map((h, i) => (
+                <div
+                  key={h}
+                  className="absolute right-2 text-[11px] text-muted-foreground leading-none"
+                  style={{ top: i * HOUR_HEIGHT - 7 }}
+                >
+                  {String(h).padStart(2, "0")}:00
+                </div>
+              ))}
+            </div>
+
+            {/* Day columns */}
+            {viewDays.map(day => {
+              const dateStr = format(day, "yyyy-MM-dd");
+              const dayLayout = layoutAulas(getAulasForDate(dateStr));
+
+              return (
+                <div
+                  key={dateStr}
+                  className={`flex-1 relative border-r last:border-r-0 overflow-hidden ${isToday(day) ? "bg-primary/[0.02]" : ""}`}
+                >
+                  {/* Hour grid lines */}
+                  {hours.map((h, i) => (
+                    <div
+                      key={h}
+                      className="absolute w-full border-t border-border/40"
+                      style={{ top: i * HOUR_HEIGHT }}
+                    />
+                  ))}
+                  {/* Half-hour lines (lighter) */}
+                  {hours.slice(0, -1).map((h, i) => (
+                    <div
+                      key={`half-${h}`}
+                      className="absolute w-full border-t border-border/20"
+                      style={{ top: i * HOUR_HEIGHT + HOUR_HEIGHT / 2 }}
+                    />
+                  ))}
+
+                  {/* Current time line */}
+                  {isToday(day) && nowVisible && (
+                    <div
+                      className="absolute w-full z-20 flex items-center pointer-events-none"
+                      style={{ top: nowTop }}
+                    >
+                      <div className="h-3 w-3 rounded-full bg-red-500 -ml-1.5 shrink-0 shadow-sm" />
+                      <div className="flex-1 h-[2px] bg-red-500" />
+                    </div>
+                  )}
+
+                  {/* Aula cards */}
+                  {dayLayout.map(({ aula, col, totalCols }) => {
+                    const bgColor = getProfColor(aula.explicadorId, explicadores);
+                    const textColor = getTextColor(bgColor);
+                    const exp = explicadores.find(e => e.id === aula.explicadorId);
+                    const aluno = alunos.find(a => a.id === aula.alunoIds[0]);
+                    const sala = salas.find(s => s.id === aula.salaId);
+
+                    const topPx = (timeToMin(aula.horaInicio) - START_HOUR * 60) * (HOUR_HEIGHT / 60);
+                    const endMin = aula.horaFim ? timeToMin(aula.horaFim) : timeToMin(aula.horaInicio) + 60;
+                    const heightPx = Math.max((endMin - timeToMin(aula.horaInicio)) * (HOUR_HEIGHT / 60) - 3, 22);
+                    const colW = 100 / totalCols;
+                    const leftPct = col * colW;
+
                     return (
-                      <div key={d.toISOString()} className={`border-l p-0.5 ${isToday(d) ? "bg-primary/5" : ""}`}>
-                        {dayAulas.map(aula => {
-                          const al = alunos.find(a => a.id === aula.alunoIds[0]);
-                          const exp = explicadores.find(e => e.id === aula.explicadorId);
-                          return (
-                            <Tooltip key={aula.id}>
-                              <TooltipTrigger asChild>
-                                <div
-                                  className="rounded p-1 text-[10px] leading-tight cursor-pointer hover:opacity-80 mb-0.5"
-                                  style={{ backgroundColor: `${disciplinaHslColors[aula.disciplina] || "hsl(var(--primary))"}20`, borderLeft: `3px solid ${disciplinaHslColors[aula.disciplina] || "hsl(var(--primary))"}` }}
-                                  onClick={() => setDetailAula(aula)}
-                                >
-                                  <p className="font-medium truncate">{aula.tipo === "grupo" ? `Grupo (${aula.alunoIds.length})` : al?.nome}</p>
-                                  <p className="truncate text-muted-foreground">{aula.disciplina}</p>
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>{aula.horaInicio}–{aula.horaFim} · {aula.disciplina}</p>
-                                <p>{exp?.nome} · {salas.find(s => s.id === aula.salaId)?.nome}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          );
-                        })}
+                      <div
+                        key={aula.id}
+                        className="absolute rounded-md px-1.5 py-1 cursor-pointer overflow-hidden shadow-sm hover:brightness-95 transition-all z-10 select-none"
+                        style={{
+                          top: topPx + 2,
+                          height: heightPx,
+                          left: `calc(${leftPct}% + 2px)`,
+                          width: `calc(${colW}% - 4px)`,
+                          backgroundColor: bgColor,
+                          color: textColor,
+                        }}
+                        onClick={() => setDetailAula(aula)}
+                      >
+                        <p className="text-[9px] opacity-75 leading-none font-sans tabular-nums">
+                          {aula.horaInicio} – {aula.horaFim}
+                        </p>
+                        <p className="text-[11px] font-bold truncate leading-tight mt-0.5 font-heading">
+                          {aula.disciplina}
+                        </p>
+                        {heightPx > 40 && (
+                          <p className="text-[10px] truncate opacity-90 leading-tight">
+                            {aula.tipo === "grupo" ? `Grupo (${aula.alunoIds.length} alunos)` : aluno?.nome}
+                          </p>
+                        )}
+                        {heightPx > 62 && (
+                          <div className="mt-0.5 space-y-px">
+                            <div className="flex items-center gap-0.5 opacity-85">
+                              <UserRound className="h-2.5 w-2.5 shrink-0" />
+                              <p className="text-[9px] truncate">{exp?.nome}</p>
+                            </div>
+                            <div className="flex items-center gap-0.5 opacity-85">
+                              <MapPin className="h-2.5 w-2.5 shrink-0" />
+                              <p className="text-[9px] truncate">{sala?.nome}</p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+              );
+            })}
+          </div>
+        </div>
+      </div>
 
-      {view === "dia" && (
-        <Card>
-          <CardContent className="p-0 overflow-x-auto">
-            <div className="flex items-center gap-2 p-3 border-b">
-              <span className="text-sm font-medium">Agrupar por:</span>
-              <div className="flex border rounded-lg overflow-hidden">
-                <button onClick={() => setDiaGroupBy("sala")} className={`px-3 py-1 text-xs font-medium ${diaGroupBy === "sala" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>Sala</button>
-                <button onClick={() => setDiaGroupBy("professor")} className={`px-3 py-1 text-xs font-medium ${diaGroupBy === "professor" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>Professor</button>
-              </div>
-            </div>
-            <div className="min-w-[500px]">
-              {diaGroupBy === "sala" ? (() => {
-                const cols = salas.filter(s => s.estado === "disponível");
-                return (<>
-                  <div className="grid border-b" style={{ gridTemplateColumns: `60px repeat(${cols.length}, 1fr)` }}>
-                    <div className="p-2" />
-                    {cols.map(s => <div key={s.id} className="p-2 text-center text-sm font-medium border-l">{s.nome}</div>)}
-                  </div>
-                  {Array.from({ length: 13 }, (_, i) => i + 8).map(hour => (
-                    <div key={hour} className="grid border-b min-h-[50px]" style={{ gridTemplateColumns: `60px repeat(${cols.length}, 1fr)` }}>
-                      <div className="p-1 text-xs text-muted-foreground text-right pr-2 pt-1">{String(hour).padStart(2, "0")}:00</div>
-                      {cols.map(sala => {
-                        const dateStr = format(currentDate, "yyyy-MM-dd");
-                        const dayAulas = getAulasForDate(dateStr).filter(a => a.salaId === sala.id && a.horaInicio === `${String(hour).padStart(2, "0")}:00`);
-                        return (
-                          <div key={sala.id} className="border-l p-0.5">
-                            {dayAulas.map(aula => {
-                              const al = alunos.find(a => a.id === aula.alunoIds[0]);
-                              return (
-                                <div key={aula.id} className="rounded p-1 text-[10px] cursor-pointer hover:opacity-80" style={{ backgroundColor: `${disciplinaHslColors[aula.disciplina]}20`, borderLeft: `3px solid ${disciplinaHslColors[aula.disciplina]}` }} onClick={() => { setEditingAula(aula); setModalOpen(true); }}>
-                                  <p className="font-medium truncate">{al?.nome}</p>
-                                  <p className="truncate text-muted-foreground">{aula.disciplina}</p>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </>);
-              })() : (() => {
-                const cols = explicadores.filter(e => e.estado === "ativo");
-                return (<>
-                  <div className="grid border-b" style={{ gridTemplateColumns: `60px repeat(${cols.length}, 1fr)` }}>
-                    <div className="p-2" />
-                    {cols.map(e => <div key={e.id} className="p-2 text-center text-sm font-medium border-l">{e.nome}</div>)}
-                  </div>
-                  {Array.from({ length: 13 }, (_, i) => i + 8).map(hour => (
-                    <div key={hour} className="grid border-b min-h-[50px]" style={{ gridTemplateColumns: `60px repeat(${cols.length}, 1fr)` }}>
-                      <div className="p-1 text-xs text-muted-foreground text-right pr-2 pt-1">{String(hour).padStart(2, "0")}:00</div>
-                      {cols.map(exp => {
-                        const dateStr = format(currentDate, "yyyy-MM-dd");
-                        const dayAulas = getAulasForDate(dateStr).filter(a => a.explicadorId === exp.id && a.horaInicio === `${String(hour).padStart(2, "0")}:00`);
-                        return (
-                          <div key={exp.id} className="border-l p-0.5">
-                            {dayAulas.map(aula => {
-                              const al = alunos.find(a => a.id === aula.alunoIds[0]);
-                              const sala = salas.find(s => s.id === aula.salaId);
-                              return (
-                                <div key={aula.id} className="rounded p-1 text-[10px] cursor-pointer hover:opacity-80" style={{ backgroundColor: `${disciplinaHslColors[aula.disciplina]}20`, borderLeft: `3px solid ${disciplinaHslColors[aula.disciplina]}` }} onClick={() => { setEditingAula(aula); setModalOpen(true); }}>
-                                  <p className="font-medium truncate">{al?.nome}</p>
-                                  <p className="truncate text-muted-foreground">{aula.disciplina} · {sala?.nome}</p>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </>);
-              })()}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {view === "mes" && (
-        <Card>
-          <CardContent className="p-4">
-            <div className="grid grid-cols-7 gap-1">
-              {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map(d => (
-                <div key={d} className="text-center text-xs font-medium text-muted-foreground p-2">{d}</div>
-              ))}
-              {(() => {
-                const monthStart = startOfMonth(currentDate);
-                const monthEnd = endOfMonth(currentDate);
-                const allDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
-                const startPadding = (getDay(monthStart) + 6) % 7;
-                const cells = [...Array(startPadding).fill(null), ...allDays];
-                return cells.map((day, i) => {
-                  if (!day) return <div key={`pad-${i}`} />;
-                  const dateStr = format(day, "yyyy-MM-dd");
-                  const count = getAulasForDate(dateStr).length;
-                  return (
-                    <div key={dateStr} className={`p-2 text-center rounded cursor-pointer hover:bg-muted ${isToday(day) ? "bg-primary/10 font-bold" : ""}`} onClick={() => { setCurrentDate(day); setView("dia"); }}>
-                      <p className="text-sm">{format(day, "d")}</p>
-                      {count > 0 && <Badge variant="secondary" className="text-[10px] mt-1">{count}</Badge>}
-                    </div>
-                  );
-                });
-              })()}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Aula Detail Popup (week view) */}
+      {/* ── Aula detail dialog ─────────────────────────────────────── */}
       <Dialog open={!!detailAula} onOpenChange={() => setDetailAula(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Detalhes da Aula</DialogTitle></DialogHeader>
@@ -249,21 +332,33 @@ export default function CalendarioPage() {
             const exp = explicadores.find(e => e.id === detailAula.explicadorId);
             const sala = salas.find(s => s.id === detailAula.salaId);
             const alunosList = detailAula.alunoIds.map(id => alunos.find(a => a.id === id)?.nome).filter(Boolean);
+            const bgColor = getProfColor(detailAula.explicadorId, explicadores);
             return (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Badge style={{ backgroundColor: `${disciplinaHslColors[detailAula.disciplina]}20`, color: disciplinaHslColors[detailAula.disciplina], border: `1px solid ${disciplinaHslColors[detailAula.disciplina]}` }}>{detailAula.disciplina}</Badge>
-                  <Badge variant="outline" className="capitalize">{detailAula.tipo}</Badge>
-                  <Badge variant="secondary" className="capitalize">{detailAula.estado}</Badge>
+              <div className="space-y-4">
+                <div className="rounded-lg p-3 text-white" style={{ backgroundColor: bgColor, color: getTextColor(bgColor) }}>
+                  <p className="font-bold text-lg font-heading">{detailAula.disciplina}</p>
+                  <p className="text-sm opacity-90">{detailAula.horaInicio} – {detailAula.horaFim} · {format(parseISO(detailAula.data), "dd/MM/yyyy")}</p>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div><span className="text-muted-foreground">Data:</span> {format(parseISO(detailAula.data), "dd/MM/yyyy")}</div>
-                  <div><span className="text-muted-foreground">Horário:</span> {detailAula.horaInicio}–{detailAula.horaFim}</div>
-                  <div><span className="text-muted-foreground">Professor:</span> {exp?.nome}</div>
-                  <div><span className="text-muted-foreground">Sala:</span> {sala?.nome}</div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <UserRound className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div><p className="text-xs text-muted-foreground">Professor</p><p className="font-medium">{exp?.nome}</p></div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div><p className="text-xs text-muted-foreground">Sala</p><p className="font-medium">{sala?.nome}</p></div>
+                  </div>
                 </div>
-                <div className="text-sm"><span className="text-muted-foreground">Aluno(s):</span> {alunosList.join(", ")}</div>
-                {detailAula.notas && <div className="text-sm"><span className="text-muted-foreground">Notas:</span> {detailAula.notas}</div>}
+                <div className="text-sm">
+                  <p className="text-xs text-muted-foreground mb-1">Aluno(s)</p>
+                  <p className="font-medium">{alunosList.join(", ")}</p>
+                </div>
+                {detailAula.notas && (
+                  <div className="text-sm">
+                    <p className="text-xs text-muted-foreground mb-1">Notas</p>
+                    <p>{detailAula.notas}</p>
+                  </div>
+                )}
                 <div className="flex justify-end gap-2 pt-2">
                   <Button variant="outline" onClick={() => setDetailAula(null)}>Fechar</Button>
                   <Button onClick={() => { setEditingAula(detailAula); setModalOpen(true); setDetailAula(null); }}>Editar</Button>
@@ -274,25 +369,41 @@ export default function CalendarioPage() {
         </DialogContent>
       </Dialog>
 
-      {/* New/Edit Lesson Modal */}
-      <AulaModal open={modalOpen} onClose={() => { setModalOpen(false); setEditingAula(null); }} aula={editingAula} onSave={(data) => {
-        if (editingAula) {
-          setAulas(prev => prev.map(a => a.id === editingAula.id ? { ...a, ...data } : a));
-          toast({ title: "Aula atualizada" });
-        } else {
-          setAulas(prev => [...prev, { ...data, id: `aula${Date.now()}`, estado: "agendada" as const, presencas: {} }]);
-          toast({ title: "Aula agendada com sucesso" });
-        }
-        setModalOpen(false); setEditingAula(null);
-      }} onCancel={editingAula ? () => {
-        setAulas(prev => prev.map(a => a.id === editingAula.id ? { ...a, estado: "cancelada" as const } : a));
-        toast({ title: "Aula cancelada" }); setModalOpen(false); setEditingAula(null);
-      } : undefined} />
+      {/* ── New/Edit Aula modal ────────────────────────────────────── */}
+      <AulaModal
+        open={modalOpen}
+        onClose={() => { setModalOpen(false); setEditingAula(null); }}
+        aula={editingAula}
+        onSave={(data) => {
+          if (editingAula) {
+            setAulas(prev => prev.map(a => a.id === editingAula.id ? { ...a, ...data } : a));
+            toast({ title: "Aula atualizada" });
+          } else {
+            setAulas(prev => [...prev, { ...data, id: `aula${Date.now()}`, estado: "agendada" as const, presencas: {} }]);
+            toast({ title: "Aula agendada com sucesso" });
+          }
+          setModalOpen(false); setEditingAula(null);
+        }}
+        onCancel={editingAula ? () => {
+          setAulas(prev => prev.map(a => a.id === editingAula.id ? { ...a, estado: "cancelada" as const } : a));
+          toast({ title: "Aula cancelada" }); setModalOpen(false); setEditingAula(null);
+        } : undefined}
+      />
     </div>
   );
 }
 
-function AulaModal({ open, onClose, aula, onSave, onCancel }: { open: boolean; onClose: () => void; aula: Aula | null; onSave: (data: any) => void; onCancel?: () => void }) {
+// ─── AulaModal (unchanged logic) ─────────────────────────────────────────────
+const horaOptions = Array.from({ length: 26 }, (_, i) => {
+  const h = Math.floor(i / 2) + 8;
+  const m = i % 2 === 0 ? "00" : "30";
+  return `${String(h).padStart(2, "0")}:${m}`;
+});
+
+function AulaModal({ open, onClose, aula, onSave, onCancel }: {
+  open: boolean; onClose: () => void; aula: Aula | null;
+  onSave: (data: any) => void; onCancel?: () => void;
+}) {
   const { alunos, explicadores, salas, aulas } = useData();
   const [tipo, setTipo] = useState<"individual" | "grupo">(aula?.tipo || "individual");
   const [disciplina, setDisciplina] = useState(aula?.disciplina || "");
@@ -318,11 +429,12 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: { open: boolean; o
     }
   });
 
-  const expsFiltrados = disciplina ? explicadores.filter(e => e.disciplinas.includes(disciplina) && e.estado === "ativo") : explicadores.filter(e => e.estado === "ativo");
+  const expsFiltrados = disciplina
+    ? explicadores.filter(e => e.disciplinas.includes(disciplina) && e.estado === "ativo")
+    : explicadores.filter(e => e.estado === "ativo");
   const capacidadeMin = tipo === "individual" ? 1 : Math.max(alunoIds.length, 1);
   const salasFiltradas = salas.filter(s => s.estado === "disponível" && s.capacidade >= capacidadeMin);
 
-  // Auto-pick first available sala (smallest capacity that fits, not occupied)
   const autoSalaId = (() => {
     if (!data || !horaInicio) return "";
     const candidates = [...salasFiltradas].sort((a, b) => a.capacidade - b.capacidade);
@@ -335,7 +447,6 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: { open: boolean; o
   const resolvedSalaId = salaId === "auto" ? autoSalaId : salaId;
   const autoSalaNome = salas.find(s => s.id === autoSalaId)?.nome;
 
-  // Conflict checks
   const conflicts: string[] = [];
   if (explicadorId && data && horaInicio) {
     const existing = aulas.find(a => a.id !== aula?.id && a.explicadorId === explicadorId && a.data === data && a.horaInicio === horaInicio && a.estado !== "cancelada");
@@ -343,10 +454,9 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: { open: boolean; o
       const al = alunos.find(a => a.id === existing.alunoIds[0]);
       conflicts.push(`⚠️ O explicador já tem aula neste horário (${existing.horaInicio} com ${al?.nome})`);
     }
-    // Check explicador availability
     const exp = explicadores.find(e => e.id === explicadorId);
     if (exp && exp.disponibilidade.length > 0) {
-      const diaSemana = new Date(data + "T00:00:00").getDay() || 7; // 1=Mon…7=Sun → align with stored 1-6
+      const diaSemana = new Date(data + "T00:00:00").getDay() || 7;
       const corrigido = diaSemana === 7 ? 0 : diaSemana;
       const disponivel = exp.disponibilidade.some(d =>
         d.diaSemana === corrigido && horaInicio >= d.horaInicio && horaInicio < d.horaFim
@@ -395,21 +505,44 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: { open: boolean; o
           </div>
           <div>
             <Label>Disciplina *</Label>
-            <Select value={disciplina} onValueChange={setDisciplina}><SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger><SelectContent>{disciplinas.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select>
+            <Select value={disciplina} onValueChange={setDisciplina}>
+              <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+              <SelectContent>{disciplinas.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+            </Select>
           </div>
           <div className={tipo === "grupo" ? "sm:col-span-2" : ""}>
             <Label>Aluno(s) *</Label>
             {tipo === "individual" ? (
-              <Select value={alunoIds[0] || ""} onValueChange={v => setAlunoIds([v])}><SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger><SelectContent>{alunos.filter(a => a.estado === "ativo").map(a => <SelectItem key={a.id} value={a.id}>{a.nome}</SelectItem>)}</SelectContent></Select>
+              <Select value={alunoIds[0] || ""} onValueChange={v => setAlunoIds([v])}>
+                <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                <SelectContent>{alunos.filter(a => a.estado === "ativo").map(a => <SelectItem key={a.id} value={a.id}>{a.nome}</SelectItem>)}</SelectContent>
+              </Select>
             ) : (
-              <div className="grid grid-cols-2 gap-1 mt-2 max-h-32 overflow-y-auto">{alunos.filter(a => a.estado === "ativo").map(a => (
-                <div key={a.id} className="flex items-center gap-2"><Checkbox checked={alunoIds.includes(a.id)} onCheckedChange={c => setAlunoIds(prev => c ? [...prev, a.id] : prev.filter(x => x !== a.id))} /><span className="text-sm">{a.nome}</span></div>
-              ))}</div>
+              <div className="grid grid-cols-2 gap-1 mt-2 max-h-32 overflow-y-auto">
+                {alunos.filter(a => a.estado === "ativo").map(a => (
+                  <div key={a.id} className="flex items-center gap-2">
+                    <Checkbox checked={alunoIds.includes(a.id)} onCheckedChange={c => setAlunoIds(prev => c ? [...prev, a.id] : prev.filter(x => x !== a.id))} />
+                    <span className="text-sm">{a.nome}</span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
           <div>
             <Label>Explicador *</Label>
-            <Select value={explicadorId} onValueChange={setExplicadorId}><SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger><SelectContent>{expsFiltrados.map(e => <SelectItem key={e.id} value={e.id}>{e.nome} ({e.valorHora}€/h)</SelectItem>)}</SelectContent></Select>
+            <Select value={explicadorId} onValueChange={setExplicadorId}>
+              <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+              <SelectContent>
+                {expsFiltrados.map(e => (
+                  <SelectItem key={e.id} value={e.id}>
+                    <span className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: getProfColor(e.id, explicadores) }} />
+                      {e.nome} ({e.valorHora}€/h)
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label>Sala *</Label>
@@ -425,26 +558,50 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: { open: boolean; o
             )}
           </div>
           <div><Label>Data</Label><Input type="date" value={data} onChange={e => setData(e.target.value)} /></div>
-          <div><Label>Hora Início</Label>
-            <Select value={horaInicio} onValueChange={setHoraInicio}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{hours.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent></Select>
+          <div>
+            <Label>Hora Início</Label>
+            <Select value={horaInicio} onValueChange={setHoraInicio}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>{horaOptions.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
+            </Select>
           </div>
-          <div><Label>Duração</Label>
-            <Select value={duracao} onValueChange={setDuracao}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>
-              <SelectItem value="30">30 min</SelectItem><SelectItem value="60">1 hora</SelectItem><SelectItem value="90">1h30</SelectItem><SelectItem value="120">2 horas</SelectItem>
-            </SelectContent></Select>
+          <div>
+            <Label>Duração</Label>
+            <Select value={duracao} onValueChange={setDuracao}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="30">30 min</SelectItem>
+                <SelectItem value="60">1 hora</SelectItem>
+                <SelectItem value="90">1h30</SelectItem>
+                <SelectItem value="120">2 horas</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <div><Label>Recorrência</Label>
-            <Select value={recorrencia} onValueChange={setRecorrencia}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>
-              <SelectItem value="unica">Única</SelectItem><SelectItem value="semanal">Semanal</SelectItem><SelectItem value="quinzenal">Quinzenal</SelectItem>
-            </SelectContent></Select>
+          <div>
+            <Label>Recorrência</Label>
+            <Select value={recorrencia} onValueChange={setRecorrencia}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unica">Única</SelectItem>
+                <SelectItem value="semanal">Semanal</SelectItem>
+                <SelectItem value="quinzenal">Quinzenal</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <div className="sm:col-span-2"><Label>Notas</Label><Textarea value={notas} onChange={e => setNotas(e.target.value)} /></div>
+          <div className="sm:col-span-2">
+            <Label>Notas</Label>
+            <Textarea value={notas} onChange={e => setNotas(e.target.value)} />
+          </div>
         </div>
 
         {conflicts.length > 0 && (
-          <div className="mt-4 space-y-2">{conflicts.map((c, i) => (
-            <div key={i} className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 p-2 rounded"><AlertTriangle className="h-4 w-4 shrink-0" /> {c}</div>
-          ))}</div>
+          <div className="mt-4 space-y-2">
+            {conflicts.map((c, i) => (
+              <div key={i} className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 p-2 rounded">
+                <AlertTriangle className="h-4 w-4 shrink-0" /> {c}
+              </div>
+            ))}
+          </div>
         )}
 
         <div className="flex justify-between mt-4">
