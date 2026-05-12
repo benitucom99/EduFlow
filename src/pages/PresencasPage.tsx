@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useData } from "@/contexts/DataContext";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CalendarDays, ChevronDown, ChevronUp } from "lucide-react";
 import { format } from "date-fns";
 import { Presenca } from "@/data/mockData";
@@ -9,13 +10,15 @@ import { cn } from "@/lib/utils";
 export default function PresencasPage() {
   const { aulas, setAulas, alunos, explicadores } = useData();
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [expFilter, setExpFilter] = useState("todos");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const aulasDoDia = useMemo(() =>
     aulas
       .filter(a => a.data === selectedDate && a.estado !== "cancelada")
+      .filter(a => expFilter === "todos" || a.explicadorId === expFilter)
       .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio)),
-    [aulas, selectedDate]
+    [aulas, selectedDate, expFilter]
   );
 
   const updatePresenca = (aulaId: string, alunoId: string, presenca: Presenca) => {
@@ -37,14 +40,27 @@ export default function PresencasPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold">Presenças</h1>
-        <div className="relative">
-          <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            type="date"
-            value={selectedDate}
-            onChange={e => setSelectedDate(e.target.value)}
-            className="pl-9 w-[180px] h-9"
-          />
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              type="date"
+              value={selectedDate}
+              onChange={e => setSelectedDate(e.target.value)}
+              className="pl-9 w-[180px] h-9"
+            />
+          </div>
+          <Select value={expFilter} onValueChange={setExpFilter}>
+            <SelectTrigger className="w-[200px] h-9">
+              <SelectValue placeholder="Todos os professores" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os professores</SelectItem>
+              {explicadores
+                .filter(e => e.estado === "ativo")
+                .map(e => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
