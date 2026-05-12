@@ -227,6 +227,39 @@ function generateAulas(): Aula[] {
     }
   }
 
+  // Duas aulas sobrepostas (mesma quarta-feira, horários cruzados)
+  const wedStr = format(addDays(monday, 2), "yyyy-MM-dd");
+  aulas.push(
+    {
+      id: `aula${id++}`,
+      alunoIds: ["a3"],
+      explicadorId: "e2",
+      salaId: "s2",
+      disciplina: "Português",
+      data: wedStr,
+      horaInicio: "10:00",
+      horaFim: "11:00",
+      tipo: "individual",
+      estado: "agendada",
+      presencas: {},
+      recorrencia: "unica",
+    },
+    {
+      id: `aula${id++}`,
+      alunoIds: ["a5"],
+      explicadorId: "e3",
+      salaId: "s3",
+      disciplina: "Inglês",
+      data: wedStr,
+      horaInicio: "10:30",
+      horaFim: "11:30",
+      tipo: "individual",
+      estado: "agendada",
+      presencas: {},
+      recorrencia: "unica",
+    }
+  );
+
   return aulas;
 }
 
