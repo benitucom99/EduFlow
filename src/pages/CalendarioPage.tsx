@@ -23,22 +23,19 @@ const TOTAL_HOURS = END_HOUR - START_HOUR;
 const hours = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => i + START_HOUR);
 
 // ─── Professor pastel palette ─────────────────────────────────────────────────
-const PROF_PALETTE = [
-  { bg: "#DBEAFE", text: "#1e40af", accent: "#3b82f6" }, // blue
-  { bg: "#D1FAE5", text: "#065f46", accent: "#10b981" }, // mint
-  { bg: "#EDE9FE", text: "#4c1d95", accent: "#8b5cf6" }, // lilac
-  { bg: "#FEE2E2", text: "#991b1b", accent: "#ef4444" }, // peach
-  { bg: "#FEF9C3", text: "#713f12", accent: "#ca8a04" }, // yellow
-  { bg: "#FCE7F3", text: "#831843", accent: "#ec4899" }, // pink
-  { bg: "#E0F2FE", text: "#0c4a6e", accent: "#0ea5e9" }, // sky
-  { bg: "#FED7AA", text: "#7c2d12", accent: "#f97316" }, // orange
-  { bg: "#CCFBF1", text: "#134e4a", accent: "#14b8a6" }, // teal
-  { bg: "#FFE4E6", text: "#881337", accent: "#f43f5e" }, // rose
+const PROFESSOR_COLORS = [
+  { bg: "#DBEAFE", text: "#1E40AF", border: "#3B82F6" }, // blue
+  { bg: "#D1FAE5", text: "#065F46", border: "#10B981" }, // mint
+  { bg: "#EDE9FE", text: "#5B21B6", border: "#8B5CF6" }, // lilac
+  { bg: "#FEE2E2", text: "#991B1B", border: "#EF4444" }, // peach
+  { bg: "#FEF3C7", text: "#92400E", border: "#F59E0B" }, // amber
+  { bg: "#FCE7F3", text: "#9D174D", border: "#EC4899" }, // pink
 ];
 
+/** Cor estável por professor: mesmo ID/nome → mesma cor (ciclo modular). */
 function getProfPalette(expId: string, allExplicadores: { id: string }[]) {
   const idx = allExplicadores.findIndex(e => e.id === expId);
-  return PROF_PALETTE[(idx < 0 ? 0 : idx) % PROF_PALETTE.length];
+  return PROFESSOR_COLORS[(idx < 0 ? 0 : idx) % PROFESSOR_COLORS.length];
 }
 
 // ─── Overlap layout ───────────────────────────────────────────────────────────
@@ -147,7 +144,7 @@ export default function CalendarioPage() {
               {explicadores.map(e => (
                 <SelectItem key={e.id} value={e.id}>
                   <span className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: getProfPalette(e.id, explicadores).accent }} />
+                    <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: getProfPalette(e.id, explicadores).border }} />
                     {e.nome}
                   </span>
                 </SelectItem>
@@ -267,7 +264,7 @@ export default function CalendarioPage() {
                           width: `calc(${colW}% - 4px)`,
                           backgroundColor: palette.bg,
                           color: palette.text,
-                          borderLeft: `3px solid ${palette.accent}`,
+                          borderLeft: `3px solid ${palette.border}`,
                         }}
                         onClick={() => setDetailAula(aula)}
                       >
@@ -295,7 +292,7 @@ export default function CalendarioPage() {
                         {heightPx > 72 && (
                           <div
                             className="flex items-center justify-between mt-1 pt-1 gap-1"
-                            style={{ borderTop: `1px solid ${palette.accent}30` }}
+                            style={{ borderTop: `1px solid ${palette.border}30` }}
                           >
                             <div className="flex items-center gap-0.5 min-w-0">
                               <UserRound className="h-2.5 w-2.5 shrink-0 opacity-60" />
@@ -328,7 +325,7 @@ export default function CalendarioPage() {
             const palette = getProfPalette(detailAula.explicadorId, explicadores);
             return (
               <div className="space-y-4">
-                <div className="rounded-lg p-3" style={{ backgroundColor: palette.bg, color: palette.text, borderLeft: `4px solid ${palette.accent}` }}>
+                <div className="rounded-lg p-3" style={{ backgroundColor: palette.bg, color: palette.text, borderLeft: `4px solid ${palette.border}` }}>
                   <p className="font-bold text-lg font-heading">{detailAula.disciplina}</p>
                   <p className="text-sm opacity-90">{detailAula.horaInicio} – {detailAula.horaFim} · {format(parseISO(detailAula.data), "dd/MM/yyyy")}</p>
                 </div>
@@ -529,7 +526,7 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: {
                 {expsFiltrados.map(e => (
                   <SelectItem key={e.id} value={e.id}>
                     <span className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: getProfPalette(e.id, explicadores).accent }} />
+                      <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: getProfPalette(e.id, explicadores).border }} />
                       {e.nome} ({e.valorHora}€/h)
                     </span>
                   </SelectItem>
