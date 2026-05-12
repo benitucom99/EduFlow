@@ -529,7 +529,7 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: {
                 {expsFiltrados.map(e => (
                   <SelectItem key={e.id} value={e.id}>
                     <span className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: getProfColor(e.id, explicadores) }} />
+                      <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: getProfPalette(e.id, explicadores).accent }} />
                       {e.nome} ({e.valorHora}€/h)
                     </span>
                   </SelectItem>
