@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ChevronLeft, ChevronRight, Plus, AlertTriangle, UserRound, MapPin } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, AlertTriangle, UserRound, MapPin, Clock } from "lucide-react";
 import { addDays, startOfWeek, format, isToday, addWeeks, subWeeks, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
@@ -22,29 +22,23 @@ const TOTAL_HOURS = END_HOUR - START_HOUR;
 
 const hours = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => i + START_HOUR);
 
-const HALF_HOURS = Array.from({ length: TOTAL_HOURS * 2 }, (_, i) => {
-  const h = START_HOUR + Math.floor(i / 2);
-  const m = i % 2 === 0 ? "00" : "30";
-  return `${String(h).padStart(2, "0")}:${m}`;
-});
-
-// ─── Professor colour palette ─────────────────────────────────────────────────
-const PROF_COLORS = [
-  "#4f46e5", "#0891b2", "#059669", "#d97706",
-  "#dc2626", "#7c3aed", "#db2777", "#0284c7",
-  "#16a34a", "#ea580c",
+// ─── Professor pastel palette ─────────────────────────────────────────────────
+const PROF_PALETTE = [
+  { bg: "#DBEAFE", text: "#1e40af", accent: "#3b82f6" }, // blue
+  { bg: "#D1FAE5", text: "#065f46", accent: "#10b981" }, // mint
+  { bg: "#EDE9FE", text: "#4c1d95", accent: "#8b5cf6" }, // lilac
+  { bg: "#FEE2E2", text: "#991b1b", accent: "#ef4444" }, // peach
+  { bg: "#FEF9C3", text: "#713f12", accent: "#ca8a04" }, // yellow
+  { bg: "#FCE7F3", text: "#831843", accent: "#ec4899" }, // pink
+  { bg: "#E0F2FE", text: "#0c4a6e", accent: "#0ea5e9" }, // sky
+  { bg: "#FED7AA", text: "#7c2d12", accent: "#f97316" }, // orange
+  { bg: "#CCFBF1", text: "#134e4a", accent: "#14b8a6" }, // teal
+  { bg: "#FFE4E6", text: "#881337", accent: "#f43f5e" }, // rose
 ];
 
-function getProfColor(expId: string, allExplicadores: { id: string }[]) {
+function getProfPalette(expId: string, allExplicadores: { id: string }[]) {
   const idx = allExplicadores.findIndex(e => e.id === expId);
-  return PROF_COLORS[(idx < 0 ? 0 : idx) % PROF_COLORS.length];
-}
-
-function getTextColor(hex: string) {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.55 ? "#111827" : "#ffffff";
+  return PROF_PALETTE[(idx < 0 ? 0 : idx) % PROF_PALETTE.length];
 }
 
 // ─── Overlap layout ───────────────────────────────────────────────────────────
@@ -116,20 +110,6 @@ export default function CalendarioPage() {
     ? `${format(weekDays[0], "d MMM", { locale: pt })} – ${format(weekDays[4], "d MMM yyyy", { locale: pt })}`
     : format(currentDate, "EEEE, d MMMM yyyy", { locale: pt });
 
-  function AulaCard({ aula }: { aula: Aula }) {
-    const bgColor = getProfColor(aula.explicadorId, explicadores);
-    const color = getTextColor(bgColor);
-    const exp = explicadores.find(e => e.id === aula.explicadorId);
-    const aluno = alunos.find(a => a.id === aula.alunoIds[0]);
-    const sala = salas.find(s => s.id === aula.salaId);
-
-    const topPx = (timeToMin(aula.horaInicio) - START_HOUR * 60) * (HOUR_HEIGHT / 60);
-    const endMin = aula.horaFim ? timeToMin(aula.horaFim) : timeToMin(aula.horaInicio) + 60;
-    const heightPx = Math.max((endMin - timeToMin(aula.horaInicio)) * (HOUR_HEIGHT / 60) - 3, 20);
-
-    return { topPx, heightPx, bgColor, color, exp, aluno, sala };
-  }
-
   return (
     <div className="flex flex-col gap-4 animate-fade-in h-full">
       {/* ── Header ─────────────────────────────────────────────────── */}
@@ -167,7 +147,7 @@ export default function CalendarioPage() {
               {explicadores.map(e => (
                 <SelectItem key={e.id} value={e.id}>
                   <span className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: getProfColor(e.id, explicadores) }} />
+                    <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: getProfPalette(e.id, explicadores).accent }} />
                     {e.nome}
                   </span>
                 </SelectItem>
@@ -265,8 +245,7 @@ export default function CalendarioPage() {
 
                   {/* Aula cards */}
                   {dayLayout.map(({ aula, col, totalCols }) => {
-                    const bgColor = getProfColor(aula.explicadorId, explicadores);
-                    const textColor = getTextColor(bgColor);
+                    const palette = getProfPalette(aula.explicadorId, explicadores);
                     const exp = explicadores.find(e => e.id === aula.explicadorId);
                     const aluno = alunos.find(a => a.id === aula.alunoIds[0]);
                     const sala = salas.find(s => s.id === aula.salaId);
@@ -280,37 +259,51 @@ export default function CalendarioPage() {
                     return (
                       <div
                         key={aula.id}
-                        className="absolute rounded-md px-1.5 py-1 cursor-pointer overflow-hidden shadow-sm hover:brightness-95 transition-all z-10 select-none"
+                        className="absolute rounded-lg px-2 py-1.5 cursor-pointer overflow-hidden shadow-sm hover:shadow-md hover:brightness-[0.97] transition-all z-10 select-none"
                         style={{
                           top: topPx + 2,
                           height: heightPx,
                           left: `calc(${leftPct}% + 2px)`,
                           width: `calc(${colW}% - 4px)`,
-                          backgroundColor: bgColor,
-                          color: textColor,
+                          backgroundColor: palette.bg,
+                          color: palette.text,
+                          borderLeft: `3px solid ${palette.accent}`,
                         }}
                         onClick={() => setDetailAula(aula)}
                       >
-                        <p className="text-[9px] opacity-75 leading-none font-sans tabular-nums">
-                          {aula.horaInicio} – {aula.horaFim}
-                        </p>
-                        <p className="text-[11px] font-bold truncate leading-tight mt-0.5 font-heading">
+                        {/* Time */}
+                        <div className="flex items-center gap-1 leading-none">
+                          <Clock className="h-2.5 w-2.5 shrink-0 opacity-60" />
+                          <span className="text-[9px] font-sans tabular-nums opacity-60">
+                            {aula.horaInicio} – {aula.horaFim}
+                          </span>
+                        </div>
+
+                        {/* Discipline — always visible */}
+                        <p className="text-[11px] font-bold font-heading leading-tight mt-0.5 truncate">
                           {aula.disciplina}
                         </p>
-                        {heightPx > 40 && (
-                          <p className="text-[10px] truncate opacity-90 leading-tight">
+
+                        {/* Student */}
+                        {heightPx > 44 && (
+                          <p className="text-[10px] truncate leading-tight opacity-80">
                             {aula.tipo === "grupo" ? `Grupo (${aula.alunoIds.length} alunos)` : aluno?.nome}
                           </p>
                         )}
-                        {heightPx > 62 && (
-                          <div className="mt-0.5 space-y-px">
-                            <div className="flex items-center gap-0.5 opacity-85">
-                              <UserRound className="h-2.5 w-2.5 shrink-0" />
-                              <p className="text-[9px] truncate">{exp?.nome}</p>
+
+                        {/* Footer: professor + room */}
+                        {heightPx > 72 && (
+                          <div
+                            className="flex items-center justify-between mt-1 pt-1 gap-1"
+                            style={{ borderTop: `1px solid ${palette.accent}30` }}
+                          >
+                            <div className="flex items-center gap-0.5 min-w-0">
+                              <UserRound className="h-2.5 w-2.5 shrink-0 opacity-60" />
+                              <span className="text-[9px] truncate opacity-70">{exp?.nome}</span>
                             </div>
-                            <div className="flex items-center gap-0.5 opacity-85">
-                              <MapPin className="h-2.5 w-2.5 shrink-0" />
-                              <p className="text-[9px] truncate">{sala?.nome}</p>
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              <MapPin className="h-2.5 w-2.5 shrink-0 opacity-60" />
+                              <span className="text-[9px] opacity-70">{sala?.nome}</span>
                             </div>
                           </div>
                         )}
@@ -332,10 +325,10 @@ export default function CalendarioPage() {
             const exp = explicadores.find(e => e.id === detailAula.explicadorId);
             const sala = salas.find(s => s.id === detailAula.salaId);
             const alunosList = detailAula.alunoIds.map(id => alunos.find(a => a.id === id)?.nome).filter(Boolean);
-            const bgColor = getProfColor(detailAula.explicadorId, explicadores);
+            const palette = getProfPalette(detailAula.explicadorId, explicadores);
             return (
               <div className="space-y-4">
-                <div className="rounded-lg p-3 text-white" style={{ backgroundColor: bgColor, color: getTextColor(bgColor) }}>
+                <div className="rounded-lg p-3" style={{ backgroundColor: palette.bg, color: palette.text, borderLeft: `4px solid ${palette.accent}` }}>
                   <p className="font-bold text-lg font-heading">{detailAula.disciplina}</p>
                   <p className="text-sm opacity-90">{detailAula.horaInicio} – {detailAula.horaFim} · {format(parseISO(detailAula.data), "dd/MM/yyyy")}</p>
                 </div>
