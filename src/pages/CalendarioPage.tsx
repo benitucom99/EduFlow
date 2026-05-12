@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ChevronLeft, ChevronRight, Plus, AlertTriangle, UserRound, MapPin, Clock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, AlertTriangle, UserRound, MapPin, Clock, Users } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 import { addDays, startOfWeek, format, isToday, addWeeks, subWeeks, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
@@ -481,127 +482,217 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: {
     onSave({ tipo, disciplina, alunoIds, explicadorId, salaId: resolvedSalaId, data, horaInicio, horaFim: endHour(), recorrencia, notas });
   };
 
+  const alunosAtivos = alunos.filter(a => a.estado === "ativo");
+
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>{aula ? "Editar Aula" : "Nova Aula"}</DialogTitle></DialogHeader>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <Label>Tipo</Label>
-            <RadioGroup value={tipo} onValueChange={v => setTipo(v as any)} className="flex gap-4 mt-2">
-              <div className="flex items-center gap-2"><RadioGroupItem value="individual" id="ind" /><Label htmlFor="ind">Individual</Label></div>
-              <div className="flex items-center gap-2"><RadioGroupItem value="grupo" id="grp" /><Label htmlFor="grp">Grupo</Label></div>
-            </RadioGroup>
-          </div>
-          <div>
-            <Label>Disciplina *</Label>
-            <Select value={disciplina} onValueChange={setDisciplina}>
-              <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
-              <SelectContent>{disciplinas.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div className={tipo === "grupo" ? "sm:col-span-2" : ""}>
-            <Label>Aluno(s) *</Label>
-            {tipo === "individual" ? (
-              <Select value={alunoIds[0] || ""} onValueChange={v => setAlunoIds([v])}>
-                <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
-                <SelectContent>{alunos.filter(a => a.estado === "ativo").map(a => <SelectItem key={a.id} value={a.id}>{a.nome}</SelectItem>)}</SelectContent>
+    <Sheet open={open} onOpenChange={onClose}>
+      <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col gap-0">
+        <SheetHeader className="px-6 py-5 border-b shrink-0">
+          <SheetTitle className="text-xl font-heading">{aula ? "Editar Aula" : "Nova Aula"}</SheetTitle>
+        </SheetHeader>
+
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-8">
+          {/* ─── Detalhes da Aula ─────────────────────────────── */}
+          <section className="space-y-4">
+            <h3 className="text-base font-bold font-heading">Detalhes da Aula</h3>
+
+            {/* Tipo (cartões visuais) */}
+            <div>
+              <Label className="text-sm mb-2 block">Tipo</Label>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { value: "individual", label: "Individual", Icon: UserRound },
+                  { value: "grupo", label: "Grupo", Icon: Users },
+                ].map(({ value, label, Icon }) => {
+                  const active = tipo === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setTipo(value as any)}
+                      className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-colors ${
+                        active ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+                      }`}
+                    >
+                      <Icon className={`h-7 w-7 ${active ? "text-primary" : "text-muted-foreground"}`} strokeWidth={1.75} />
+                      <span className={`text-sm font-medium ${active ? "text-primary" : "text-foreground"}`}>{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Aluno(s) */}
+            <div>
+              <Label className="text-sm">Aluno(s) <span className="text-destructive">*</span></Label>
+              {tipo === "individual" ? (
+                <Select value={alunoIds[0] || ""} onValueChange={v => setAlunoIds([v])}>
+                  <SelectTrigger><SelectValue placeholder="Selecionar aluno" /></SelectTrigger>
+                  <SelectContent>
+                    {alunosAtivos.map(a => <SelectItem key={a.id} value={a.id}>{a.nome}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="grid grid-cols-2 gap-1 mt-2 max-h-40 overflow-y-auto border rounded-md p-2">
+                  {alunosAtivos.map(a => (
+                    <div key={a.id} className="flex items-center gap-2">
+                      <Checkbox
+                        checked={alunoIds.includes(a.id)}
+                        onCheckedChange={c => setAlunoIds(prev => c ? [...prev, a.id] : prev.filter(x => x !== a.id))}
+                      />
+                      <span className="text-sm">{a.nome}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Disciplina */}
+            <div>
+              <Label className="text-sm">Disciplina <span className="text-destructive">*</span></Label>
+              <Select value={disciplina} onValueChange={setDisciplina}>
+                <SelectTrigger><SelectValue placeholder="Selecionar disciplina" /></SelectTrigger>
+                <SelectContent>{disciplinas.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
               </Select>
-            ) : (
-              <div className="grid grid-cols-2 gap-1 mt-2 max-h-32 overflow-y-auto">
-                {alunos.filter(a => a.estado === "ativo").map(a => (
-                  <div key={a.id} className="flex items-center gap-2">
-                    <Checkbox checked={alunoIds.includes(a.id)} onCheckedChange={c => setAlunoIds(prev => c ? [...prev, a.id] : prev.filter(x => x !== a.id))} />
-                    <span className="text-sm">{a.nome}</span>
-                  </div>
-                ))}
+            </div>
+
+            {/* Explicador */}
+            <div>
+              <Label className="text-sm">Explicador <span className="text-destructive">*</span></Label>
+              <Select value={explicadorId} onValueChange={setExplicadorId}>
+                <SelectTrigger><SelectValue placeholder="Selecionar explicador" /></SelectTrigger>
+                <SelectContent>
+                  {expsFiltrados.map(e => (
+                    <SelectItem key={e.id} value={e.id}>
+                      <span className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: getProfPalette(e.id, explicadores).border }} />
+                        {e.nome} ({e.valorHora}€/h)
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Sala */}
+            <div>
+              <Label className="text-sm">Sala <span className="text-destructive">*</span></Label>
+              <Select value={salaId} onValueChange={setSalaId}>
+                <SelectTrigger><SelectValue placeholder="Selecionar sala" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Automática{autoSalaNome ? ` (${autoSalaNome})` : ""}</SelectItem>
+                  {salasFiltradas.map(s => <SelectItem key={s.id} value={s.id}>{s.nome} (cap. {s.capacidade})</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {salaId === "auto" && autoSalaNome && (
+                <p className="text-xs text-muted-foreground mt-1">Sala atribuída: {autoSalaNome}</p>
+              )}
+            </div>
+          </section>
+
+          {/* ─── Agendamento ──────────────────────────────────── */}
+          <section className="space-y-4 pt-6 border-t">
+            <h3 className="text-base font-bold font-heading">Agendamento</h3>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label className="text-sm">Data</Label>
+                <Input type="date" value={data} onChange={e => setData(e.target.value)} />
               </div>
-            )}
-          </div>
-          <div>
-            <Label>Explicador *</Label>
-            <Select value={explicadorId} onValueChange={setExplicadorId}>
-              <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
-              <SelectContent>
-                {expsFiltrados.map(e => (
-                  <SelectItem key={e.id} value={e.id}>
-                    <span className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: getProfPalette(e.id, explicadores).border }} />
-                      {e.nome} ({e.valorHora}€/h)
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Sala *</Label>
-            <Select value={salaId} onValueChange={setSalaId}>
-              <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="auto">Automática{autoSalaNome ? ` (${autoSalaNome})` : ""}</SelectItem>
-                {salasFiltradas.map(s => <SelectItem key={s.id} value={s.id}>{s.nome} (cap. {s.capacidade})</SelectItem>)}
-              </SelectContent>
-            </Select>
-            {salaId === "auto" && autoSalaNome && (
-              <p className="text-xs text-muted-foreground mt-1">Sala atribuída: {autoSalaNome}</p>
-            )}
-          </div>
-          <div><Label>Data</Label><Input type="date" value={data} onChange={e => setData(e.target.value)} /></div>
-          <div>
-            <Label>Hora Início</Label>
-            <Select value={horaInicio} onValueChange={setHoraInicio}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{horaOptions.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Duração</Label>
-            <Select value={duracao} onValueChange={setDuracao}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="30">30 min</SelectItem>
-                <SelectItem value="60">1 hora</SelectItem>
-                <SelectItem value="90">1h30</SelectItem>
-                <SelectItem value="120">2 horas</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Recorrência</Label>
-            <Select value={recorrencia} onValueChange={setRecorrencia}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="unica">Única</SelectItem>
-                <SelectItem value="semanal">Semanal</SelectItem>
-                <SelectItem value="quinzenal">Quinzenal</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="sm:col-span-2">
-            <Label>Notas</Label>
-            <Textarea value={notas} onChange={e => setNotas(e.target.value)} />
-          </div>
+              <div>
+                <Label className="text-sm">Hora Início</Label>
+                <Select value={horaInicio} onValueChange={setHoraInicio}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{horaOptions.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-sm">Duração</Label>
+                <Select value={duracao} onValueChange={setDuracao}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="30">30 min</SelectItem>
+                    <SelectItem value="60">1 hora</SelectItem>
+                    <SelectItem value="90">1h30</SelectItem>
+                    <SelectItem value="120">2 horas</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Recorrência toggle */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">Recorrência</Label>
+                <Switch
+                  checked={recorrencia !== "unica"}
+                  onCheckedChange={c => setRecorrencia(c ? "semanal" : "unica")}
+                />
+              </div>
+              {recorrencia !== "unica" && (
+                <Select value={recorrencia} onValueChange={setRecorrencia}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="semanal">Semanal</SelectItem>
+                    <SelectItem value="quinzenal">Quinzenal</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </section>
+
+          {/* ─── Informações Adicionais ───────────────────────── */}
+          <section className="space-y-4 pt-6 border-t">
+            <h3 className="text-base font-bold font-heading">Informações Adicionais</h3>
+
+            <div>
+              <Label className="text-sm">Notas</Label>
+              <div className="relative">
+                <Textarea
+                  value={notas}
+                  onChange={e => setNotas(e.target.value.slice(0, 500))}
+                  rows={4}
+                  className="resize-none pr-14"
+                />
+                <span className="absolute bottom-2 right-3 text-xs text-muted-foreground tabular-nums">
+                  {notas.length}/500
+                </span>
+              </div>
+            </div>
+          </section>
+
+          {/* Conflitos */}
+          {conflicts.length > 0 && (
+            <div className="space-y-2">
+              {conflicts.map((c, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 p-2 rounded-md">
+                  <AlertTriangle className="h-4 w-4 shrink-0" /> {c}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Cancelar Aula (modo edição) */}
+          {onCancel && (
+            <div className="pt-4 border-t">
+              <Button variant="destructive" className="w-full" onClick={onCancel}>
+                Cancelar Aula
+              </Button>
+            </div>
+          )}
         </div>
 
-        {conflicts.length > 0 && (
-          <div className="mt-4 space-y-2">
-            {conflicts.map((c, i) => (
-              <div key={i} className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 p-2 rounded">
-                <AlertTriangle className="h-4 w-4 shrink-0" /> {c}
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="flex justify-between mt-4">
-          <div>{onCancel && <Button variant="destructive" onClick={onCancel}>Cancelar Aula</Button>}</div>
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={onClose}>Fechar</Button>
-            <Button onClick={handleSave} disabled={conflicts.length > 0 || !disciplina || alunoIds.length === 0}>Guardar</Button>
-          </div>
+        {/* ─── Footer ─────────────────────────────────────────── */}
+        <div className="flex justify-end gap-3 px-6 py-4 border-t bg-muted/30 shrink-0">
+          <Button
+            onClick={handleSave}
+            disabled={conflicts.length > 0 || !disciplina || alunoIds.length === 0 || !explicadorId}
+          >
+            {aula ? "Guardar" : "Criar Aula"}
+          </Button>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }
