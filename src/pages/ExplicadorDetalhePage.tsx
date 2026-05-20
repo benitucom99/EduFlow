@@ -9,17 +9,13 @@ import { ArrowLeft, Mail, Phone, GraduationCap, Pencil, Landmark, CreditCard } f
 import { useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 
-const dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-
-// Re-use the modal from ExplicadoresPage by lazy-importing the page
-// Instead, we inline a simple edit dialog approach
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { disciplinas, Disponibilidade, Explicador } from "@/data/mockData";
+import { Explicador } from "@/contexts/DataContext";
 import { useEffect } from "react";
 
 export default function ExplicadorDetalhePage() {
@@ -79,23 +75,24 @@ export default function ExplicadorDetalhePage() {
           </CardContent>
         </Card>
         <div className="lg:col-span-2">
-          <Tabs defaultValue="disponibilidade">
-            <TabsList><TabsTrigger value="disponibilidade">Disponibilidade</TabsTrigger><TabsTrigger value="estatisticas">Estatísticas</TabsTrigger></TabsList>
-            <TabsContent value="disponibilidade">
+          <Tabs defaultValue="estatisticas">
+            <TabsList><TabsTrigger value="estatisticas">Estatísticas</TabsTrigger><TabsTrigger value="aulas">Aulas Recentes</TabsTrigger></TabsList>
+            <TabsContent value="aulas">
               <Card><CardContent className="p-6">
-                <div className="grid grid-cols-5 gap-2">
-                  {[1, 2, 3, 4, 5].map(day => {
-                    const dayDisps = exp.disponibilidade.filter(d => d.diaSemana === day);
-                    return (
-                      <div key={day} className="text-center">
-                        <p className="font-medium text-sm mb-2">{dias[day]}</p>
-                        {dayDisps.length > 0 ? dayDisps.map((d, i) => (
-                          <div key={i} className="bg-success/10 text-success rounded p-1.5 text-xs mb-1">{d.horaInicio}-{d.horaFim}</div>
-                        )) : <div className="bg-muted rounded p-1.5 text-xs text-muted-foreground">—</div>}
+                {aulas.filter(a => a.explicadorId === id).length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">Sem aulas registadas.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {aulas.filter(a => a.explicadorId === id).sort((a, b) => b.data.localeCompare(a.data)).slice(0, 10).map(a => (
+                      <div key={a.id} className="flex items-center justify-between text-sm border-b border-border/50 pb-2">
+                        <span className="text-muted-foreground">{a.data.split("-").reverse().join("/")}</span>
+                        <span className="font-medium">{a.disciplina}</span>
+                        <span>{a.horaInicio} – {a.horaFim}</span>
+                        <span className={`px-2 py-0.5 rounded text-xs ${a.estado === "realizada" ? "bg-success/10 text-success" : a.estado === "cancelada" ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"}`}>{a.estado}</span>
                       </div>
-                    );
-                  })}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent></Card>
             </TabsContent>
             <TabsContent value="estatisticas">
@@ -127,7 +124,8 @@ export default function ExplicadorDetalhePage() {
   );
 }
 
-function EditExplicadorModal({ open, onClose, explicador, onSave }: { open: boolean; onClose: () => void; explicador: Explicador; onSave: (data: any) => void }) {
+function EditExplicadorModal({ open, onClose, explicador, onSave }: { open: boolean; onClose: () => void; explicador: Explicador; onSave: (data: any) => void; }) {
+  const { disciplinas } = useData();
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
@@ -187,7 +185,7 @@ function EditExplicadorModal({ open, onClose, explicador, onSave }: { open: bool
             <div><Label>Valor/Hora (€)</Label><Input type="number" value={valorHora} onChange={e => setValorHora(e.target.value)} /></div>
             <div><Label>Disciplinas *</Label>{errors.disc && <p className="text-xs text-destructive">{errors.disc}</p>}
               <div className="grid grid-cols-2 gap-2 mt-2">{disciplinas.map(d => (
-                <div key={d} className="flex items-center gap-2"><Checkbox checked={selectedDisc.includes(d)} onCheckedChange={c => setSelectedDisc(prev => c ? [...prev, d] : prev.filter(x => x !== d))} /><span className="text-sm">{d}</span></div>
+                <div key={d.nome} className="flex items-center gap-2"><Checkbox checked={selectedDisc.includes(d.nome)} onCheckedChange={c => setSelectedDisc(prev => c ? [...prev, d.nome] : prev.filter(x => x !== d.nome))} /><span className="text-sm">{d.nome}</span></div>
               ))}</div>
             </div>
           </TabsContent>

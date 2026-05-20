@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CalendarDays, ChevronDown, ChevronUp } from "lucide-react";
 import { format } from "date-fns";
-import { Presenca } from "@/data/mockData";
+import { Presenca } from "@/contexts/DataContext";
 import { cn } from "@/lib/utils";
 
 export default function PresencasPage() {

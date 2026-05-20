@@ -14,20 +14,11 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, Eye, Pencil, LayoutGrid, LayoutList, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Explicador, disciplinas, Disponibilidade } from "@/data/mockData";
-
-const DIAS_SEMANA = [
-  { label: "D", full: "Domingo", day: 0 },
-  { label: "S", full: "Segunda", day: 1 },
-  { label: "T", full: "Terça", day: 2 },
-  { label: "Q", full: "Quarta", day: 3 },
-  { label: "Q", full: "Quinta", day: 4 },
-  { label: "S", full: "Sexta", day: 5 },
-  { label: "S", full: "Sábado", day: 6 },
-];
+import { Explicador } from "@/contexts/DataContext";
 
 export default function ExplicadoresPage() {
-  const { explicadores, createExplicador, updateExplicador, deleteExplicador } = useData();
+  const { explicadores, disciplinas, createExplicador, updateExplicador, deleteExplicador } = useData();
+  const discNames = disciplinas.map(d => d.nome);
   const navigate = useNavigate();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
@@ -72,7 +63,7 @@ export default function ExplicadoresPage() {
         </div>
         <Select value={discFilter} onValueChange={setDiscFilter}>
           <SelectTrigger className="w-[180px]"><SelectValue placeholder="Disciplina" /></SelectTrigger>
-          <SelectContent><SelectItem value="todas">Todas</SelectItem>{disciplinas.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+          <SelectContent><SelectItem value="todas">Todas</SelectItem>{discNames.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
         </Select>
         <Select value={estadoFilter} onValueChange={setEstadoFilter}>
           <SelectTrigger className="w-[120px]"><SelectValue placeholder="Estado" /></SelectTrigger>
@@ -82,6 +73,9 @@ export default function ExplicadoresPage() {
 
       {viewMode === "table" ? (
         <Card><CardContent className="p-0">
+          {filtered.length === 0 ? (
+            <div className="py-16 text-center text-muted-foreground">Nenhum explicador encontrado.</div>
+          ) : (
           <Table>
             <TableHeader><TableRow>
               <TableHead>Nome</TableHead>
@@ -113,9 +107,13 @@ export default function ExplicadoresPage() {
               ))}
             </TableBody>
           </Table>
+          )}
         </CardContent></Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filtered.length === 0 && (
+            <div className="col-span-full py-16 text-center text-muted-foreground">Nenhum explicador encontrado.</div>
+          )}
           {filtered.map(exp => (
             <Card key={exp.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-6">
@@ -143,6 +141,7 @@ export default function ExplicadoresPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         explicador={editing}
+        discNames={discNames}
         onSave={async (data) => {
           if (editing) {
             await updateExplicador(editing.id, data);
@@ -175,10 +174,11 @@ export default function ExplicadoresPage() {
   );
 }
 
-function ExplicadorModal({ open, onClose, explicador, onSave }: {
+function ExplicadorModal({ open, onClose, explicador, discNames, onSave }: {
   open: boolean;
   onClose: () => void;
   explicador: Explicador | null;
+  discNames: string[];
   onSave: (data: any) => void;
 }) {
   const [nome, setNome] = useState("");
@@ -186,7 +186,6 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
   const [telefone, setTelefone] = useState("");
   const [valorHora, setValorHora] = useState("15");
   const [selectedDisc, setSelectedDisc] = useState<string[]>([]);
-  const [disp, setDisp] = useState<Disponibilidade[]>([]);
   const [iban, setIban] = useState("");
   const [nif, setNif] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -198,43 +197,11 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
       setTelefone(explicador?.telefone || "");
       setValorHora(String(explicador?.valorHora || 15));
       setSelectedDisc(explicador?.disciplinas || []);
-      setDisp(explicador?.disponibilidade || []);
       setIban(explicador?.iban || "");
       setNif(explicador?.nif || "");
       setErrors({});
     }
   }, [open, explicador]);
-
-  const activeDays = useMemo(() => [...new Set(disp.map(d => d.diaSemana))].sort((a, b) => a - b), [disp]);
-
-  const toggleDay = (day: number) => {
-    if (activeDays.includes(day)) {
-      setDisp(prev => prev.filter(d => d.diaSemana !== day));
-    } else {
-      setDisp(prev => [...prev, { diaSemana: day, horaInicio: "09:00", horaFim: "13:00" }]);
-    }
-  };
-
-  const addBloco = (day: number) => {
-    setDisp(prev => [...prev, { diaSemana: day, horaInicio: "14:00", horaFim: "18:00" }]);
-  };
-
-  const removeBloco = (day: number, idx: number) => {
-    let count = 0;
-    setDisp(prev => prev.filter(d => {
-      if (d.diaSemana !== day) return true;
-      return count++ !== idx;
-    }));
-  };
-
-  const updateBloco = (day: number, idx: number, field: "horaInicio" | "horaFim", value: string) => {
-    let count = 0;
-    setDisp(prev => prev.map(d => {
-      if (d.diaSemana !== day) return d;
-      const i = count++;
-      return i === idx ? { ...d, [field]: value } : d;
-    }));
-  };
 
   const handleSave = () => {
     const e: Record<string, string> = {};
@@ -248,7 +215,6 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
       habilitacoes: explicador?.habilitacoes || "",
       valorHora: parseFloat(valorHora),
       disciplinas: selectedDisc,
-      disponibilidade: disp,
       iban: iban || undefined,
       nif: nif || undefined,
     });
@@ -264,7 +230,6 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
           <TabsList className="w-full">
             <TabsTrigger value="dados" className="flex-1">Dados</TabsTrigger>
             <TabsTrigger value="financeiro" className="flex-1">Financeiro</TabsTrigger>
-            <TabsTrigger value="disponibilidade" className="flex-1">Disponibilidade</TabsTrigger>
           </TabsList>
 
           <TabsContent value="dados" className="space-y-4 mt-4">
@@ -285,7 +250,7 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
               <Label>Disciplinas *</Label>
               {errors.disc && <p className="text-xs text-destructive">{errors.disc}</p>}
               <div className="grid grid-cols-2 gap-2 mt-2">
-                {disciplinas.map(d => (
+                {discNames.map(d => (
                   <div key={d} className="flex items-center gap-2">
                     <Checkbox checked={selectedDisc.includes(d)} onCheckedChange={c => setSelectedDisc(prev => c ? [...prev, d] : prev.filter(x => x !== d))} />
                     <span className="text-sm">{d}</span>
@@ -311,85 +276,6 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
               />
               {errors.nif && <p className="text-xs text-destructive mt-1">{errors.nif}</p>}
             </div>
-          </TabsContent>
-
-          <TabsContent value="disponibilidade" className="mt-4 space-y-4">
-            {/* Step 1: day selection */}
-            <div>
-              <p className="text-sm font-medium mb-3">Seleciona os dias disponíveis</p>
-              <div className="flex gap-2 flex-wrap">
-                {DIAS_SEMANA.map(({ label, full, day }) => {
-                  const active = activeDays.includes(day);
-                  return (
-                    <button
-                      key={day}
-                      type="button"
-                      title={full}
-                      onClick={() => toggleDay(day)}
-                      className={`h-9 w-9 rounded-full text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring
-                        ${active
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                        }`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Step 2: time blocks per selected day */}
-            {activeDays.length > 0 && (
-              <div className="space-y-3">
-                <p className="text-sm font-medium">Blocos de horário</p>
-                {activeDays.map(day => {
-                  const dayName = DIAS_SEMANA.find(d => d.day === day)?.full ?? "";
-                  const blocos = disp.filter(d => d.diaSemana === day);
-                  return (
-                    <div key={day} className="border rounded-lg p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold text-primary">{dayName}</span>
-                        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => addBloco(day)}>
-                          + Bloco
-                        </Button>
-                      </div>
-                      {blocos.map((b, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <Input
-                            type="time"
-                            value={b.horaInicio}
-                            className="w-28"
-                            onChange={e => updateBloco(day, idx, "horaInicio", e.target.value)}
-                          />
-                          <span className="text-sm text-muted-foreground">—</span>
-                          <Input
-                            type="time"
-                            value={b.horaFim}
-                            className="w-28"
-                            onChange={e => updateBloco(day, idx, "horaFim", e.target.value)}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
-                            onClick={() => removeBloco(day, idx)}
-                          >
-                            ×
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {activeDays.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                Seleciona pelo menos um dia para configurar os horários.
-              </p>
-            )}
           </TabsContent>
         </Tabs>
 

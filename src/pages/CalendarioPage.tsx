@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { addDays, startOfWeek, format, isToday, addWeeks, subWeeks, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
-import { disciplinas, Aula } from "@/data/mockData";
+import { Aula } from "@/contexts/DataContext";
 
 // ─── Layout constants ────────────────────────────────────────────────────────
 const HOUR_HEIGHT = 64; // px per hour
@@ -78,7 +78,8 @@ function layoutAulas(aulas: Aula[]) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function CalendarioPage() {
-  const { aulas, createAulas, updateAula, cancelAula, alunos, explicadores, salas } = useData();
+  const { aulas, createAulas, updateAula, cancelAula, alunos, explicadores, salas, disciplinas } = useData();
+  const discNames = disciplinas.map(d => d.nome);
   const { toast } = useToast();
   const [view, setView] = useState<"semana" | "dia">("semana");
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -412,7 +413,8 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: {
   open: boolean; onClose: () => void; aula: Aula | null;
   onSave: (aulas: any[]) => void; onCancel?: () => void;
 }) {
-  const { alunos, explicadores, salas, aulas } = useData();
+  const { alunos, explicadores, salas, aulas, disciplinas } = useData();
+  const discNames = disciplinas.map(d => d.nome);
   const [tipo, setTipo] = useState<"individual" | "grupo">(aula?.tipo || "individual");
   const [disciplina, setDisciplina] = useState(aula?.disciplina || "");
   const [alunoIds, setAlunoIds] = useState<string[]>(aula?.alunoIds || []);
@@ -442,8 +444,7 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: {
   const expsFiltrados = disciplina
     ? explicadores.filter(e => e.disciplinas.includes(disciplina) && e.estado === "ativo")
     : explicadores.filter(e => e.estado === "ativo");
-  const capacidadeMin = tipo === "individual" ? 1 : Math.max(alunoIds.length, 1);
-  const salasFiltradas = salas.filter(s => s.estado === "disponível" && s.capacidade >= capacidadeMin);
+  const salasFiltradas = salas;
 
   const autoSalaId = (() => {
     if (!data || !horaInicio) return "";
@@ -644,7 +645,7 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: {
               <Label className="text-sm">Disciplina <span className="text-destructive">*</span></Label>
               <Select value={disciplina} onValueChange={setDisciplina}>
                 <SelectTrigger><SelectValue placeholder="Selecionar disciplina" /></SelectTrigger>
-                <SelectContent>{disciplinas.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+                <SelectContent>{discNames.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
               </Select>
             </div>
 

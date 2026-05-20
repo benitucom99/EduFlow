@@ -1,5 +1,4 @@
-import { Aula, Aluno, Explicador, precosDisciplinas } from "@/data/mockData";
-import { resolveRate } from "@/lib/servicos";
+import { Aula, Aluno, Explicador, Disciplina } from "@/contexts/DataContext";
 
 export function formatCurrency(value: number): string {
   return value.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -19,20 +18,11 @@ export function formatDuration(hours: number): string {
   return `${h}h ${String(m).padStart(2, "0")}min`;
 }
 
-export function getAulaPrecoAluno(aula: Aula, numClassesAlunoServico = 1): number {
-  const rate = resolveRate(aula.disciplina, aula.tipo, numClassesAlunoServico);
-  return parseDurationHours(aula.horaInicio, aula.horaFim) * rate;
-}
-
-export function getAulaPrecoExplicador(aula: Aula, explicador: Explicador): number {
-  return parseDurationHours(aula.horaInicio, aula.horaFim) * explicador.valorHora;
-}
-
 export interface AulaFaturacaoAluno {
   aula: Aula;
   presenca: "presente" | "falta_justificada" | "falta_injustificada" | null;
   duracao: number;
-  precoHora: number;
+  precoPorAula: number;
   valorSessao: number;
   cobrar: boolean;
 }
@@ -48,38 +38,25 @@ export interface ResumoAluno {
 export function calcularCobrancaAlunos(
   aulas: Aula[],
   alunos: Aluno[],
+  disciplinas: Disciplina[],
   dataInicio: string,
   dataFim: string
 ): ResumoAluno[] {
-  const aulasFiltradas = aulas.filter(
-    a => a.data >= dataInicio && a.data <= dataFim
-  );
-
+  const aulasFiltradas = aulas.filter(a => a.data >= dataInicio && a.data <= dataFim);
   const alunoMap = new Map(alunos.map(a => [a.id, a]));
+  const discPriceMap = new Map(disciplinas.map(d => [d.nome, d.precoPorAula]));
   const resultado = new Map<string, AulaFaturacaoAluno[]>();
-
-  // Pre-compute per (aluno, disciplina, tipo) class counts in the period.
-  // Tier rate depends on how many classes of that service the student attends.
-  const countKey = (alunoId: string, disc: string, tipo: string) => `${alunoId}|${disc}|${tipo}`;
-  const counts = new Map<string, number>();
-  for (const aula of aulasFiltradas) {
-    for (const alunoId of aula.alunoIds) {
-      const k = countKey(alunoId, aula.disciplina, aula.tipo);
-      counts.set(k, (counts.get(k) ?? 0) + 1);
-    }
-  }
 
   for (const aula of aulasFiltradas) {
     for (const alunoId of aula.alunoIds) {
       const presenca = aula.presencas[alunoId] ?? null;
       const duracao = parseDurationHours(aula.horaInicio, aula.horaFim);
-      const numClasses = counts.get(countKey(alunoId, aula.disciplina, aula.tipo)) ?? 1;
-      const precoHora = resolveRate(aula.disciplina, aula.tipo, numClasses);
+      const precoPorAula = discPriceMap.get(aula.disciplina) ?? 0;
       const cobrar = presenca === "presente";
-      const valorSessao = duracao * precoHora;
+      const valorSessao = precoPorAula;
 
       if (!resultado.has(alunoId)) resultado.set(alunoId, []);
-      resultado.get(alunoId)!.push({ aula, presenca, duracao, precoHora, valorSessao, cobrar });
+      resultado.get(alunoId)!.push({ aula, presenca, duracao, precoPorAula, valorSessao, cobrar });
     }
   }
 
@@ -124,26 +101,20 @@ export function calcularPagamentoExplicadores(
   dataInicio: string,
   dataFim: string
 ): ResumoExplicador[] {
-  const aulasFiltradas = aulas.filter(
-    a => a.data >= dataInicio && a.data <= dataFim
-  );
-
+  const aulasFiltradas = aulas.filter(a => a.data >= dataInicio && a.data <= dataFim);
   const expMap = new Map(explicadores.map(e => [e.id, e]));
   const resultado = new Map<string, AulaFaturacaoExplicador[]>();
 
   for (const aula of aulasFiltradas) {
     const explicador = expMap.get(aula.explicadorId);
     if (!explicador) continue;
-
     const alunosPresentes = aula.alunoIds.some(id => aula.presencas[id] === "presente");
     const duracao = parseDurationHours(aula.horaInicio, aula.horaFim);
     const contabilizado = alunosPresentes;
 
     if (!resultado.has(aula.explicadorId)) resultado.set(aula.explicadorId, []);
     resultado.get(aula.explicadorId)!.push({
-      aula,
-      alunosPresentes,
-      duracao,
+      aula, alunosPresentes, duracao,
       valorHora: explicador.valorHora,
       valorSessao: duracao * explicador.valorHora,
       contabilizado,
@@ -155,10 +126,9 @@ export function calcularPagamentoExplicadores(
       const explicador = expMap.get(expId);
       if (!explicador) return null;
       const contabilizadas = aulasExp.filter(a => a.contabilizado);
-      const disciplinasSet = new Set(aulasExp.map(a => a.aula.disciplina));
       return {
         explicador,
-        disciplinasLecionadas: Array.from(disciplinasSet),
+        disciplinasLecionadas: [...new Set(aulasExp.map(a => a.aula.disciplina))],
         aulas: aulasExp,
         aulasRealizadas: contabilizadas.length,
         horasTotais: contabilizadas.reduce((s, a) => s + a.duracao, 0),
@@ -175,21 +145,18 @@ function csvLine(fields: string[]): string {
 }
 
 function downloadCsv(filename: string, content: string) {
-  const bom = "\uFEFF";
+  const bom = "﻿";
   const blob = new Blob([bom + content], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
+  a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
 }
 
 export function exportCobrancaDetalhada(resumos: ResumoAluno[], explicadores: Explicador[], periodo: string) {
   const expMap = new Map(explicadores.map(e => [e.id, e]));
-  let csv = csvLine(["Aluno", "Encarregado de Educação", "Email Encarregado", "Data", "Hora Início", "Hora Fim", "Disciplina", "Tipo", "Explicador", "Duração (min)", "Preço/Hora (€)", "Valor Sessão (€)", "Presença", "Cobrar"]);
+  let csv = csvLine(["Aluno", "Encarregado de Educação", "Email Encarregado", "Data", "Hora Início", "Hora Fim", "Disciplina", "Tipo", "Explicador", "Duração (min)", "Preço/Aula (€)", "Valor Sessão (€)", "Presença", "Cobrar"]);
   let totalGeral = 0;
-
   for (const r of resumos) {
     for (const a of r.aulas) {
       const exp = expMap.get(a.aula.explicadorId);
@@ -199,7 +166,7 @@ export function exportCobrancaDetalhada(resumos: ResumoAluno[], explicadores: Ex
         a.aula.data.split("-").reverse().join("/"), a.aula.horaInicio, a.aula.horaFim,
         a.aula.disciplina, a.aula.tipo === "individual" ? "Individual" : "Grupo",
         exp?.nome ?? "", String(Math.round(a.duracao * 60)),
-        a.precoHora.toFixed(2), a.valorSessao.toFixed(2), presLabel, a.cobrar ? "Sim" : "Não"
+        a.precoPorAula.toFixed(2), a.valorSessao.toFixed(2), presLabel, a.cobrar ? "Sim" : "Não",
       ]);
     }
     csv += csvLine([`SUBTOTAL ${r.aluno.nome}`, "", "", "", "", "", "", "", "", "", "", r.valorTotal.toFixed(2), "", ""]);
@@ -225,7 +192,6 @@ export function exportPagamentoDetalhado(resumos: ResumoExplicador[], alunos: Al
   const alunoMap = new Map(alunos.map(a => [a.id, a]));
   let csv = csvLine(["Explicador", "Email", "Data", "Hora Início", "Hora Fim", "Disciplina", "Aluno(s)", "Tipo", "Duração (min)", "Valor/Hora (€)", "Valor Sessão (€)", "Presença Aluno", "Contabilizado"]);
   let totalGeral = 0;
-
   for (const r of resumos) {
     for (const a of r.aulas) {
       const alunoNomes = a.aula.alunoIds.map(id => alunoMap.get(id)?.nome ?? id).join(", ");
@@ -234,7 +200,7 @@ export function exportPagamentoDetalhado(resumos: ResumoExplicador[], alunos: Al
         a.aula.horaInicio, a.aula.horaFim, a.aula.disciplina, alunoNomes,
         a.aula.tipo === "individual" ? "Individual" : "Grupo",
         String(Math.round(a.duracao * 60)), a.valorHora.toFixed(2), a.valorSessao.toFixed(2),
-        a.alunosPresentes ? "Presente" : "Falta", a.contabilizado ? "Sim" : "Não"
+        a.alunosPresentes ? "Presente" : "Falta", a.contabilizado ? "Sim" : "Não",
       ]);
     }
     const subtotal = r.aulas.filter(a => a.contabilizado).reduce((s, a) => s + a.valorSessao, 0);

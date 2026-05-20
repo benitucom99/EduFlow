@@ -21,7 +21,7 @@ import PresencasPage from "@/pages/PresencasPage";
 import ConfiguracoesPage from "@/pages/ConfiguracoesPage";
 import FaturacaoPage from "@/pages/FaturacaoPage";
 import NotFound from "@/pages/NotFound";
-import ServicosPage from "@/pages/ServicosPage";
+import DisciplinasPage from "@/pages/DisciplinasPage";
 
 // NOTE: The following pages are intentionally not routed (feature disabled),
 // but their source files are preserved for future re-enablement:
@@ -51,7 +51,7 @@ const App = () => (
                   <Route path="/alunos/:id" element={<AlunoDetalhePage />} />
                   <Route path="/explicadores" element={<ExplicadoresPage />} />
                   <Route path="/explicadores/:id" element={<ExplicadorDetalhePage />} />
-                  <Route path="/servicos" element={<ServicosPage />} />
+                  <Route path="/disciplinas" element={<DisciplinasPage />} />
                   <Route path="/salas" element={<SalasPage />} />
                   <Route path="/calendario" element={<CalendarioPage />} />
                   <Route path="/presencas" element={<PresencasPage />} />

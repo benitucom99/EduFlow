@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, MoreHorizontal, Eye, Pencil, X, UserPlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Aluno, disciplinas } from "@/data/mockData";
+import { Aluno } from "@/contexts/DataContext";
 
 const estadoBadge = (estado: string) => {
   const map: Record<string, string> = {
@@ -28,7 +28,8 @@ const estadoBadge = (estado: string) => {
 };
 
 export default function AlunosPage() {
-  const { alunos, explicadores, createAluno, updateAluno, deleteAluno, toggleAlunoEstado } = useData();
+  const { alunos, explicadores, disciplinas, createAluno, updateAluno, deleteAluno, toggleAlunoEstado } = useData();
+  const discNames = disciplinas.map(d => d.nome);
   const navigate = useNavigate();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
@@ -102,7 +103,7 @@ export default function AlunosPage() {
             <SelectTrigger className="w-[180px]"><SelectValue placeholder="Disciplina" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todas">Todas</SelectItem>
-              {disciplinas.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+              {discNames.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
             </SelectContent>
           </Select>
           <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setEstadoFilter("todos"); setAnoFilter("todos"); setDiscFilter("todas"); }}>
@@ -200,6 +201,7 @@ export default function AlunosPage() {
         onClose={() => setModalOpen(false)}
         aluno={editingAluno}
         explicadores={explicadores}
+        discNames={discNames}
         onSave={async (data) => {
           if (editingAluno) {
             await updateAluno(editingAluno.id, data);
@@ -229,11 +231,12 @@ export default function AlunosPage() {
   );
 }
 
-function AlunoModal({ open, onClose, aluno, explicadores, onSave }: {
+function AlunoModal({ open, onClose, aluno, explicadores, discNames, onSave }: {
   open: boolean;
   onClose: () => void;
   aluno: Aluno | null;
   explicadores: { id: string; nome: string; estado: string }[];
+  discNames: string[];
   onSave: (data: any) => void;
 }) {
   const [nome, setNome] = useState("");
@@ -332,7 +335,7 @@ function AlunoModal({ open, onClose, aluno, explicadores, onSave }: {
             <div>
               <Label>Disciplinas</Label>
               <div className="grid grid-cols-2 gap-2 mt-2">
-                {disciplinas.map(d => (
+                {discNames.map(d => (
                   <div key={d} className="flex items-center gap-2">
                     <Checkbox checked={selectedDisc.includes(d)} onCheckedChange={checked => {
                       setSelectedDisc(prev => checked ? [...prev, d] : prev.filter(x => x !== d));

@@ -11,7 +11,6 @@ import { format, startOfMonth, endOfMonth, subMonths, startOfQuarter } from "dat
 import { pt } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { disciplinaHslColors } from "@/data/mockData";
 import {
   formatCurrency, formatDuration, parseDurationHours,
   calcularCobrancaAlunos, calcularPagamentoExplicadores,
@@ -39,8 +38,8 @@ function AvatarIniciais({ nome, className }: { nome: string; className?: string 
   );
 }
 
-function DisciplinaBadge({ disciplina }: { disciplina: string }) {
-  const color = disciplinaHslColors[disciplina] || "hsl(0,0%,50%)";
+function DisciplinaBadge({ disciplina, colorMap }: { disciplina: string; colorMap: Map<string, string> }) {
+  const color = colorMap.get(disciplina) || "#6366f1";
   return (
     <Badge style={{ backgroundColor: `${color}20`, color, borderColor: `${color}40` }} className="border">
       {disciplina}
@@ -62,7 +61,8 @@ function SortHeader({ label, sortKey, currentSort, currentDir, onSort }: {
 }
 
 export default function FaturacaoPage() {
-  const { aulas, alunos, explicadores } = useData();
+  const { aulas, alunos, explicadores, disciplinas } = useData();
+  const discColorMap = new Map(disciplinas.map(d => [d.nome, d.corHsl || "#6366f1"]));
   const now = new Date();
   const [dataInicio, setDataInicio] = useState<Date>(startOfMonth(now));
   const [dataFim, setDataFim] = useState<Date>(endOfMonth(now));
@@ -76,7 +76,7 @@ export default function FaturacaoPage() {
   const di = format(dataInicio, "yyyy-MM-dd");
   const df = format(dataFim, "yyyy-MM-dd");
 
-  const resumoAlunos = useMemo(() => calcularCobrancaAlunos(aulas, alunos, di, df), [aulas, alunos, di, df]);
+  const resumoAlunos = useMemo(() => calcularCobrancaAlunos(aulas, alunos, disciplinas, di, df), [aulas, alunos, disciplinas, di, df]);
   const resumoExplicadores = useMemo(() => calcularPagamentoExplicadores(aulas, explicadores, di, df), [aulas, explicadores, di, df]);
 
   const totalCobrar = useMemo(() => resumoAlunos.reduce((s, r) => s + r.valorTotal, 0), [resumoAlunos]);
@@ -275,7 +275,7 @@ export default function FaturacaoPage() {
                                       <th className="text-left p-2 text-muted-foreground">Tipo</th>
                                       <th className="text-left p-2 text-muted-foreground">Explicador</th>
                                       <th className="text-left p-2 text-muted-foreground">Duração</th>
-                                      <th className="text-left p-2 text-muted-foreground">Preço/hora</th>
+                                      <th className="text-left p-2 text-muted-foreground">Preço/Aula</th>
                                       <th className="text-left p-2 text-muted-foreground">Valor</th>
                                       <th className="text-left p-2 text-muted-foreground">Presença</th>
                                     </tr>
@@ -287,11 +287,11 @@ export default function FaturacaoPage() {
                                         <tr key={i} className={cn("border-b border-border/30", i % 2 === 1 && "bg-muted/10")}>
                                           <td className="p-2">{a.aula.data.split("-").reverse().join("/")}</td>
                                           <td className="p-2">{a.aula.horaInicio} - {a.aula.horaFim}</td>
-                                          <td className="p-2"><DisciplinaBadge disciplina={a.aula.disciplina} /></td>
+                                          <td className="p-2"><DisciplinaBadge disciplina={a.aula.disciplina} colorMap={discColorMap} /></td>
                                           <td className="p-2">{a.aula.tipo === "individual" ? "Individual" : "Grupo"}</td>
                                           <td className="p-2">{exp?.nome ?? "—"}</td>
                                           <td className="p-2">{formatDuration(a.duracao)}</td>
-                                          <td className={cn("p-2", !a.cobrar && "text-muted-foreground line-through")}>{formatCurrency(a.precoHora)}</td>
+                                          <td className={cn("p-2", !a.cobrar && "text-muted-foreground line-through")}>{formatCurrency(a.precoPorAula)}</td>
                                           <td className={cn("p-2", !a.cobrar && "text-muted-foreground line-through")}>
                                             {formatCurrency(a.valorSessao)}
                                             {!a.cobrar && <span className="text-xs text-muted-foreground ml-1">(não cobrado)</span>}
@@ -362,7 +362,7 @@ export default function FaturacaoPage() {
                       <>
                         <tr key={r.explicador.id} className={cn("border-b border-border/50 hover:bg-muted/30 transition-colors", idx % 2 === 1 && "bg-muted/10")}>
                           <td className="p-3"><div className="flex items-center gap-2"><AvatarIniciais nome={r.explicador.nome} /><span className="font-medium">{r.explicador.nome}</span></div></td>
-                          <td className="p-3"><div className="flex flex-wrap gap-1">{r.disciplinasLecionadas.map(d => <DisciplinaBadge key={d} disciplina={d} />)}</div></td>
+                          <td className="p-3"><div className="flex flex-wrap gap-1">{r.disciplinasLecionadas.map(d => <DisciplinaBadge key={d} disciplina={d} colorMap={discColorMap} />)}</div></td>
                           <td className="p-3 text-sm">{r.aulasRealizadas}</td>
                           <td className="p-3 text-sm">{formatDuration(r.horasTotais)}</td>
                           <td className="p-3 text-sm">{formatCurrency(r.explicador.valorHora)}</td>
@@ -399,7 +399,7 @@ export default function FaturacaoPage() {
                                         <tr key={i} className={cn("border-b border-border/30", i % 2 === 1 && "bg-muted/10")}>
                                           <td className="p-2">{a.aula.data.split("-").reverse().join("/")}</td>
                                           <td className="p-2">{a.aula.horaInicio} - {a.aula.horaFim}</td>
-                                          <td className="p-2"><DisciplinaBadge disciplina={a.aula.disciplina} /></td>
+                                          <td className="p-2"><DisciplinaBadge disciplina={a.aula.disciplina} colorMap={discColorMap} /></td>
                                           <td className="p-2">{alunoNomes}</td>
                                           <td className="p-2">{a.aula.tipo === "individual" ? "Individual" : "Grupo"}</td>
                                           <td className="p-2">{formatDuration(a.duracao)}</td>

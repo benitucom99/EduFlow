@@ -14,7 +14,7 @@ const navItems = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "rececionista", "explicador"] },
   { path: "/alunos", label: "Alunos", icon: Users, roles: ["admin", "rececionista"] },
   { path: "/explicadores", label: "Explicadores", icon: GraduationCap, roles: ["admin", "rececionista"] },
-  { path: "/servicos", label: "Serviços", icon: BookOpen, roles: ["admin"] },
+  { path: "/disciplinas", label: "Disciplinas", icon: BookOpen, roles: ["admin"] },
   { path: "/salas", label: "Salas", icon: DoorOpen, roles: ["admin", "rececionista"] },
   { path: "/calendario", label: "Calendário", icon: CalendarDays, roles: ["admin", "rececionista", "explicador"] },
   { path: "/presencas", label: "Presenças", icon: ClipboardCheck, roles: ["admin", "rececionista", "explicador"] },
