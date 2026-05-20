@@ -39,7 +39,7 @@ function notaColor(n: number) {
 }
 
 export default function GestaoAlunoPage() {
-  const { aulas, setAulas, alunos, explicadores, salas } = useData();
+  const { aulas, setPresenca, alunos, explicadores, salas } = useData();
   const { toast } = useToast();
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [expFilter, setExpFilter] = useState("todos");
@@ -67,7 +67,7 @@ export default function GestaoAlunoPage() {
   }, [aulasDodia]);
 
   const updatePresenca = (aulaId: string, alunoId: string, presenca: Presenca) => {
-    setAulas(prev => prev.map(a => a.id === aulaId ? { ...a, presencas: { ...a.presencas, [alunoId]: presenca } } : a));
+    setPresenca(aulaId, alunoId, presenca);
   };
 
   const setAtraso = (aulaId: string, alunoId: string, minutos: number) => {

@@ -25,7 +25,7 @@ import { useEffect } from "react";
 export default function ExplicadorDetalhePage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { explicadores, setExplicadores, aulas, alunos } = useData();
+  const { explicadores, updateExplicador, aulas, alunos } = useData();
   const { toast } = useToast();
   const exp = explicadores.find(e => e.id === id);
   const [editOpen, setEditOpen] = useState(false);
@@ -117,8 +117,8 @@ export default function ExplicadorDetalhePage() {
         open={editOpen}
         onClose={() => setEditOpen(false)}
         explicador={exp}
-        onSave={(data) => {
-          setExplicadores(prev => prev.map(e => e.id === exp.id ? { ...e, ...data } : e));
+        onSave={async (data) => {
+          await updateExplicador(exp.id, data);
           toast({ title: "Explicador atualizado" });
           setEditOpen(false);
         }}

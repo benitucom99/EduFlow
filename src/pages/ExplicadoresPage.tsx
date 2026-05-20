@@ -27,7 +27,7 @@ const DIAS_SEMANA = [
 ];
 
 export default function ExplicadoresPage() {
-  const { explicadores, setExplicadores } = useData();
+  const { explicadores, createExplicador, updateExplicador, deleteExplicador } = useData();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
@@ -47,9 +47,9 @@ export default function ExplicadoresPage() {
     });
   }, [explicadores, search, discFilter, estadoFilter]);
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteTarget) return;
-    setExplicadores(prev => prev.filter(e => e.id !== deleteTarget.id));
+    await deleteExplicador(deleteTarget.id);
     toast({ title: "Explicador eliminado" });
     setDeleteTarget(null);
   };
@@ -143,12 +143,12 @@ export default function ExplicadoresPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         explicador={editing}
-        onSave={(data) => {
+        onSave={async (data) => {
           if (editing) {
-            setExplicadores(prev => prev.map(e => e.id === editing.id ? { ...e, ...data } : e));
+            await updateExplicador(editing.id, data);
             toast({ title: "Explicador atualizado" });
           } else {
-            setExplicadores(prev => [...prev, { ...data, id: `e${Date.now()}`, estado: "ativo" as const }]);
+            await createExplicador(data);
             toast({ title: "Explicador adicionado" });
           }
           setModalOpen(false);

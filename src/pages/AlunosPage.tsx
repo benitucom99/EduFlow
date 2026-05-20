@@ -28,7 +28,7 @@ const estadoBadge = (estado: string) => {
 };
 
 export default function AlunosPage() {
-  const { alunos, setAlunos, explicadores } = useData();
+  const { alunos, explicadores, createAluno, updateAluno, deleteAluno, toggleAlunoEstado } = useData();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
@@ -53,16 +53,16 @@ export default function AlunosPage() {
   const paged = filtered.slice(page * 10, (page + 1) * 10);
   const totalPages = Math.ceil(filtered.length / 10);
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deleteId) {
-      setAlunos(prev => prev.filter(a => a.id !== deleteId));
+      await deleteAluno(deleteId);
       toast({ title: "Aluno eliminado com sucesso" });
       setDeleteId(null);
     }
   };
 
-  const toggleEstado = (id: string) => {
-    setAlunos(prev => prev.map(a => a.id === id ? { ...a, estado: a.estado === "ativo" ? "inativo" : "ativo" } : a));
+  const toggleEstado = async (id: string) => {
+    await toggleAlunoEstado(id);
     toast({ title: "Estado atualizado" });
   };
 
@@ -200,13 +200,12 @@ export default function AlunosPage() {
         onClose={() => setModalOpen(false)}
         aluno={editingAluno}
         explicadores={explicadores}
-        onSave={(data) => {
+        onSave={async (data) => {
           if (editingAluno) {
-            setAlunos(prev => prev.map(a => a.id === editingAluno.id ? { ...a, ...data } : a));
+            await updateAluno(editingAluno.id, data);
             toast({ title: "Aluno atualizado com sucesso" });
           } else {
-            const newAluno: Aluno = { ...data, id: `a${Date.now()}`, estado: "ativo", dataInscricao: new Date().toISOString().split("T")[0] };
-            setAlunos(prev => [...prev, newAluno]);
+            await createAluno(data);
             toast({ title: "Aluno criado com sucesso" });
           }
           setModalOpen(false);

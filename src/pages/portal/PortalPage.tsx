@@ -22,7 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function PortalPage() {
   const { user } = useAuth();
-  const { alunos, aulas, setAulas, explicadores } = useData();
+  const { alunos, aulas, cancelAula, explicadores } = useData();
   const { toast } = useToast();
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedAlunoId, setSelectedAlunoId] = useState<string | null>(null);
@@ -142,8 +142,8 @@ export default function PortalPage() {
             <AlertDialogCancel>Manter aula</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                setAulas(prev => prev.map(a => a.id === cancelAulaId ? { ...a, estado: "cancelada" as const } : a));
+              onClick={async () => {
+                if (cancelAulaId) await cancelAula(cancelAulaId);
                 toast({ title: "Aula cancelada", description: "A aula foi cancelada com sucesso." });
                 setCancelAulaId(null);
               }}

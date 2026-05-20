@@ -16,7 +16,7 @@ import { format, isToday, parseISO } from "date-fns";
 const equipIcons: Record<string, any> = { "quadro branco": Presentation, projetor: Tv, computador: Monitor, televisão: Tv };
 
 export default function SalasPage() {
-  const { salas, setSalas, aulas, alunos, explicadores } = useData();
+  const { salas, createSala, updateSala, aulas, alunos, explicadores } = useData();
   const { toast } = useToast();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Sala | null>(null);
@@ -97,12 +97,12 @@ export default function SalasPage() {
       </div>
 
       {/* Create/Edit Modal */}
-      <SalaModal open={modalOpen} onClose={() => setModalOpen(false)} sala={editing} onSave={(data) => {
+      <SalaModal open={modalOpen} onClose={() => setModalOpen(false)} sala={editing} onSave={async (data) => {
         if (editing) {
-          setSalas(prev => prev.map(s => s.id === editing.id ? { ...s, ...data } : s));
+          await updateSala(editing.id, data);
           toast({ title: "Sala atualizada" });
         } else {
-          setSalas(prev => [...prev, { ...data, id: `s${Date.now()}` }]);
+          await createSala(data);
           toast({ title: "Sala criada" });
         }
         setModalOpen(false);

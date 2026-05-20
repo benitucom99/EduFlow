@@ -22,7 +22,7 @@ interface Props {
 }
 
 export default function MarcarAulaModal({ open, onOpenChange, preSelectedAlunoId, educandoIds }: Props) {
-  const { alunos, explicadores, salas, aulas, setAulas } = useData();
+  const { alunos, explicadores, salas, aulas, createAulas } = useData();
   const { toast } = useToast();
 
   const [alunoId, setAlunoId] = useState(preSelectedAlunoId || "");
@@ -154,8 +154,7 @@ export default function MarcarAulaModal({ open, onOpenChange, preSelectedAlunoId
       recorrencia: recorrencia === "ano_letivo" ? "semanal" : recorrencia,
     }));
 
-    setTimeout(() => {
-      setAulas(prev => [...prev, ...newAulas]);
+    createAulas(newAulas).finally(() => {
       setSaving(false);
       onOpenChange(false);
       resetForm();

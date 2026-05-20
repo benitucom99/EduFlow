@@ -19,7 +19,7 @@ function estadoBadge(estado: InscricaoEstado) {
 
 export default function InscricoesPage() {
   const { inscricoes, updateEstado, remove } = useInscricoes();
-  const { setAlunos } = useData();
+  const { createAluno } = useData();
   const { toast } = useToast();
   const [embedOpen, setEmbedOpen] = useState(false);
   const [detail, setDetail] = useState<Inscricao | null>(null);
@@ -27,23 +27,19 @@ export default function InscricoesPage() {
   const filtered = (estado: InscricaoEstado | "todas") =>
     estado === "todas" ? inscricoes : inscricoes.filter(i => i.estado === estado);
 
-  const aprovar = (i: Inscricao) => {
-    setAlunos(prev => [
-      ...prev,
-      {
-        id: `a-${Date.now()}`,
-        nome: i.nomeAluno,
-        email: i.emailAluno,
-        telefone: i.telefoneAluno,
-        escola: i.escola,
-        anoLetivo: i.anoLetivo,
-        disciplinas: i.disciplinas,
-        encarregado: { nome: i.nomeEncarregado, email: i.emailEncarregado, telefone: i.telefoneEncarregado },
-        estado: "ativo",
-        dataInscricao: i.criadoEm.split("T")[0],
-        nifEncarregado: i.nifEncarregado,
-      },
-    ]);
+  const aprovar = async (i: Inscricao) => {
+    await createAluno({
+      nome: i.nomeAluno,
+      email: i.emailAluno,
+      telefone: i.telefoneAluno,
+      escola: i.escola,
+      anoLetivo: i.anoLetivo,
+      disciplinas: i.disciplinas,
+      encarregado: { nome: i.nomeEncarregado, email: i.emailEncarregado, telefone: i.telefoneEncarregado },
+      estado: "ativo",
+      dataInscricao: i.criadoEm.split("T")[0],
+      nifEncarregado: i.nifEncarregado,
+    });
     updateEstado(i.id, "aprovada");
     setDetail(null);
     toast({ title: "Inscrição aprovada", description: `${i.nomeAluno} foi adicionado(a) aos alunos.` });

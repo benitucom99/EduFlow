@@ -8,7 +8,7 @@ import { Presenca } from "@/data/mockData";
 import { cn } from "@/lib/utils";
 
 export default function PresencasPage() {
-  const { aulas, setAulas, alunos, explicadores } = useData();
+  const { aulas, setPresenca, alunos, explicadores } = useData();
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [expFilter, setExpFilter] = useState("todos");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -22,9 +22,7 @@ export default function PresencasPage() {
   );
 
   const updatePresenca = (aulaId: string, alunoId: string, presenca: Presenca) => {
-    setAulas(prev => prev.map(a =>
-      a.id === aulaId ? { ...a, presencas: { ...a.presencas, [alunoId]: presenca } } : a
-    ));
+    setPresenca(aulaId, alunoId, presenca);
   };
 
   const toggle = (aulaId: string) => {

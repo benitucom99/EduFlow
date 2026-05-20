@@ -78,7 +78,7 @@ function layoutAulas(aulas: Aula[]) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function CalendarioPage() {
-  const { aulas, setAulas, alunos, explicadores, salas } = useData();
+  const { aulas, createAulas, updateAula, cancelAula, alunos, explicadores, salas } = useData();
   const { toast } = useToast();
   const [view, setView] = useState<"semana" | "dia">("semana");
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -380,27 +380,20 @@ export default function CalendarioPage() {
         open={modalOpen}
         onClose={() => { setModalOpen(false); setEditingAula(null); }}
         aula={editingAula}
-        onSave={(aulasToCreate) => {
+        onSave={async (aulasToCreate) => {
           if (editingAula) {
-            setAulas(prev => prev.map(a => a.id === editingAula.id ? { ...a, ...aulasToCreate[0] } : a));
+            await updateAula(editingAula.id, aulasToCreate[0]);
             toast({ title: "Aula atualizada" });
           } else {
-            const baseId = Date.now();
-            const novas = aulasToCreate.map((d: any, i: number) => ({
-              ...d,
-              id: `aula${baseId}-${i}`,
-              estado: "agendada" as const,
-              presencas: {},
-            }));
-            setAulas(prev => [...prev, ...novas]);
+            await createAulas(aulasToCreate);
             toast({
-              title: novas.length > 1 ? `${novas.length} aulas agendadas` : "Aula agendada com sucesso",
+              title: aulasToCreate.length > 1 ? `${aulasToCreate.length} aulas agendadas` : "Aula agendada com sucesso",
             });
           }
           setModalOpen(false); setEditingAula(null);
         }}
-        onCancel={editingAula ? () => {
-          setAulas(prev => prev.map(a => a.id === editingAula.id ? { ...a, estado: "cancelada" as const } : a));
+        onCancel={editingAula ? async () => {
+          await cancelAula(editingAula.id);
           toast({ title: "Aula cancelada" }); setModalOpen(false); setEditingAula(null);
         } : undefined}
       />
