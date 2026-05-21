@@ -352,18 +352,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const createExplicador = async (data: ExplicadorInput): Promise<Explicador | null> => {
     const cid = ensureCentro();
     const tempPassword = data.password ?? Math.random().toString(36).slice(2) + "Aa1!";
-    const { data: sess } = await supabase.auth.getSession();
-    const { data: signed, error: suErr } = await supabase.auth.signUp({
-      email: data.email,
-      password: tempPassword,
-      options: { data: { nome: data.nome } },
+    const { data: fnData, error: fnErr } = await supabase.functions.invoke("create-explicador", {
+      body: { email: data.email, password: tempPassword, nome: data.nome, centro_id: cid },
     });
-    if (suErr || !signed.user) { console.error("signUp explicador failed", suErr); return null; }
-    const newUserId = signed.user.id;
-    if (sess.session) {
-      await supabase.auth.setSession({ access_token: sess.session.access_token, refresh_token: sess.session.refresh_token });
-    }
-    await supabase.from("users").update({ centro_id: cid, role: "explicador" }).eq("id", newUserId);
+    if (fnErr || !fnData?.user_id) { console.error("create-explicador failed", fnErr ?? fnData); return null; }
+    const newUserId = fnData.user_id as string;
     await supabase.from("professor_perfis").insert({
       user_id: newUserId, centro_id: cid,
       telefone: data.telefone || null,
