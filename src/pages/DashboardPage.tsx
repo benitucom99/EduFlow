@@ -4,24 +4,45 @@ import { useData } from "@/contexts/DataContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Users, BookOpen, Wallet, CheckCircle2, CalendarDays, UserRound, MapPin } from "lucide-react";
+
 import { isToday, parseISO } from "date-fns";
 
 export default function DashboardPage() {
-  const { alunos, aulas, explicadores, salas } = useData();
+  const { alunos, aulas, explicadores, salas, disciplinas } = useData();
 
   const stats = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
     const ativos = alunos.filter(a => a.estado === "ativo").length;
     const aulasAtivas = aulas.filter(a => a.estado !== "cancelada").length;
-    const salasDisp = salas.filter(s => s.estado === "disponível").length;
-    const ocupacao = salasDisp > 0 ? Math.round((aulasAtivas / (salasDisp * 5 * 8)) * 100) : 0;
-    const receita = aulas
-      .filter(a => a.estado !== "cancelada")
-      .reduce((sum, a) => {
-        const exp = explicadores.find(e => e.id === a.explicadorId);
-        return sum + (exp?.valorHora || 0);
-      }, 0);
-    return { ativos, aulasAtivas, ocupacao: Math.min(ocupacao, 100), receita };
-  }, [alunos, aulas, explicadores, salas]);
+
+    const aulasDoMes = aulas.filter(a => {
+      if (a.estado === "cancelada") return false;
+      try {
+        const d = parseISO(a.data);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      } catch { return false; }
+    });
+
+    let receita = 0;
+    let totalPresencas = 0;
+    let totalPresente = 0;
+    for (const aula of aulasDoMes) {
+      const disc = disciplinas.find(d => d.nome === aula.disciplina);
+      const preco = disc?.precoPorAula ?? 0;
+      for (const p of Object.values(aula.presencas)) {
+        if (p !== null) {
+          totalPresencas++;
+          if (p === "presente") { totalPresente++; receita += preco; }
+        }
+      }
+    }
+
+    const assiduidade = totalPresencas > 0 ? Math.round((totalPresente / totalPresencas) * 100) : 0;
+    return { ativos, aulasAtivas, receita, assiduidade };
+  }, [alunos, aulas, disciplinas]);
 
   const aulasHoje = useMemo(() => {
     return aulas
@@ -39,7 +60,7 @@ export default function DashboardPage() {
     { label: "Total de Alunos", value: stats.ativos.toLocaleString("pt-PT"), icon: Users, iconBg: "bg-slate-100", iconColor: "text-slate-600" },
     { label: "Aulas Ativas", value: stats.aulasAtivas, icon: BookOpen, iconBg: "bg-amber-100", iconColor: "text-amber-500" },
     { label: "Receita Mensal", value: formatReceita(stats.receita), icon: Wallet, iconBg: "bg-emerald-100", iconColor: "text-emerald-500" },
-    { label: "Taxa de Assiduidade", value: `${stats.ocupacao}%`, icon: CheckCircle2, iconBg: "bg-violet-100", iconColor: "text-violet-500" },
+    { label: "Taxa de Assiduidade", value: `${stats.assiduidade}%`, icon: CheckCircle2, iconBg: "bg-violet-100", iconColor: "text-violet-500" },
   ];
 
   return (

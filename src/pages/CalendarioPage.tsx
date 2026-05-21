@@ -428,7 +428,7 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: {
   const [alunoPopoverOpen, setAlunoPopoverOpen] = useState(false);
   const [alunoSearch, setAlunoSearch] = useState("");
 
-  useState(() => {
+  useEffect(() => {
     if (open) {
       setTipo(aula?.tipo || "individual");
       setDisciplina(aula?.disciplina || "");
@@ -439,7 +439,7 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: {
       setHoraInicio(aula?.horaInicio || "09:00");
       setNotas(aula?.notas || "");
     }
-  });
+  }, [open, aula]);
 
   const expsFiltrados = disciplina
     ? explicadores.filter(e => e.disciplinas.includes(disciplina) && e.estado === "ativo")
@@ -448,7 +448,7 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: {
 
   const autoSalaId = (() => {
     if (!data || !horaInicio) return "";
-    const candidates = [...salasFiltradas].sort((a, b) => a.capacidade - b.capacidade);
+    const candidates = [...salasFiltradas].sort((a, b) => a.nome.localeCompare(b.nome));
     for (const s of candidates) {
       const ocupada = aulas.find(a => a.id !== aula?.id && a.salaId === s.id && a.data === data && a.horaInicio === horaInicio && a.estado !== "cancelada");
       if (!ocupada) return s.id;
@@ -464,15 +464,6 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: {
     if (existing) {
       const al = alunos.find(a => a.id === existing.alunoIds[0]);
       conflicts.push(`⚠️ O explicador já tem aula neste horário (${existing.horaInicio} com ${al?.nome})`);
-    }
-    const exp = explicadores.find(e => e.id === explicadorId);
-    if (exp && exp.disponibilidade.length > 0) {
-      const diaSemana = new Date(data + "T00:00:00").getDay() || 7;
-      const corrigido = diaSemana === 7 ? 0 : diaSemana;
-      const disponivel = exp.disponibilidade.some(d =>
-        d.diaSemana === corrigido && horaInicio >= d.horaInicio && horaInicio < d.horaFim
-      );
-      if (!disponivel) conflicts.push(`⚠️ ${exp.nome} não tem disponibilidade marcada para este dia/horário`);
     }
   }
   if (salaId === "auto" && !autoSalaId && data && horaInicio) {
@@ -674,7 +665,7 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: {
                 <SelectTrigger><SelectValue placeholder="Selecionar sala" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="auto">Automática{autoSalaNome ? ` (${autoSalaNome})` : ""}</SelectItem>
-                  {salasFiltradas.map(s => <SelectItem key={s.id} value={s.id}>{s.nome} (cap. {s.capacidade})</SelectItem>)}
+                  {salasFiltradas.map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
                 </SelectContent>
               </Select>
               {salaId === "auto" && autoSalaNome && (
