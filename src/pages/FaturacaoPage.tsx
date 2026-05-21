@@ -134,7 +134,7 @@ export default function FaturacaoPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold">Faturação</h1>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
           {[
             { id: "este_mes", label: "Este mês" },
             { id: "mes_anterior", label: "Mês anterior" },
@@ -175,6 +175,9 @@ export default function FaturacaoPage() {
               </PopoverContent>
             </Popover>
           </div>
+          <Button size="sm" onClick={() => window.print()}>
+            <Download className="h-4 w-4 mr-1" /> Exportar PDF
+          </Button>
         </div>
       </div>
 
@@ -211,14 +214,14 @@ export default function FaturacaoPage() {
 
       {/* Tabs */}
       <Tabs defaultValue="cobranca" className="space-y-4">
-        <TabsList>
+        <TabsList className="print:hidden">
           <TabsTrigger value="cobranca">Cobrança a Alunos</TabsTrigger>
           <TabsTrigger value="pagamento">Pagamento a Explicadores</TabsTrigger>
         </TabsList>
 
         {/* TAB 1 — Cobrança */}
         <TabsContent value="cobranca" className="space-y-4">
-          <div className="flex gap-2 justify-end flex-wrap">
+          <div className="flex gap-2 justify-end flex-wrap print:hidden">
             <Button variant="outline" size="sm" onClick={() => { exportCobrancaDetalhada(resumoAlunos, explicadores, periodoStr); toast.success("Ficheiro exportado com sucesso"); }}>
               <Download className="h-4 w-4 mr-1" /> Exportar Cobrança (CSV)
             </Button>
@@ -243,7 +246,7 @@ export default function FaturacaoPage() {
                       <SortHeader label="Aulas Realizadas" sortKey="aulas" currentSort={sortAluno.key} currentDir={sortAluno.dir} onSort={toggleSortAluno} />
                       <SortHeader label="Horas Totais" sortKey="horas" currentSort={sortAluno.key} currentDir={sortAluno.dir} onSort={toggleSortAluno} />
                       <SortHeader label="Valor Total" sortKey="valor" currentSort={sortAluno.key} currentDir={sortAluno.dir} onSort={toggleSortAluno} />
-                      <th className="text-left p-3 text-sm font-medium text-muted-foreground">Ações</th>
+                      <th className="text-left p-3 text-sm font-medium text-muted-foreground print:hidden">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -255,7 +258,7 @@ export default function FaturacaoPage() {
                           <td className="p-3 text-sm">{r.aulasRealizadas}</td>
                           <td className="p-3 text-sm">{formatDuration(r.horasTotais)}</td>
                           <td className="p-3 font-semibold">{formatCurrency(r.valorTotal)}</td>
-                          <td className="p-3">
+                          <td className="p-3 print:hidden">
                             <Button variant="ghost" size="sm" onClick={() => setExpandedAluno(expandedAluno === r.aluno.id ? null : r.aluno.id)}>
                               {expandedAluno === r.aluno.id ? "Fechar" : "Ver Detalhe"}
                               {expandedAluno === r.aluno.id ? <ChevronUp className="h-4 w-4 ml-1" /> : <ChevronDown className="h-4 w-4 ml-1" />}
@@ -320,7 +323,7 @@ export default function FaturacaoPage() {
                     <tr className="bg-muted/40 font-bold border-t-2 border-border">
                       <td colSpan={4} className="p-3 text-right">TOTAL GERAL:</td>
                       <td className="p-3">{formatCurrency(totalCobrar)}</td>
-                      <td />
+                      <td className="print:hidden" />
                     </tr>
                   </tfoot>
                 </table>
@@ -331,7 +334,7 @@ export default function FaturacaoPage() {
 
         {/* TAB 2 — Pagamento */}
         <TabsContent value="pagamento" className="space-y-4">
-          <div className="flex gap-2 justify-end">
+          <div className="flex gap-2 justify-end print:hidden">
             <Button variant="outline" size="sm" onClick={() => { exportPagamentoDetalhado(resumoExplicadores, alunos, periodoStr); toast.success("Ficheiro exportado com sucesso"); }}>
               <Download className="h-4 w-4 mr-1" /> Exportar Pagamentos (CSV)
             </Button>
@@ -354,7 +357,7 @@ export default function FaturacaoPage() {
                       <SortHeader label="Horas Totais" sortKey="horas" currentSort={sortExp.key} currentDir={sortExp.dir} onSort={toggleSortExp} />
                       <th className="text-left p-3 text-sm font-medium text-muted-foreground">Valor/Hora</th>
                       <SortHeader label="Total a Pagar" sortKey="valor" currentSort={sortExp.key} currentDir={sortExp.dir} onSort={toggleSortExp} />
-                      <th className="text-left p-3 text-sm font-medium text-muted-foreground">Ações</th>
+                      <th className="text-left p-3 text-sm font-medium text-muted-foreground print:hidden">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -367,7 +370,7 @@ export default function FaturacaoPage() {
                           <td className="p-3 text-sm">{formatDuration(r.horasTotais)}</td>
                           <td className="p-3 text-sm">{formatCurrency(r.explicador.valorHora)}</td>
                           <td className="p-3 font-semibold">{formatCurrency(r.totalPagar)}</td>
-                          <td className="p-3">
+                          <td className="p-3 print:hidden">
                             <Button variant="ghost" size="sm" onClick={() => setExpandedExp(expandedExp === r.explicador.id ? null : r.explicador.id)}>
                               {expandedExp === r.explicador.id ? "Fechar" : "Ver Detalhe"}
                               {expandedExp === r.explicador.id ? <ChevronUp className="h-4 w-4 ml-1" /> : <ChevronDown className="h-4 w-4 ml-1" />}
@@ -432,7 +435,7 @@ export default function FaturacaoPage() {
                     <tr className="bg-muted/40 font-bold border-t-2 border-border">
                       <td colSpan={5} className="p-3 text-right">TOTAL GERAL A PAGAR:</td>
                       <td className="p-3">{formatCurrency(totalPagar)}</td>
-                      <td />
+                      <td className="print:hidden" />
                     </tr>
                   </tfoot>
                 </table>

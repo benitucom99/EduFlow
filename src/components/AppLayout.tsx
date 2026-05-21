@@ -9,9 +9,13 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppSidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
-      <div className={cn("transition-all duration-300", collapsed ? "ml-16" : "ml-60")}>
-        <AppHeader />
+      <div className="print:hidden">
+        <AppSidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
+      </div>
+      <div className={cn("transition-all duration-300 print:ml-0", collapsed ? "ml-16" : "ml-60")}>
+        <div className="print:hidden">
+          <AppHeader />
+        </div>
         <main className="p-6">
           <Outlet />
         </main>
