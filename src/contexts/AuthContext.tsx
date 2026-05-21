@@ -82,7 +82,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(async ({ data }) => {
       if (!mounted) return;
       setSession(data.session);
-      await loadProfile(data.session);
+      try {
+        await loadProfile(data.session);
+      } catch (err) {
+        console.error("loadProfile error", err);
+      }
     }).catch(console.error).finally(() => {
       if (mounted) setLoading(false);
     });
