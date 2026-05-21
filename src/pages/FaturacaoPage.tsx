@@ -129,6 +129,8 @@ export default function FaturacaoPage() {
   const alunoMap = useMemo(() => new Map(alunos.map(a => [a.id, a])), [alunos]);
   const expMap = useMemo(() => new Map(explicadores.map(e => [e.id, e])), [explicadores]);
 
+  const exportBtnClass = "border-0 bg-[#F3ECDA] text-primary hover:bg-[#EAE0C8] hover:text-primary";
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -175,9 +177,6 @@ export default function FaturacaoPage() {
               </PopoverContent>
             </Popover>
           </div>
-          <Button size="sm" onClick={() => window.print()}>
-            <Download className="h-4 w-4 mr-1" /> Exportar PDF
-          </Button>
         </div>
       </div>
 
@@ -222,14 +221,14 @@ export default function FaturacaoPage() {
         {/* TAB 1 — Cobrança */}
         <TabsContent value="cobranca" className="space-y-4">
           <div className="flex gap-2 justify-end flex-wrap print:hidden">
-            <Button variant="outline" size="sm" onClick={() => { exportCobrancaDetalhada(resumoAlunos, explicadores, periodoStr); toast.success("Ficheiro exportado com sucesso"); }}>
+            <Button size="sm" className={exportBtnClass} onClick={() => { exportCobrancaDetalhada(resumoAlunos, explicadores, periodoStr); toast.success("Ficheiro exportado com sucesso"); }}>
               <Download className="h-4 w-4 mr-1" /> Exportar Cobrança (CSV)
             </Button>
-            <Button variant="outline" size="sm" onClick={() => { exportCobrancaResumo(resumoAlunos, periodoStr); toast.success("Ficheiro exportado com sucesso"); }}>
-              <FileText className="h-4 w-4 mr-1" /> Exportar Resumo (CSV)
+            <Button size="sm" className={exportBtnClass} onClick={() => window.print()}>
+              <Download className="h-4 w-4 mr-1" /> Exportar PDF
             </Button>
-            <Button size="sm" onClick={() => { toast.success("Rascunho de fatura gerado com sucesso", { description: `${resumoAlunos.length} fatura(s) em rascunho criada(s) para o período ${format(dataInicio, "dd/MM")} - ${format(dataFim, "dd/MM/yyyy")}.` }); }}>
-              <FileText className="h-4 w-4 mr-1" /> Gerar Rascunho
+            <Button size="sm" className={exportBtnClass} onClick={() => { exportCobrancaResumo(resumoAlunos, periodoStr); toast.success("Ficheiro exportado com sucesso"); }}>
+              <FileText className="h-4 w-4 mr-1" /> Exportar Resumo (CSV)
             </Button>
           </div>
 
@@ -334,11 +333,14 @@ export default function FaturacaoPage() {
 
         {/* TAB 2 — Pagamento */}
         <TabsContent value="pagamento" className="space-y-4">
-          <div className="flex gap-2 justify-end print:hidden">
-            <Button variant="outline" size="sm" onClick={() => { exportPagamentoDetalhado(resumoExplicadores, alunos, periodoStr); toast.success("Ficheiro exportado com sucesso"); }}>
+          <div className="flex gap-2 justify-end flex-wrap print:hidden">
+            <Button size="sm" className={exportBtnClass} onClick={() => { exportPagamentoDetalhado(resumoExplicadores, alunos, periodoStr); toast.success("Ficheiro exportado com sucesso"); }}>
               <Download className="h-4 w-4 mr-1" /> Exportar Pagamentos (CSV)
             </Button>
-            <Button variant="outline" size="sm" onClick={() => { exportPagamentoResumo(resumoExplicadores, periodoStr); toast.success("Ficheiro exportado com sucesso"); }}>
+            <Button size="sm" className={exportBtnClass} onClick={() => window.print()}>
+              <Download className="h-4 w-4 mr-1" /> Exportar PDF
+            </Button>
+            <Button size="sm" className={exportBtnClass} onClick={() => { exportPagamentoResumo(resumoExplicadores, periodoStr); toast.success("Ficheiro exportado com sucesso"); }}>
               <FileText className="h-4 w-4 mr-1" /> Exportar Resumo (CSV)
             </Button>
           </div>
