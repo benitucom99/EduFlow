@@ -266,7 +266,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       cor_hsl: data.corHsl || null,
       preco_por_aula: data.precoPorAula,
     }).select().single();
-    if (error) { console.error(error); return null; }
+    if (error) throw error;
     await refresh();
     return { id: row.id, nome: row.nome, corHsl: row.cor_hsl ?? null, precoPorAula: Number(row.preco_por_aula) };
   };
@@ -304,7 +304,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       encarregado_telefone: data.encarregado.telefone || null,
       encarregado_nif: data.nifEncarregado || null,
     }).select().single();
-    if (error) { console.error(error); return null; }
+    if (error) throw error;
     const ids = (data.disciplinas ?? []).map(discIdFor).filter(Boolean) as string[];
     if (ids.length) await supabase.from("alunos_disciplinas").insert(ids.map(d => ({ aluno_id: row.id, disciplina_id: d })));
     await refresh();
@@ -355,7 +355,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const { data: fnData, error: fnErr } = await supabase.functions.invoke("create-explicador", {
       body: { email: data.email, password: tempPassword, nome: data.nome, centro_id: cid },
     });
-    if (fnErr || !fnData?.user_id) { console.error("create-explicador failed", fnErr ?? fnData); return null; }
+    if (fnErr || !fnData?.user_id) throw fnErr ?? new Error("create-explicador: " + JSON.stringify(fnData));
     const newUserId = fnData.user_id as string;
     await supabase.from("professor_perfis").insert({
       user_id: newUserId, centro_id: cid,
@@ -402,7 +402,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const createSala = async (data: SalaInput): Promise<Sala | null> => {
     const cid = ensureCentro();
     const { data: row, error } = await supabase.from("salas").insert({ centro_id: cid, nome: data.nome }).select().single();
-    if (error) { console.error(error); return null; }
+    if (error) throw error;
     await refresh();
     return { id: row.id, nome: row.nome };
   };
@@ -434,7 +434,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       notas: e.notas ?? null,
     }));
     const { data: created, error } = await supabase.from("aulas").insert(rows).select("id");
-    if (error || !created) { console.error(error); return; }
+    if (error || !created) throw error ?? new Error("aulas: insert retornou sem dados");
     const apRows: any[] = [];
     const aaRows: any[] = [];
     created.forEach((c, i) => {

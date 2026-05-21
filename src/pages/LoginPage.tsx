@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 import { GraduationCap, Mail, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("admin@eduflow.pt");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
@@ -72,12 +72,25 @@ export default function LoginPage() {
             {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Checkbox id="remember" />
-              <Label htmlFor="remember" className="text-sm font-normal">Manter sessão</Label>
-            </div>
-            <button type="button" className="text-sm text-secondary hover:underline" onClick={() => toast({ title: "Funcionalidade disponível em breve" })}>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              className="text-sm text-secondary hover:underline"
+              onClick={async () => {
+                if (!email || !/\S+@\S+\.\S+/.test(email)) {
+                  toast({ title: "Introduza um email válido primeiro", variant: "destructive" });
+                  return;
+                }
+                const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                  redirectTo: window.location.origin + "/reset-password",
+                });
+                if (error) {
+                  toast({ title: "Erro", description: error.message, variant: "destructive" });
+                } else {
+                  toast({ title: "Email enviado", description: "Verifique a sua caixa de correio para redefinir a palavra-passe." });
+                }
+              }}
+            >
               Esqueceu a palavra-passe?
             </button>
           </div>
