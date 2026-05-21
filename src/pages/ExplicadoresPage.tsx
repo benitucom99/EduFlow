@@ -23,7 +23,6 @@ export default function ExplicadoresPage() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [discFilter, setDiscFilter] = useState("todas");
-  const [estadoFilter, setEstadoFilter] = useState("todos");
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Explicador | null>(null);
@@ -33,10 +32,9 @@ export default function ExplicadoresPage() {
     return explicadores.filter(e => {
       if (search && !e.nome.toLowerCase().includes(search.toLowerCase())) return false;
       if (discFilter !== "todas" && !e.disciplinas.includes(discFilter)) return false;
-      if (estadoFilter !== "todos" && e.estado !== estadoFilter) return false;
       return true;
     });
-  }, [explicadores, search, discFilter, estadoFilter]);
+  }, [explicadores, search, discFilter]);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -65,10 +63,6 @@ export default function ExplicadoresPage() {
           <SelectTrigger className="w-[180px]"><SelectValue placeholder="Disciplina" /></SelectTrigger>
           <SelectContent><SelectItem value="todas">Todas</SelectItem>{discNames.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
         </Select>
-        <Select value={estadoFilter} onValueChange={setEstadoFilter}>
-          <SelectTrigger className="w-[120px]"><SelectValue placeholder="Estado" /></SelectTrigger>
-          <SelectContent><SelectItem value="todos">Todos</SelectItem><SelectItem value="ativo">Ativo</SelectItem><SelectItem value="inativo">Inativo</SelectItem></SelectContent>
-        </Select>
       </CardContent></Card>
 
       {viewMode === "table" ? (
@@ -81,7 +75,6 @@ export default function ExplicadoresPage() {
               <TableHead>Nome</TableHead>
               <TableHead>Disciplinas</TableHead>
               <TableHead>Valor/Hora</TableHead>
-              <TableHead>Estado</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
@@ -95,7 +88,6 @@ export default function ExplicadoresPage() {
                   </TableCell>
                   <TableCell><div className="flex gap-1 flex-wrap">{exp.disciplinas.map(d => <Badge key={d} variant="secondary" className="text-[10px]">{d}</Badge>)}</div></TableCell>
                   <TableCell className="font-medium">{exp.valorHora}€</TableCell>
-                  <TableCell><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${exp.estado === "ativo" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>{exp.estado}</span></TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/explicadores/${exp.id}`)}><Eye className="h-4 w-4" /></Button>
@@ -121,7 +113,6 @@ export default function ExplicadoresPage() {
                   <div className="h-12 w-12 rounded-full bg-accent flex items-center justify-center text-lg font-bold text-accent-foreground">{exp.nome.split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
                   <div>
                     <p className="font-semibold">{exp.nome}</p>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${exp.estado === "ativo" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>{exp.estado}</span>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-1 mb-3">{exp.disciplinas.map(d => <Badge key={d} variant="secondary" className="text-xs">{d}</Badge>)}</div>

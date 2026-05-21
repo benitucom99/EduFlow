@@ -55,7 +55,7 @@ export default function LoginPage() {
             <Label htmlFor="email">Email</Label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} className="pl-10" placeholder="email@exemplo.pt" />
+              <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} className="pl-10" />
             </div>
             {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
           </div>
@@ -103,9 +103,6 @@ export default function LoginPage() {
 
         <p className="text-sm text-muted-foreground text-center mt-6">
           Ainda não tem conta? <Link to="/signup" className="text-secondary hover:underline">Criar centro</Link>
-        </p>
-        <p className="text-xs text-muted-foreground text-center mt-3">
-          Demo: admin@eduflow.pt / admin123
         </p>
       </div>
     </div>
