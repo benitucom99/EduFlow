@@ -54,7 +54,11 @@ export default function DashboardPage() {
     let totalPresente = 0;
     for (const aula of aulasDoMes) {
       const disc = disciplinas.find(d => d.nome === aula.disciplina);
-      const preco = disc?.precoPorAula ?? 0;
+      const precoHora = disc?.precoPorHora ?? 0;
+      const [h1, m1] = aula.horaInicio.split(":").map(Number);
+      const [h2, m2] = aula.horaFim.split(":").map(Number);
+      const duracao = (h2 * 60 + m2 - (h1 * 60 + m1)) / 60;
+      const preco = precoHora * duracao;
       for (const p of Object.values(aula.presencas)) {
         if (p !== null) {
           totalPresencas++;

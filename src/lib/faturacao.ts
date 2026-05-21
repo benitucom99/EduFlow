@@ -22,7 +22,7 @@ export interface AulaFaturacaoAluno {
   aula: Aula;
   presenca: "presente" | "falta_justificada" | "falta_injustificada" | null;
   duracao: number;
-  precoPorAula: number;
+  precoPorHora: number;
   valorSessao: number;
   cobrar: boolean;
 }
@@ -44,19 +44,19 @@ export function calcularCobrancaAlunos(
 ): ResumoAluno[] {
   const aulasFiltradas = aulas.filter(a => a.data >= dataInicio && a.data <= dataFim);
   const alunoMap = new Map(alunos.map(a => [a.id, a]));
-  const discPriceMap = new Map(disciplinas.map(d => [d.nome, d.precoPorAula]));
+  const discPriceMap = new Map(disciplinas.map(d => [d.nome, d.precoPorHora]));
   const resultado = new Map<string, AulaFaturacaoAluno[]>();
 
   for (const aula of aulasFiltradas) {
     for (const alunoId of aula.alunoIds) {
       const presenca = aula.presencas[alunoId] ?? null;
       const duracao = parseDurationHours(aula.horaInicio, aula.horaFim);
-      const precoPorAula = discPriceMap.get(aula.disciplina) ?? 0;
+      const precoPorHora = discPriceMap.get(aula.disciplina) ?? 0;
       const cobrar = presenca === "presente";
-      const valorSessao = precoPorAula;
+      const valorSessao = precoPorHora * duracao;
 
       if (!resultado.has(alunoId)) resultado.set(alunoId, []);
-      resultado.get(alunoId)!.push({ aula, presenca, duracao, precoPorAula, valorSessao, cobrar });
+      resultado.get(alunoId)!.push({ aula, presenca, duracao, precoPorHora, valorSessao, cobrar });
     }
   }
 
@@ -155,7 +155,7 @@ function downloadCsv(filename: string, content: string) {
 
 export function exportCobrancaDetalhada(resumos: ResumoAluno[], explicadores: Explicador[], periodo: string) {
   const expMap = new Map(explicadores.map(e => [e.id, e]));
-  let csv = csvLine(["Aluno", "Encarregado de Educação", "Email Encarregado", "Data", "Hora Início", "Hora Fim", "Disciplina", "Tipo", "Explicador", "Duração (min)", "Preço/Aula (€)", "Valor Sessão (€)", "Presença", "Cobrar"]);
+  let csv = csvLine(["Aluno", "Encarregado de Educação", "Email Encarregado", "Data", "Hora Início", "Hora Fim", "Disciplina", "Tipo", "Explicador", "Duração (min)", "Preço/Hora (€)", "Valor Sessão (€)", "Presença", "Cobrar"]);
   let totalGeral = 0;
   for (const r of resumos) {
     for (const a of r.aulas) {
@@ -166,7 +166,7 @@ export function exportCobrancaDetalhada(resumos: ResumoAluno[], explicadores: Ex
         a.aula.data.split("-").reverse().join("/"), a.aula.horaInicio, a.aula.horaFim,
         a.aula.disciplina, a.aula.tipo === "individual" ? "Individual" : "Grupo",
         exp?.nome ?? "", String(Math.round(a.duracao * 60)),
-        a.precoPorAula.toFixed(2), a.valorSessao.toFixed(2), presLabel, a.cobrar ? "Sim" : "Não",
+        a.precoPorHora.toFixed(2), a.valorSessao.toFixed(2), presLabel, a.cobrar ? "Sim" : "Não",
       ]);
     }
     csv += csvLine([`SUBTOTAL ${r.aluno.nome}`, "", "", "", "", "", "", "", "", "", "", r.valorTotal.toFixed(2), "", ""]);

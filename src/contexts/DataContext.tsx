@@ -9,7 +9,7 @@ export interface Disciplina {
   id: string;
   nome: string;
   corHsl: string | null;
-  precoPorAula: number;
+  precoPorHora: number;
 }
 
 export interface Aluno {
@@ -107,7 +107,7 @@ const DataContext = createContext<DataContextType | null>(null);
 async function loadDisciplinas(centroId: string) {
   const { data, error } = await supabase
     .from("disciplinas")
-    .select("id, nome, cor_hsl, preco_por_aula")
+    .select("id, nome, cor_hsl, preco_por_hora")
     .eq("centro_id", centroId)
     .order("nome");
   if (error) throw error;
@@ -115,7 +115,7 @@ async function loadDisciplinas(centroId: string) {
     id: d.id,
     nome: d.nome,
     corHsl: d.cor_hsl ?? null,
-    precoPorAula: Number(d.preco_por_aula ?? 0),
+    precoPorHora: Number(d.preco_por_hora ?? 0),
   }));
   const idToName = new Map<string, string>();
   const nameToId = new Map<string, string>();
@@ -264,18 +264,18 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       centro_id: cid,
       nome: data.nome,
       cor_hsl: data.corHsl || null,
-      preco_por_aula: data.precoPorAula,
+      preco_por_hora: data.precoPorHora,
     }).select().single();
     if (error) throw error;
     await refresh();
-    return { id: row.id, nome: row.nome, corHsl: row.cor_hsl ?? null, precoPorAula: Number(row.preco_por_aula) };
+    return { id: row.id, nome: row.nome, corHsl: row.cor_hsl ?? null, precoPorHora: Number(row.preco_por_hora) };
   };
 
   const updateDisciplina = async (id: string, patch: Partial<DisciplinaInput>) => {
     const upd: any = {};
     if (patch.nome !== undefined) upd.nome = patch.nome;
     if (patch.corHsl !== undefined) upd.cor_hsl = patch.corHsl || null;
-    if (patch.precoPorAula !== undefined) upd.preco_por_aula = patch.precoPorAula;
+    if (patch.precoPorHora !== undefined) upd.preco_por_hora = patch.precoPorHora;
     if (Object.keys(upd).length) await supabase.from("disciplinas").update(upd).eq("id", id);
     await refresh();
   };

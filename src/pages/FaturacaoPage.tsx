@@ -278,7 +278,7 @@ export default function FaturacaoPage() {
                                       <th className="text-left p-2 text-muted-foreground">Tipo</th>
                                       <th className="text-left p-2 text-muted-foreground">Explicador</th>
                                       <th className="text-left p-2 text-muted-foreground">Duração</th>
-                                      <th className="text-left p-2 text-muted-foreground">Preço/Aula</th>
+                                      <th className="text-left p-2 text-muted-foreground">Preço/Hora</th>
                                       <th className="text-left p-2 text-muted-foreground">Valor</th>
                                       <th className="text-left p-2 text-muted-foreground">Presença</th>
                                     </tr>
@@ -294,7 +294,7 @@ export default function FaturacaoPage() {
                                           <td className="p-2">{a.aula.tipo === "individual" ? "Individual" : "Grupo"}</td>
                                           <td className="p-2">{exp?.nome ?? "—"}</td>
                                           <td className="p-2">{formatDuration(a.duracao)}</td>
-                                          <td className={cn("p-2", !a.cobrar && "text-muted-foreground line-through")}>{formatCurrency(a.precoPorAula)}</td>
+                                          <td className={cn("p-2", !a.cobrar && "text-muted-foreground line-through")}>{formatCurrency(a.precoPorHora)}</td>
                                           <td className={cn("p-2", !a.cobrar && "text-muted-foreground line-through")}>
                                             {formatCurrency(a.valorSessao)}
                                             {!a.cobrar && <span className="text-xs text-muted-foreground ml-1">(não cobrado)</span>}

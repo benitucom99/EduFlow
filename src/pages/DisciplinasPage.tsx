@@ -48,7 +48,7 @@ export default function DisciplinasPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Disciplina</TableHead>
-                  <TableHead>Preço por Aula</TableHead>
+                  <TableHead>Preço por Hora</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -64,7 +64,7 @@ export default function DisciplinasPage() {
                       </div>
                     </TableCell>
                     <TableCell className="font-semibold text-primary">
-                      {disc.precoPorAula.toFixed(2)} €
+                      {disc.precoPorHora.toFixed(2)} €
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
@@ -127,14 +127,14 @@ function DisciplinaModal({ open, onClose, disciplina, onSave }: {
   onSave: (data: any) => void;
 }) {
   const [nome, setNome] = useState("");
-  const [precoPorAula, setPrecoPorAula] = useState("20");
+  const [precoPorHora, setPrecoPorHora] = useState("20");
   const [corHsl, setCorHsl] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (open) {
       setNome(disciplina?.nome || "");
-      setPrecoPorAula(String(disciplina?.precoPorAula ?? 20));
+      setPrecoPorHora(String(disciplina?.precoPorHora ?? 20));
       setCorHsl(disciplina?.corHsl || "");
       setErrors({});
     }
@@ -143,11 +143,11 @@ function DisciplinaModal({ open, onClose, disciplina, onSave }: {
   const handleSave = () => {
     const e: Record<string, string> = {};
     if (!nome.trim()) e.nome = "Obrigatório";
-    const preco = parseFloat(precoPorAula);
+    const preco = parseFloat(precoPorHora);
     if (isNaN(preco) || preco < 0) e.preco = "Valor inválido";
     setErrors(e);
     if (Object.keys(e).length > 0) return;
-    onSave({ nome: nome.trim(), precoPorAula: preco, corHsl: corHsl || null });
+    onSave({ nome: nome.trim(), precoPorHora: preco, corHsl: corHsl || null });
   };
 
   return (
@@ -163,13 +163,13 @@ function DisciplinaModal({ open, onClose, disciplina, onSave }: {
             {errors.nome && <p className="text-xs text-destructive mt-1">{errors.nome}</p>}
           </div>
           <div>
-            <Label>Preço por Aula (€)</Label>
+            <Label>Preço por Hora (€)</Label>
             <Input
               type="number"
               min={0}
               step={0.5}
-              value={precoPorAula}
-              onChange={e => setPrecoPorAula(e.target.value)}
+              value={precoPorHora}
+              onChange={e => setPrecoPorHora(e.target.value)}
               placeholder="20.00"
             />
             {errors.preco && <p className="text-xs text-destructive mt-1">{errors.preco}</p>}
