@@ -1,9 +1,8 @@
-import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   LayoutDashboard, Users, GraduationCap, DoorOpen, CalendarDays,
-  ClipboardCheck, Receipt, Settings, LogOut, ChevronLeft, ChevronRight, Menu,
+  ClipboardCheck, Receipt, Settings, LogOut, ChevronLeft, ChevronRight,
   BookOpen
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -22,17 +21,24 @@ const navItems = [
   { path: "/configuracoes", label: "Configurações", icon: Settings, roles: ["admin"] },
 ];
 
-export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+interface SidebarProps {
+  collapsed: boolean;
+  onToggle: () => void;
+  /** Chamado ao clicar num link — usado pelo drawer mobile para fechar. */
+  onNavigate?: () => void;
+  /** Esconde o botão de recolher (não faz sentido no drawer mobile). */
+  showCollapseToggle?: boolean;
+}
+
+/** Conteúdo interno da sidebar, partilhado entre a versão fixa (desktop) e o drawer (mobile). */
+export function SidebarBody({ collapsed, onToggle, onNavigate, showCollapseToggle = true }: SidebarProps) {
   const location = useLocation();
   const { user, logout } = useAuth();
 
   const visibleItems = navItems.filter(item => user && item.roles.includes(user.role));
 
   return (
-    <aside className={cn(
-      "fixed left-0 top-0 z-40 h-screen bg-sidebar text-sidebar-foreground transition-all duration-300 flex flex-col",
-      collapsed ? "w-16" : "w-60"
-    )}>
+    <div className="flex h-full flex-col">
       {/* Logo */}
       <div className="flex items-center gap-2 px-4 h-16 border-b border-sidebar-border">
         <GraduationCap className="h-7 w-7 shrink-0" />
@@ -47,6 +53,7 @@ export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean
           const link = (
             <Link
               to={item.path}
+              onClick={onNavigate}
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 isActive
@@ -97,16 +104,30 @@ export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean
           >
             <LogOut className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent/50 ml-auto"
-            onClick={onToggle}
-          >
-            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          </Button>
+          {showCollapseToggle && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent/50 ml-auto"
+              onClick={onToggle}
+            >
+              {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            </Button>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Sidebar fixa para desktop (lg+). Em mobile usa-se o drawer no AppLayout. */
+export default function AppSidebar({ collapsed, onToggle }: SidebarProps) {
+  return (
+    <aside className={cn(
+      "fixed left-0 top-0 z-40 h-screen bg-sidebar text-sidebar-foreground transition-all duration-300",
+      collapsed ? "w-16" : "w-60"
+    )}>
+      <SidebarBody collapsed={collapsed} onToggle={onToggle} />
     </aside>
   );
 }
