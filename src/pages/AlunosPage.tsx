@@ -17,15 +17,38 @@ import { Plus, Search, MoreHorizontal, Eye, Pencil, X, UserPlus } from "lucide-r
 import { useToast } from "@/hooks/use-toast";
 import { Aluno } from "@/contexts/DataContext";
 
-const estadoBadge = (estado: string) => {
-  const map: Record<string, string> = {
-    ativo: "bg-success text-success-foreground",
-    inativo: "bg-muted text-muted-foreground",
-    "pre-inscrito": "bg-warning text-warning-foreground",
-  };
-  const labels: Record<string, string> = { ativo: "Ativo", inativo: "Inativo", "pre-inscrito": "Pendente" };
-  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${map[estado]}`}>{labels[estado]}</span>;
-};
+const ESTADO_CONFIG = {
+  ativo: { label: "Ativo", dot: "bg-green-500", badge: "bg-success text-success-foreground" },
+  "pre-inscrito": { label: "Pendente", dot: "bg-yellow-400", badge: "bg-warning text-warning-foreground" },
+  inativo: { label: "Inativo", dot: "bg-gray-400", badge: "bg-muted text-muted-foreground" },
+} as const;
+
+type EstadoKey = keyof typeof ESTADO_CONFIG;
+
+function EstadoBadge({ estado, alunoId, onMudar }: { estado: string; alunoId: string; onMudar: (id: string, novoEstado: string) => void }) {
+  const key: EstadoKey = (estado in ESTADO_CONFIG ? estado : "inativo") as EstadoKey;
+  const config = ESTADO_CONFIG[key];
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <span
+          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity select-none ${config.badge}`}
+          onClick={e => e.stopPropagation()}
+        >
+          {config.label}
+        </span>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        {(Object.entries(ESTADO_CONFIG) as [EstadoKey, typeof ESTADO_CONFIG[EstadoKey]][]).map(([k, cfg]) => (
+          <DropdownMenuItem key={k} className={k === key ? "font-semibold" : ""} onClick={() => onMudar(alunoId, k)}>
+            <span className={`h-2 w-2 rounded-full shrink-0 ${cfg.dot}`} />
+            {cfg.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export default function AlunosPage() {
   const { alunos, explicadores, disciplinas, createAluno, updateAluno, deleteAluno, updateAlunoEstado } = useData();
@@ -156,7 +179,7 @@ export default function AlunosPage() {
                       </div>
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-sm">{aluno.encarregado.nome}</TableCell>
-                    <TableCell>{estadoBadge(aluno.estado)}</TableCell>
+                    <TableCell><EstadoBadge estado={aluno.estado} alunoId={aluno.id} onMudar={mudarEstado} /></TableCell>
                     <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/alunos/${aluno.id}`)}>
@@ -170,9 +193,6 @@ export default function AlunosPage() {
                             <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {aluno.estado !== "ativo" && <DropdownMenuItem onClick={() => mudarEstado(aluno.id, "ativo")}>Mudar para Ativo</DropdownMenuItem>}
-                            {aluno.estado !== "pre-inscrito" && <DropdownMenuItem onClick={() => mudarEstado(aluno.id, "pre-inscrito")}>Mudar para Pendente</DropdownMenuItem>}
-                            {aluno.estado !== "inativo" && <DropdownMenuItem onClick={() => mudarEstado(aluno.id, "inativo")}>Mudar para Inativo</DropdownMenuItem>}
                             <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(aluno.id)}>Eliminar</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
