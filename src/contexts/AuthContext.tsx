@@ -48,10 +48,11 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
     .eq("id", userId)
     .maybeSingle();
   if (error) {
+    // Erro real (rede/RLS): deixa o caller manter a sessão e tentar de novo.
     console.error("fetchProfile error", error);
-    return null;
+    throw error;
   }
-  if (!data) return null;
+  if (!data) return null; // Sem linha → perfil genuinamente inexistente.
   const centroNome = (data as { centros?: { nome: string } | null }).centros?.nome ?? null;
   return {
     id: data.id,
@@ -68,61 +69,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadProfile = useCallback(async (s: Session | null): Promise<Profile | null> => {
-    if (!s?.user) {
-      setProfile(null);
-      return null;
-    }
-    const p = await fetchProfile(s.user.id);
-    setProfile(p);
-    return p;
-  }, []);
-
   useEffect(() => {
     let mounted = true;
 
-    // Safety net: if getSession hangs, unblock the UI after 5 s.
+    // Rede de segurança: a app nunca fica presa no spinner.
     const timeoutId = window.setTimeout(() => {
       if (mounted) {
-        console.warn("[Auth] getSession timeout — forcing loading=false");
+        console.warn("[Auth] Auth init timeout — forcing loading=false");
         setLoading(false);
       }
     }, 5000);
 
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!mounted) return;
-      setSession(data.session);
+    // Corre SEMPRE fora do lock de auth (via setTimeout no listener), para
+    // evitar o deadlock do supabase-js: nunca chamar diretamente dentro do
+    // callback onAuthStateChange.
+    const syncProfile = async (s: Session | null, manageLoading: boolean) => {
+      if (!s?.user) {
+        setProfile(null);
+        if (manageLoading && mounted) setLoading(false);
+        return;
+      }
       try {
-        const p = await loadProfile(data.session);
-        // Session exists but no profile row → invalid state, force re-login.
-        if (mounted && data.session && !p) {
-          console.warn("[Auth] No profile after getSession — signing out");
-          await supabase.auth.signOut();
+        const p = await fetchProfile(s.user.id);
+        if (!mounted) return;
+        setProfile(p);
+        if (!p) {
+          // Sessão válida mas sem linha de perfil legível → estado inválido.
+          console.warn("[Auth] No profile row for session — signing out");
+          supabase.auth.signOut();
         }
       } catch (err) {
-        console.error("[Auth] loadProfile error", err);
-        if (mounted && data.session) await supabase.auth.signOut();
+        // Erro transitório (rede/RLS): mantém a sessão, não expulsa o utilizador.
+        console.error("[Auth] fetchProfile failed (keeping session):", err);
+      } finally {
+        if (manageLoading && mounted) setLoading(false);
       }
-    }).catch(err => {
-      console.error("[Auth] getSession error", err);
-    }).finally(() => {
-      clearTimeout(timeoutId);
-      if (mounted) setLoading(false);
-    });
+    };
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       if (!mounted) return;
       setSession(s);
-      try {
-        const p = await loadProfile(s);
-        if (mounted && s && !p) {
-          console.warn("[Auth] No profile after auth state change — signing out");
-          await supabase.auth.signOut();
-        }
-      } catch (err) {
-        console.error("[Auth] loadProfile error in onAuthStateChange", err);
-        if (mounted && s) await supabase.auth.signOut();
+
+      if (event === "SIGNED_OUT" || !s) {
+        setProfile(null);
+        setLoading(false);
+        return;
       }
+
+      // INITIAL_SESSION / SIGNED_IN: bloqueia a UI com spinner até o perfil
+      // resolver (evita redirect para /login num refresh válido ou pós-login).
+      // TOKEN_REFRESHED / USER_UPDATED: re-sincroniza em background, sem spinner.
+      const manageLoading = event === "INITIAL_SESSION" || event === "SIGNED_IN";
+      if (manageLoading) setLoading(true);
+
+      // Adia para FORA do lock — crítico para não causar deadlock.
+      setTimeout(() => { syncProfile(s, manageLoading); }, 0);
     });
 
     return () => {
@@ -130,7 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(timeoutId);
       sub.subscription.unsubscribe();
     };
-  }, [loadProfile]);
+  }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -150,8 +151,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const { error: rpcErr } = await supabase.rpc("create_centro_for_new_admin", { p_centro_nome: centroNome });
     if (rpcErr) return { ok: false, error: rpcErr.message };
-    const p = await fetchProfile(data.session.user.id);
-    setProfile(p);
+    try {
+      const p = await fetchProfile(data.session.user.id);
+      setProfile(p);
+    } catch (err) {
+      console.error("[Auth] fetchProfile after signUp failed:", err);
+    }
     return { ok: true };
   }, []);
 
@@ -162,8 +167,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshProfile = useCallback(async () => {
     if (session?.user) {
-      const p = await fetchProfile(session.user.id);
-      setProfile(p);
+      try {
+        const p = await fetchProfile(session.user.id);
+        setProfile(p);
+      } catch (err) {
+        console.error("[Auth] refreshProfile failed:", err);
+      }
     }
   }, [session]);
 
