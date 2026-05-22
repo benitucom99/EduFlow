@@ -253,6 +253,34 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     else { setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]); }
   }, [isAuthenticated, centroId, refresh]);
 
+  // ── Refreshes granulares ──────────────────────────────────────────────────────
+  // Cada mutação recarrega apenas a(s) entidade(s) que mexeu, em vez de refazer
+  // o download das 5 tabelas. refreshDisciplinas devolve o novo mapa id→nome,
+  // porque os nomes de disciplina ficam embebidos em alunos/explicadores/aulas.
+  const refreshDisciplinas = async (): Promise<Map<string, string>> => {
+    if (!centroId) return new Map();
+    const { discs, idToName, nameToId } = await loadDisciplinas(centroId);
+    setDisciplinas(discs);
+    setDiscMaps({ idToName, nameToId });
+    return idToName;
+  };
+  const refreshAlunos = async (idToName: Map<string, string> = discMaps.idToName) => {
+    if (!centroId) return;
+    setAlunos(await loadAlunos(centroId, idToName));
+  };
+  const refreshExplicadores = async (idToName: Map<string, string> = discMaps.idToName) => {
+    if (!centroId) return;
+    setExplicadores(await loadExplicadores(centroId, idToName));
+  };
+  const refreshSalas = async () => {
+    if (!centroId) return;
+    setSalas(await loadSalas(centroId));
+  };
+  const refreshAulas = async (idToName: Map<string, string> = discMaps.idToName) => {
+    if (!centroId) return;
+    setAulas(await loadAulas(centroId, idToName));
+  };
+
   const ensureCentro = () => {
     if (!centroId) throw new Error("Sem centro ativo");
     return centroId;
@@ -269,7 +297,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       preco_por_hora: data.precoPorHora,
     }).select().single();
     if (error) throw error;
-    await refresh();
+    await refreshDisciplinas();
     return { id: row.id, nome: row.nome, corHsl: row.cor_hsl ?? null, precoPorHora: Number(row.preco_por_hora) };
   };
 
@@ -279,12 +307,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (patch.corHsl !== undefined) upd.cor_hsl = patch.corHsl || null;
     if (patch.precoPorHora !== undefined) upd.preco_por_hora = patch.precoPorHora;
     if (Object.keys(upd).length) await supabase.from("disciplinas").update(upd).eq("id", id);
-    await refresh();
+    const idToName = await refreshDisciplinas();
+    // Renomear afeta os nomes de disciplina embebidos noutras entidades.
+    if (patch.nome !== undefined) {
+      await Promise.all([refreshAlunos(idToName), refreshExplicadores(idToName), refreshAulas(idToName)]);
+    }
   };
 
   const deleteDisciplina = async (id: string) => {
     await supabase.from("disciplinas").delete().eq("id", id);
-    await refresh();
+    const idToName = await refreshDisciplinas();
+    await Promise.all([refreshAlunos(idToName), refreshExplicadores(idToName), refreshAulas(idToName)]);
   };
 
   // ── Alunos ──────────────────────────────────────────────────────────────────
@@ -310,7 +343,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
     const ids = (data.disciplinas ?? []).map(discIdFor).filter(Boolean) as string[];
     if (ids.length) await supabase.from("alunos_disciplinas").insert(ids.map(d => ({ aluno_id: row.id, disciplina_id: d })));
-    await refresh();
+    await refreshAlunos();
     return row as any;
   };
 
@@ -337,17 +370,18 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       const ids = patch.disciplinas.map(discIdFor).filter(Boolean) as string[];
       if (ids.length) await supabase.from("alunos_disciplinas").insert(ids.map(d => ({ aluno_id: id, disciplina_id: d })));
     }
-    await refresh();
+    await refreshAlunos();
   };
 
   const deleteAluno = async (id: string) => {
     await supabase.from("alunos").delete().eq("id", id);
-    await refresh();
+    // Aulas referenciam o aluno (aula_alunos) — recarregar ambos.
+    await Promise.all([refreshAlunos(), refreshAulas()]);
   };
 
   const updateAlunoEstado = async (id: string, novoEstado: string) => {
     await supabase.from("alunos").update({ estado: novoEstado }).eq("id", id);
-    await refresh();
+    await refreshAlunos();
   };
 
   // ── Explicadores ─────────────────────────────────────────────────────────────
@@ -370,7 +404,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     });
     const ids = (data.disciplinas ?? []).map(discIdFor).filter(Boolean) as string[];
     if (ids.length) await supabase.from("professor_disciplinas").insert(ids.map(d => ({ professor_user_id: newUserId, disciplina_id: d })));
-    await refresh();
+    await refreshExplicadores();
     return null;
   };
 
@@ -392,12 +426,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       const ids = patch.disciplinas.map(discIdFor).filter(Boolean) as string[];
       if (ids.length) await supabase.from("professor_disciplinas").insert(ids.map(d => ({ professor_user_id: id, disciplina_id: d })));
     }
-    await refresh();
+    await refreshExplicadores();
   };
 
   const deleteExplicador = async (id: string) => {
     await supabase.from("users").delete().eq("id", id);
-    await refresh();
+    // Aulas referenciam o explicador (aula_professores) — recarregar ambos.
+    await Promise.all([refreshExplicadores(), refreshAulas()]);
   };
 
   // ── Salas ────────────────────────────────────────────────────────────────────
@@ -405,18 +440,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const cid = ensureCentro();
     const { data: row, error } = await supabase.from("salas").insert({ centro_id: cid, nome: data.nome }).select().single();
     if (error) throw error;
-    await refresh();
+    await refreshSalas();
     return { id: row.id, nome: row.nome };
   };
 
   const updateSala = async (id: string, patch: Partial<Sala>) => {
     if (patch.nome !== undefined) await supabase.from("salas").update({ nome: patch.nome }).eq("id", id);
-    await refresh();
+    await refreshSalas();
   };
 
   const deleteSala = async (id: string) => {
     await supabase.from("salas").delete().eq("id", id);
-    await refresh();
+    // Aulas referenciam a sala — recarregar ambos.
+    await Promise.all([refreshSalas(), refreshAulas()]);
   };
 
   // ── Aulas ────────────────────────────────────────────────────────────────────
@@ -446,7 +482,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     });
     if (apRows.length) await supabase.from("aula_professores").insert(apRows);
     if (aaRows.length) await supabase.from("aula_alunos").insert(aaRows);
-    await refresh();
+    await refreshAulas();
   };
 
   const updateAula = async (id: string, patch: Partial<Aula>) => {
@@ -469,12 +505,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       await supabase.from("aula_alunos").delete().eq("aula_id", id);
       if (patch.alunoIds.length) await supabase.from("aula_alunos").insert(patch.alunoIds.map(aid => ({ aula_id: id, aluno_id: aid, presenca: null })));
     }
-    await refresh();
+    await refreshAulas();
   };
 
   const cancelAula = async (id: string) => {
     await supabase.from("aulas").update({ estado: "cancelada" }).eq("id", id);
-    await refresh();
+    await refreshAulas();
   };
 
   const setPresenca = async (aulaId: string, alunoId: string, presenca: Presenca) => {
