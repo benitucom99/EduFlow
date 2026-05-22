@@ -26,6 +26,7 @@ export interface Aluno {
   valorHora?: number;
   explicadorId?: string;
   nifEncarregado?: string;
+  desconto?: number;
 }
 
 export interface Explicador {
@@ -85,7 +86,7 @@ interface DataContextType {
   createAluno: (data: AlunoInput) => Promise<Aluno | null>;
   updateAluno: (id: string, patch: Partial<Aluno>) => Promise<void>;
   deleteAluno: (id: string) => Promise<void>;
-  toggleAlunoEstado: (id: string) => Promise<void>;
+  updateAlunoEstado: (id: string, novoEstado: string) => Promise<void>;
 
   createExplicador: (data: ExplicadorInput) => Promise<Explicador | null>;
   updateExplicador: (id: string, patch: Partial<Explicador>) => Promise<void>;
@@ -126,7 +127,7 @@ async function loadDisciplinas(centroId: string) {
 async function loadAlunos(centroId: string, discIdToName: Map<string, string>): Promise<Aluno[]> {
   const { data, error } = await supabase
     .from("alunos")
-    .select("id, nome, email, telefone, escola, ano_letivo, estado, data_inscricao, valor_hora, explicador_user_id, encarregado_nome, encarregado_email, encarregado_telefone, encarregado_nif, alunos_disciplinas(disciplina_id)")
+    .select("id, nome, email, telefone, escola, ano_letivo, estado, data_inscricao, valor_hora, explicador_user_id, encarregado_nome, encarregado_email, encarregado_telefone, encarregado_nif, desconto, alunos_disciplinas(disciplina_id)")
     .eq("centro_id", centroId)
     .order("nome");
   if (error) throw error;
@@ -144,6 +145,7 @@ async function loadAlunos(centroId: string, discIdToName: Map<string, string>): 
     valorHora: r.valor_hora != null ? Number(r.valor_hora) : undefined,
     explicadorId: r.explicador_user_id ?? undefined,
     nifEncarregado: r.encarregado_nif ?? undefined,
+    desconto: r.desconto ?? 0,
   }));
 }
 
@@ -303,6 +305,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       encarregado_email: data.encarregado.email || null,
       encarregado_telefone: data.encarregado.telefone || null,
       encarregado_nif: data.nifEncarregado || null,
+      desconto: data.desconto ?? 0,
     }).select().single();
     if (error) throw error;
     const ids = (data.disciplinas ?? []).map(discIdFor).filter(Boolean) as string[];
@@ -327,6 +330,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       updates.encarregado_telefone = patch.encarregado.telefone || null;
     }
     if (patch.nifEncarregado !== undefined) updates.encarregado_nif = patch.nifEncarregado || null;
+    if (patch.desconto !== undefined) updates.desconto = patch.desconto ?? 0;
     if (Object.keys(updates).length) await supabase.from("alunos").update(updates).eq("id", id);
     if (patch.disciplinas) {
       await supabase.from("alunos_disciplinas").delete().eq("aluno_id", id);
@@ -341,10 +345,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     await refresh();
   };
 
-  const toggleAlunoEstado = async (id: string) => {
-    const a = alunos.find(x => x.id === id);
-    if (!a) return;
-    await supabase.from("alunos").update({ estado: a.estado === "ativo" ? "inativo" : "ativo" }).eq("id", id);
+  const updateAlunoEstado = async (id: string, novoEstado: string) => {
+    await supabase.from("alunos").update({ estado: novoEstado }).eq("id", id);
     await refresh();
   };
 
@@ -486,7 +488,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     <DataContext.Provider value={{
       disciplinas, alunos, explicadores, salas, aulas, loading, refresh,
       createDisciplina, updateDisciplina, deleteDisciplina,
-      createAluno, updateAluno, deleteAluno, toggleAlunoEstado,
+      createAluno, updateAluno, deleteAluno, updateAlunoEstado,
       createExplicador, updateExplicador, deleteExplicador,
       createSala, updateSala, deleteSala,
       createAulas, updateAula, cancelAula, setPresenca,

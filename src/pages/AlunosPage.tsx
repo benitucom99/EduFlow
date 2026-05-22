@@ -23,12 +23,12 @@ const estadoBadge = (estado: string) => {
     inativo: "bg-muted text-muted-foreground",
     "pre-inscrito": "bg-warning text-warning-foreground",
   };
-  const labels: Record<string, string> = { ativo: "Ativo", inativo: "Inativo", "pre-inscrito": "Pré-inscrito" };
+  const labels: Record<string, string> = { ativo: "Ativo", inativo: "Inativo", "pre-inscrito": "Pendente" };
   return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${map[estado]}`}>{labels[estado]}</span>;
 };
 
 export default function AlunosPage() {
-  const { alunos, explicadores, disciplinas, createAluno, updateAluno, deleteAluno, toggleAlunoEstado } = useData();
+  const { alunos, explicadores, disciplinas, createAluno, updateAluno, deleteAluno, updateAlunoEstado } = useData();
   const discNames = disciplinas.map(d => d.nome);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -62,8 +62,8 @@ export default function AlunosPage() {
     }
   };
 
-  const toggleEstado = async (id: string) => {
-    await toggleAlunoEstado(id);
+  const mudarEstado = async (id: string, novoEstado: string) => {
+    await updateAlunoEstado(id, novoEstado);
     toast({ title: "Estado atualizado" });
   };
 
@@ -170,9 +170,9 @@ export default function AlunosPage() {
                             <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => toggleEstado(aluno.id)}>
-                              {aluno.estado === "ativo" ? "Desativar" : "Ativar"}
-                            </DropdownMenuItem>
+                            {aluno.estado !== "ativo" && <DropdownMenuItem onClick={() => mudarEstado(aluno.id, "ativo")}>Mudar para Ativo</DropdownMenuItem>}
+                            {aluno.estado !== "pre-inscrito" && <DropdownMenuItem onClick={() => mudarEstado(aluno.id, "pre-inscrito")}>Mudar para Pendente</DropdownMenuItem>}
+                            {aluno.estado !== "inativo" && <DropdownMenuItem onClick={() => mudarEstado(aluno.id, "inativo")}>Mudar para Inativo</DropdownMenuItem>}
                             <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(aluno.id)}>Eliminar</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -250,6 +250,7 @@ function AlunoModal({ open, onClose, aluno, explicadores, discNames, onSave }: {
   const [encTelefone, setEncTelefone] = useState("");
   const [explicadorId, setExplicadorId] = useState("");
   const [nifEncarregado, setNifEncarregado] = useState("");
+  const [desconto, setDesconto] = useState("0");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Reset all fields when modal opens or aluno changes
@@ -266,6 +267,7 @@ function AlunoModal({ open, onClose, aluno, explicadores, discNames, onSave }: {
       setEncTelefone(aluno?.encarregado?.telefone || "");
       setExplicadorId(aluno?.explicadorId || "");
       setNifEncarregado(aluno?.nifEncarregado || "");
+      setDesconto(String(aluno?.desconto ?? 0));
       setErrors({});
     }
   }, [open, aluno]);
@@ -286,6 +288,7 @@ function AlunoModal({ open, onClose, aluno, explicadores, discNames, onSave }: {
       encarregado: { nome: encNome, email: encEmail, telefone: encTelefone },
       explicadorId: explicadorId && explicadorId !== "none" ? explicadorId : undefined,
       nifEncarregado: nifEncarregado || undefined,
+      desconto: Math.min(100, Math.max(0, parseInt(desconto) || 0)),
     });
   };
 
@@ -331,6 +334,20 @@ function AlunoModal({ open, onClose, aluno, explicadores, discNames, onSave }: {
                   {explicadoresAtivos.map(e => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label>Desconto (%)</Label>
+              <div className="relative">
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={desconto}
+                  onChange={e => setDesconto(e.target.value)}
+                  className="pr-8"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+              </div>
             </div>
             <div>
               <Label>Disciplinas</Label>

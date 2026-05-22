@@ -53,7 +53,9 @@ export function calcularCobrancaAlunos(
       const duracao = parseDurationHours(aula.horaInicio, aula.horaFim);
       const precoPorHora = discPriceMap.get(aula.disciplina) ?? 0;
       const cobrar = presenca === "presente";
-      const valorSessao = precoPorHora * duracao;
+      const aluno = alunoMap.get(alunoId);
+      const descontoRatio = (aluno?.desconto || 0) / 100;
+      const valorSessao = (precoPorHora * duracao) * (1 - descontoRatio);
 
       if (!resultado.has(alunoId)) resultado.set(alunoId, []);
       resultado.get(alunoId)!.push({ aula, presenca, duracao, precoPorHora, valorSessao, cobrar });
