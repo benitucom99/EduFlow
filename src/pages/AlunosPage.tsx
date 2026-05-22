@@ -38,9 +38,9 @@ function EstadoBadge({ estado, alunoId, onMudar }: { estado: string; alunoId: st
           {config.label}
         </span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
+      <DropdownMenuContent align="start" onClick={e => e.stopPropagation()}>
         {(Object.entries(ESTADO_CONFIG) as [EstadoKey, typeof ESTADO_CONFIG[EstadoKey]][]).map(([k, cfg]) => (
-          <DropdownMenuItem key={k} className={k === key ? "font-semibold" : ""} onClick={() => onMudar(alunoId, k)}>
+          <DropdownMenuItem key={k} className={k === key ? "font-semibold" : ""} onClick={e => { e.stopPropagation(); onMudar(alunoId, k); }}>
             <span className={`h-2 w-2 rounded-full shrink-0 ${cfg.dot}`} />
             {cfg.label}
           </DropdownMenuItem>
