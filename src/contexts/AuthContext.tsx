@@ -68,35 +68,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadProfile = useCallback(async (s: Session | null) => {
+  const loadProfile = useCallback(async (s: Session | null): Promise<Profile | null> => {
     if (!s?.user) {
       setProfile(null);
-      return;
+      return null;
     }
     const p = await fetchProfile(s.user.id);
     setProfile(p);
+    return p;
   }, []);
 
   useEffect(() => {
     let mounted = true;
+
+    // Safety net: if getSession hangs, unblock the UI after 5 s.
+    const timeoutId = window.setTimeout(() => {
+      if (mounted) {
+        console.warn("[Auth] getSession timeout — forcing loading=false");
+        setLoading(false);
+      }
+    }, 5000);
+
     supabase.auth.getSession().then(async ({ data }) => {
       if (!mounted) return;
       setSession(data.session);
       try {
-        await loadProfile(data.session);
+        const p = await loadProfile(data.session);
+        // Session exists but no profile row → invalid state, force re-login.
+        if (mounted && data.session && !p) {
+          console.warn("[Auth] No profile after getSession — signing out");
+          await supabase.auth.signOut();
+        }
       } catch (err) {
-        console.error("loadProfile error", err);
+        console.error("[Auth] loadProfile error", err);
+        if (mounted && data.session) await supabase.auth.signOut();
       }
-    }).catch(console.error).finally(() => {
+    }).catch(err => {
+      console.error("[Auth] getSession error", err);
+    }).finally(() => {
+      clearTimeout(timeoutId);
       if (mounted) setLoading(false);
     });
+
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, s) => {
       if (!mounted) return;
       setSession(s);
-      await loadProfile(s);
+      try {
+        const p = await loadProfile(s);
+        if (mounted && s && !p) {
+          console.warn("[Auth] No profile after auth state change — signing out");
+          await supabase.auth.signOut();
+        }
+      } catch (err) {
+        console.error("[Auth] loadProfile error in onAuthStateChange", err);
+        if (mounted && s) await supabase.auth.signOut();
+      }
     });
+
     return () => {
       mounted = false;
+      clearTimeout(timeoutId);
       sub.subscription.unsubscribe();
     };
   }, [loadProfile]);

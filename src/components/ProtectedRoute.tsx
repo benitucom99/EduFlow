@@ -15,6 +15,9 @@ export default function ProtectedRoute({ children, allowedRoles }: { children: R
 
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
+  // Session exists but profile failed to load → treat as unauthenticated.
+  if (!profile) return <Navigate to="/login" replace />;
+
   // User com sessão mas sem centro_id → completar onboarding.
   if (profile && !profile.centro_id) return <Navigate to="/onboarding" replace />;
 
