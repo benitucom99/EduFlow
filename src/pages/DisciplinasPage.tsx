@@ -20,9 +20,14 @@ export default function DisciplinasPage() {
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    await deleteDisciplina(deleteTarget.id);
-    toast({ title: "Disciplina eliminada" });
-    setDeleteTarget(null);
+    try {
+      await deleteDisciplina(deleteTarget.id);
+      toast({ title: "Disciplina eliminada" });
+    } catch {
+      toast({ title: "Erro ao eliminar disciplina", description: "Tenta novamente.", variant: "destructive" });
+    } finally {
+      setDeleteTarget(null);
+    }
   };
 
   return (
@@ -89,14 +94,18 @@ export default function DisciplinasPage() {
         onClose={() => setModalOpen(false)}
         disciplina={editing}
         onSave={async (data) => {
-          if (editing) {
-            await updateDisciplina(editing.id, data);
-            toast({ title: "Disciplina atualizada" });
-          } else {
-            await createDisciplina(data);
-            toast({ title: "Disciplina criada" });
+          try {
+            if (editing) {
+              await updateDisciplina(editing.id, data);
+              toast({ title: "Disciplina atualizada" });
+            } else {
+              await createDisciplina(data);
+              toast({ title: "Disciplina criada" });
+            }
+            setModalOpen(false);
+          } catch {
+            toast({ title: "Erro ao guardar disciplina", description: "Tenta novamente.", variant: "destructive" });
           }
-          setModalOpen(false);
         }}
       />
 

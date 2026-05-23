@@ -115,9 +115,13 @@ export default function ExplicadorDetalhePage() {
         onClose={() => setEditOpen(false)}
         explicador={exp}
         onSave={async (data) => {
-          await updateExplicador(exp.id, data);
-          toast({ title: "Explicador atualizado" });
-          setEditOpen(false);
+          try {
+            await updateExplicador(exp.id, data);
+            toast({ title: "Explicador atualizado" });
+            setEditOpen(false);
+          } catch {
+            toast({ title: "Erro ao guardar explicador", description: "Tenta novamente.", variant: "destructive" });
+          }
         }}
       />
     </div>

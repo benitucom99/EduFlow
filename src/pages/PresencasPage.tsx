@@ -5,10 +5,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CalendarDays, ChevronDown, ChevronUp } from "lucide-react";
 import { format } from "date-fns";
 import { Presenca } from "@/contexts/DataContext";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 export default function PresencasPage() {
   const { aulas, setPresenca, alunos, explicadores } = useData();
+  const { toast } = useToast();
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [expFilter, setExpFilter] = useState("todos");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -21,8 +23,12 @@ export default function PresencasPage() {
     [aulas, selectedDate, expFilter]
   );
 
-  const updatePresenca = (aulaId: string, alunoId: string, presenca: Presenca) => {
-    setPresenca(aulaId, alunoId, presenca);
+  const updatePresenca = async (aulaId: string, alunoId: string, presenca: Presenca) => {
+    try {
+      await setPresenca(aulaId, alunoId, presenca);
+    } catch {
+      toast({ title: "Erro ao registar presença", description: "A alteração foi revertida. Tenta novamente.", variant: "destructive" });
+    }
   };
 
   const toggle = (aulaId: string) => {

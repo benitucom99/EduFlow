@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export type Presenca = "presente" | "falta_justificada" | "falta_injustificada" | null;
@@ -86,7 +87,7 @@ interface DataContextType {
   createAluno: (data: AlunoInput) => Promise<Aluno | null>;
   updateAluno: (id: string, patch: Partial<Aluno>) => Promise<void>;
   deleteAluno: (id: string) => Promise<void>;
-  updateAlunoEstado: (id: string, novoEstado: string) => Promise<void>;
+  updateAlunoEstado: (id: string, novoEstado: Aluno["estado"]) => Promise<void>;
 
   createExplicador: (data: ExplicadorInput) => Promise<Explicador | null>;
   updateExplicador: (id: string, patch: Partial<Explicador>) => Promise<void>;
@@ -211,9 +212,17 @@ async function loadAulas(centroId: string, discIdToName: Map<string, string>): P
   });
 }
 
+// Lança o erro do Supabase se a operação falhar. As mutações UPDATE/DELETE/INSERT
+// que não usam .select() ignoravam o erro silenciosamente — daí este wrapper.
+async function run(query: PromiseLike<{ error: unknown }>): Promise<void> {
+  const { error } = await query;
+  if (error) throw error;
+}
+
 // ── Provider ──────────────────────────────────────────────────────────────────
 export function DataProvider({ children }: { children: React.ReactNode }) {
   const { profile, isAuthenticated } = useAuth();
+  const { toast } = useToast();
   const centroId = profile?.centro_id ?? null;
 
   const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
@@ -243,10 +252,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setAlunos(al); setExplicadores(ex); setSalas(sa); setAulas(au);
     } catch (e) {
       console.error("Data refresh failed", e);
+      toast({
+        title: "Erro ao carregar dados",
+        description: "Não foi possível obter os dados do centro. Verifica a ligação e tenta atualizar a página.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
-  }, [centroId]);
+  }, [centroId, toast]);
 
   useEffect(() => {
     if (isAuthenticated && centroId) refresh();
@@ -306,7 +320,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (patch.nome !== undefined) upd.nome = patch.nome;
     if (patch.corHsl !== undefined) upd.cor_hsl = patch.corHsl || null;
     if (patch.precoPorHora !== undefined) upd.preco_por_hora = patch.precoPorHora;
-    if (Object.keys(upd).length) await supabase.from("disciplinas").update(upd).eq("id", id);
+    if (Object.keys(upd).length) await run(supabase.from("disciplinas").update(upd).eq("id", id));
     const idToName = await refreshDisciplinas();
     // Renomear afeta os nomes de disciplina embebidos noutras entidades.
     if (patch.nome !== undefined) {
@@ -315,7 +329,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteDisciplina = async (id: string) => {
-    await supabase.from("disciplinas").delete().eq("id", id);
+    await run(supabase.from("disciplinas").delete().eq("id", id));
     const idToName = await refreshDisciplinas();
     await Promise.all([refreshAlunos(idToName), refreshExplicadores(idToName), refreshAulas(idToName)]);
   };
@@ -342,7 +356,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }).select().single();
     if (error) throw error;
     const ids = (data.disciplinas ?? []).map(discIdFor).filter(Boolean) as string[];
-    if (ids.length) await supabase.from("alunos_disciplinas").insert(ids.map(d => ({ aluno_id: row.id, disciplina_id: d })));
+    if (ids.length) await run(supabase.from("alunos_disciplinas").insert(ids.map(d => ({ aluno_id: row.id, disciplina_id: d }))));
     await refreshAlunos();
     return row as any;
   };
@@ -364,23 +378,23 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
     if (patch.nifEncarregado !== undefined) updates.encarregado_nif = patch.nifEncarregado || null;
     if (patch.desconto !== undefined) updates.desconto = patch.desconto ?? 0;
-    if (Object.keys(updates).length) await supabase.from("alunos").update(updates).eq("id", id);
+    if (Object.keys(updates).length) await run(supabase.from("alunos").update(updates).eq("id", id));
     if (patch.disciplinas) {
-      await supabase.from("alunos_disciplinas").delete().eq("aluno_id", id);
+      await run(supabase.from("alunos_disciplinas").delete().eq("aluno_id", id));
       const ids = patch.disciplinas.map(discIdFor).filter(Boolean) as string[];
-      if (ids.length) await supabase.from("alunos_disciplinas").insert(ids.map(d => ({ aluno_id: id, disciplina_id: d })));
+      if (ids.length) await run(supabase.from("alunos_disciplinas").insert(ids.map(d => ({ aluno_id: id, disciplina_id: d }))));
     }
     await refreshAlunos();
   };
 
   const deleteAluno = async (id: string) => {
-    await supabase.from("alunos").delete().eq("id", id);
+    await run(supabase.from("alunos").delete().eq("id", id));
     // Aulas referenciam o aluno (aula_alunos) — recarregar ambos.
     await Promise.all([refreshAlunos(), refreshAulas()]);
   };
 
-  const updateAlunoEstado = async (id: string, novoEstado: string) => {
-    await supabase.from("alunos").update({ estado: novoEstado }).eq("id", id);
+  const updateAlunoEstado = async (id: string, novoEstado: Aluno["estado"]) => {
+    await run(supabase.from("alunos").update({ estado: novoEstado }).eq("id", id));
     await refreshAlunos();
   };
 
@@ -393,7 +407,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     });
     if (fnErr || !fnData?.user_id) throw fnErr ?? new Error("create-explicador: " + JSON.stringify(fnData));
     const newUserId = fnData.user_id as string;
-    await supabase.from("professor_perfis").insert({
+    await run(supabase.from("professor_perfis").insert({
       user_id: newUserId, centro_id: cid,
       telefone: data.telefone || null,
       valor_hora: data.valorHora,
@@ -401,9 +415,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       iban: data.iban || null,
       nif: data.nif || null,
       estado: data.estado ?? "ativo",
-    });
+    }));
     const ids = (data.disciplinas ?? []).map(discIdFor).filter(Boolean) as string[];
-    if (ids.length) await supabase.from("professor_disciplinas").insert(ids.map(d => ({ professor_user_id: newUserId, disciplina_id: d })));
+    if (ids.length) await run(supabase.from("professor_disciplinas").insert(ids.map(d => ({ professor_user_id: newUserId, disciplina_id: d }))));
     await refreshExplicadores();
     return null;
   };
@@ -412,7 +426,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const usersUpd: any = {};
     if (patch.nome !== undefined) usersUpd.nome = patch.nome;
     if (patch.email !== undefined) usersUpd.email = patch.email;
-    if (Object.keys(usersUpd).length) await supabase.from("users").update(usersUpd).eq("id", id);
+    if (Object.keys(usersUpd).length) await run(supabase.from("users").update(usersUpd).eq("id", id));
     const perfUpd: any = {};
     if (patch.telefone !== undefined) perfUpd.telefone = patch.telefone || null;
     if (patch.valorHora !== undefined) perfUpd.valor_hora = patch.valorHora;
@@ -420,17 +434,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (patch.iban !== undefined) perfUpd.iban = patch.iban || null;
     if (patch.nif !== undefined) perfUpd.nif = patch.nif || null;
     if (patch.estado !== undefined) perfUpd.estado = patch.estado;
-    if (Object.keys(perfUpd).length) await supabase.from("professor_perfis").update(perfUpd).eq("user_id", id);
+    if (Object.keys(perfUpd).length) await run(supabase.from("professor_perfis").update(perfUpd).eq("user_id", id));
     if (patch.disciplinas) {
-      await supabase.from("professor_disciplinas").delete().eq("professor_user_id", id);
+      await run(supabase.from("professor_disciplinas").delete().eq("professor_user_id", id));
       const ids = patch.disciplinas.map(discIdFor).filter(Boolean) as string[];
-      if (ids.length) await supabase.from("professor_disciplinas").insert(ids.map(d => ({ professor_user_id: id, disciplina_id: d })));
+      if (ids.length) await run(supabase.from("professor_disciplinas").insert(ids.map(d => ({ professor_user_id: id, disciplina_id: d }))));
     }
     await refreshExplicadores();
   };
 
   const deleteExplicador = async (id: string) => {
-    await supabase.from("users").delete().eq("id", id);
+    await run(supabase.from("users").delete().eq("id", id));
     // Aulas referenciam o explicador (aula_professores) — recarregar ambos.
     await Promise.all([refreshExplicadores(), refreshAulas()]);
   };
@@ -445,12 +459,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateSala = async (id: string, patch: Partial<Sala>) => {
-    if (patch.nome !== undefined) await supabase.from("salas").update({ nome: patch.nome }).eq("id", id);
+    if (patch.nome !== undefined) await run(supabase.from("salas").update({ nome: patch.nome }).eq("id", id));
     await refreshSalas();
   };
 
   const deleteSala = async (id: string) => {
-    await supabase.from("salas").delete().eq("id", id);
+    await run(supabase.from("salas").delete().eq("id", id));
     // Aulas referenciam a sala — recarregar ambos.
     await Promise.all([refreshSalas(), refreshAulas()]);
   };
@@ -480,8 +494,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (e.explicadorId) apRows.push({ aula_id: c.id, professor_user_id: e.explicadorId });
       e.alunoIds.forEach(aid => aaRows.push({ aula_id: c.id, aluno_id: aid, presenca: null }));
     });
-    if (apRows.length) await supabase.from("aula_professores").insert(apRows);
-    if (aaRows.length) await supabase.from("aula_alunos").insert(aaRows);
+    if (apRows.length) await run(supabase.from("aula_professores").insert(apRows));
+    if (aaRows.length) await run(supabase.from("aula_alunos").insert(aaRows));
     await refreshAulas();
   };
 
@@ -496,28 +510,36 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (patch.estado !== undefined) upd.estado = patch.estado;
     if (patch.recorrencia !== undefined) upd.recorrencia = patch.recorrencia;
     if (patch.notas !== undefined) upd.notas = patch.notas || null;
-    if (Object.keys(upd).length) await supabase.from("aulas").update(upd).eq("id", id);
+    if (Object.keys(upd).length) await run(supabase.from("aulas").update(upd).eq("id", id));
     if (patch.explicadorId !== undefined) {
-      await supabase.from("aula_professores").delete().eq("aula_id", id);
-      if (patch.explicadorId) await supabase.from("aula_professores").insert({ aula_id: id, professor_user_id: patch.explicadorId });
+      await run(supabase.from("aula_professores").delete().eq("aula_id", id));
+      if (patch.explicadorId) await run(supabase.from("aula_professores").insert({ aula_id: id, professor_user_id: patch.explicadorId }));
     }
     if (patch.alunoIds !== undefined) {
-      await supabase.from("aula_alunos").delete().eq("aula_id", id);
-      if (patch.alunoIds.length) await supabase.from("aula_alunos").insert(patch.alunoIds.map(aid => ({ aula_id: id, aluno_id: aid, presenca: null })));
+      await run(supabase.from("aula_alunos").delete().eq("aula_id", id));
+      if (patch.alunoIds.length) await run(supabase.from("aula_alunos").insert(patch.alunoIds.map(aid => ({ aula_id: id, aluno_id: aid, presenca: null }))));
     }
     await refreshAulas();
   };
 
   const cancelAula = async (id: string) => {
-    await supabase.from("aulas").update({ estado: "cancelada" }).eq("id", id);
+    await run(supabase.from("aulas").update({ estado: "cancelada" }).eq("id", id));
     await refreshAulas();
   };
 
   const setPresenca = async (aulaId: string, alunoId: string, presenca: Presenca) => {
-    await supabase.from("aula_alunos").update({ presenca }).eq("aula_id", aulaId).eq("aluno_id", alunoId);
+    // Otimista: aplica já na UI; se o gravar falhar, reverte e propaga o erro.
+    const prevPresenca: Presenca = aulas.find(a => a.id === aulaId)?.presencas[alunoId] ?? null;
     setAulas(prev => prev.map(a => a.id === aulaId
       ? { ...a, presencas: { ...a.presencas, [alunoId]: presenca } }
       : a));
+    const { error } = await supabase.from("aula_alunos").update({ presenca }).eq("aula_id", aulaId).eq("aluno_id", alunoId);
+    if (error) {
+      setAulas(prev => prev.map(a => a.id === aulaId
+        ? { ...a, presencas: { ...a.presencas, [alunoId]: prevPresenca } }
+        : a));
+      throw error;
+    }
   };
 
   return (

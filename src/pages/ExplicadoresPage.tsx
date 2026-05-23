@@ -38,9 +38,14 @@ export default function ExplicadoresPage() {
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    await deleteExplicador(deleteTarget.id);
-    toast({ title: "Explicador eliminado" });
-    setDeleteTarget(null);
+    try {
+      await deleteExplicador(deleteTarget.id);
+      toast({ title: "Explicador eliminado" });
+    } catch {
+      toast({ title: "Erro ao eliminar explicador", description: "Tenta novamente.", variant: "destructive" });
+    } finally {
+      setDeleteTarget(null);
+    }
   };
 
   return (
@@ -134,14 +139,18 @@ export default function ExplicadoresPage() {
         explicador={editing}
         discNames={discNames}
         onSave={async (data) => {
-          if (editing) {
-            await updateExplicador(editing.id, data);
-            toast({ title: "Explicador atualizado" });
-          } else {
-            await createExplicador(data);
-            toast({ title: "Explicador adicionado" });
+          try {
+            if (editing) {
+              await updateExplicador(editing.id, data);
+              toast({ title: "Explicador atualizado" });
+            } else {
+              await createExplicador(data);
+              toast({ title: "Explicador adicionado" });
+            }
+            setModalOpen(false);
+          } catch {
+            toast({ title: "Erro ao guardar explicador", description: "Verifica os dados e tenta novamente.", variant: "destructive" });
           }
-          setModalOpen(false);
         }}
       />
 

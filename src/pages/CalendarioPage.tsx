@@ -382,20 +382,28 @@ export default function CalendarioPage() {
         onClose={() => { setModalOpen(false); setEditingAula(null); }}
         aula={editingAula}
         onSave={async (aulasToCreate) => {
-          if (editingAula) {
-            await updateAula(editingAula.id, aulasToCreate[0]);
-            toast({ title: "Aula atualizada" });
-          } else {
-            await createAulas(aulasToCreate);
-            toast({
-              title: aulasToCreate.length > 1 ? `${aulasToCreate.length} aulas agendadas` : "Aula agendada com sucesso",
-            });
+          try {
+            if (editingAula) {
+              await updateAula(editingAula.id, aulasToCreate[0]);
+              toast({ title: "Aula atualizada" });
+            } else {
+              await createAulas(aulasToCreate);
+              toast({
+                title: aulasToCreate.length > 1 ? `${aulasToCreate.length} aulas agendadas` : "Aula agendada com sucesso",
+              });
+            }
+            setModalOpen(false); setEditingAula(null);
+          } catch {
+            toast({ title: "Erro ao guardar aula", description: "Tenta novamente.", variant: "destructive" });
           }
-          setModalOpen(false); setEditingAula(null);
         }}
         onCancel={editingAula ? async () => {
-          await cancelAula(editingAula.id);
-          toast({ title: "Aula cancelada" }); setModalOpen(false); setEditingAula(null);
+          try {
+            await cancelAula(editingAula.id);
+            toast({ title: "Aula cancelada" }); setModalOpen(false); setEditingAula(null);
+          } catch {
+            toast({ title: "Erro ao cancelar aula", description: "Tenta novamente.", variant: "destructive" });
+          }
         } : undefined}
       />
     </div>

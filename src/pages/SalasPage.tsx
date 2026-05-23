@@ -26,9 +26,14 @@ export default function SalasPage() {
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    await deleteSala(deleteTarget.id);
-    toast({ title: "Sala eliminada" });
-    setDeleteTarget(null);
+    try {
+      await deleteSala(deleteTarget.id);
+      toast({ title: "Sala eliminada" });
+    } catch {
+      toast({ title: "Erro ao eliminar sala", description: "Tenta novamente.", variant: "destructive" });
+    } finally {
+      setDeleteTarget(null);
+    }
   };
 
   return (
@@ -91,14 +96,18 @@ export default function SalasPage() {
         onClose={() => setModalOpen(false)}
         sala={editing}
         onSave={async (data) => {
-          if (editing) {
-            await updateSala(editing.id, data);
-            toast({ title: "Sala atualizada" });
-          } else {
-            await createSala(data);
-            toast({ title: "Sala criada" });
+          try {
+            if (editing) {
+              await updateSala(editing.id, data);
+              toast({ title: "Sala atualizada" });
+            } else {
+              await createSala(data);
+              toast({ title: "Sala criada" });
+            }
+            setModalOpen(false);
+          } catch {
+            toast({ title: "Erro ao guardar sala", description: "Tenta novamente.", variant: "destructive" });
           }
-          setModalOpen(false);
         }}
       />
 

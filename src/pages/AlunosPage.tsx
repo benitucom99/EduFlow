@@ -25,7 +25,7 @@ const ESTADO_CONFIG = {
 
 type EstadoKey = keyof typeof ESTADO_CONFIG;
 
-function EstadoBadge({ estado, alunoId, onMudar }: { estado: string; alunoId: string; onMudar: (id: string, novoEstado: string) => void }) {
+function EstadoBadge({ estado, alunoId, onMudar }: { estado: string; alunoId: string; onMudar: (id: string, novoEstado: EstadoKey) => void }) {
   const key: EstadoKey = (estado in ESTADO_CONFIG ? estado : "inativo") as EstadoKey;
   const config = ESTADO_CONFIG[key];
   return (
@@ -79,15 +79,24 @@ export default function AlunosPage() {
 
   const handleDelete = async () => {
     if (deleteId) {
-      await deleteAluno(deleteId);
-      toast({ title: "Aluno eliminado com sucesso" });
-      setDeleteId(null);
+      try {
+        await deleteAluno(deleteId);
+        toast({ title: "Aluno eliminado com sucesso" });
+      } catch {
+        toast({ title: "Erro ao eliminar aluno", description: "Tenta novamente.", variant: "destructive" });
+      } finally {
+        setDeleteId(null);
+      }
     }
   };
 
-  const mudarEstado = async (id: string, novoEstado: string) => {
-    await updateAlunoEstado(id, novoEstado);
-    toast({ title: "Estado atualizado" });
+  const mudarEstado = async (id: string, novoEstado: EstadoKey) => {
+    try {
+      await updateAlunoEstado(id, novoEstado);
+      toast({ title: "Estado atualizado" });
+    } catch {
+      toast({ title: "Erro ao atualizar estado", description: "Tenta novamente.", variant: "destructive" });
+    }
   };
 
   return (
@@ -223,14 +232,18 @@ export default function AlunosPage() {
         explicadores={explicadores}
         discNames={discNames}
         onSave={async (data) => {
-          if (editingAluno) {
-            await updateAluno(editingAluno.id, data);
-            toast({ title: "Aluno atualizado com sucesso" });
-          } else {
-            await createAluno(data);
-            toast({ title: "Aluno criado com sucesso" });
+          try {
+            if (editingAluno) {
+              await updateAluno(editingAluno.id, data);
+              toast({ title: "Aluno atualizado com sucesso" });
+            } else {
+              await createAluno(data);
+              toast({ title: "Aluno criado com sucesso" });
+            }
+            setModalOpen(false);
+          } catch {
+            toast({ title: "Erro ao guardar aluno", description: "Verifica os dados e tenta novamente.", variant: "destructive" });
           }
-          setModalOpen(false);
         }}
       />
 
