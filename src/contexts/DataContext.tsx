@@ -316,7 +316,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateDisciplina = async (id: string, patch: Partial<DisciplinaInput>) => {
-    const upd: any = {};
+    const upd: Record<string, unknown> = {};
     if (patch.nome !== undefined) upd.nome = patch.nome;
     if (patch.corHsl !== undefined) upd.cor_hsl = patch.corHsl || null;
     if (patch.precoPorHora !== undefined) upd.preco_por_hora = patch.precoPorHora;
@@ -362,7 +362,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateAluno = async (id: string, patch: Partial<Aluno>) => {
-    const updates: any = {};
+    const updates: Record<string, unknown> = {};
     if (patch.nome !== undefined) updates.nome = patch.nome;
     if (patch.email !== undefined) updates.email = patch.email || null;
     if (patch.telefone !== undefined) updates.telefone = patch.telefone || null;
@@ -423,11 +423,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateExplicador = async (id: string, patch: Partial<Explicador>) => {
-    const usersUpd: any = {};
+    const usersUpd: Record<string, unknown> = {};
     if (patch.nome !== undefined) usersUpd.nome = patch.nome;
     if (patch.email !== undefined) usersUpd.email = patch.email;
     if (Object.keys(usersUpd).length) await run(supabase.from("users").update(usersUpd).eq("id", id));
-    const perfUpd: any = {};
+    const perfUpd: Record<string, unknown> = {};
     if (patch.telefone !== undefined) perfUpd.telefone = patch.telefone || null;
     if (patch.valorHora !== undefined) perfUpd.valor_hora = patch.valorHora;
     if (patch.habilitacoes !== undefined) perfUpd.habilitacoes = patch.habilitacoes || null;
@@ -487,8 +487,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }));
     const { data: created, error } = await supabase.from("aulas").insert(rows).select("id");
     if (error || !created) throw error ?? new Error("aulas: insert retornou sem dados");
-    const apRows: any[] = [];
-    const aaRows: any[] = [];
+    const apRows: Record<string, unknown>[] = [];
+    const aaRows: Record<string, unknown>[] = [];
     created.forEach((c, i) => {
       const e = entries[i];
       if (e.explicadorId) apRows.push({ aula_id: c.id, professor_user_id: e.explicadorId });
@@ -500,7 +500,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateAula = async (id: string, patch: Partial<Aula>) => {
-    const upd: any = {};
+    const upd: Record<string, unknown> = {};
     if (patch.salaId !== undefined) upd.sala_id = patch.salaId || null;
     if (patch.disciplina !== undefined) upd.disciplina_id = discIdFor(patch.disciplina);
     if (patch.data !== undefined) upd.data = patch.data;
