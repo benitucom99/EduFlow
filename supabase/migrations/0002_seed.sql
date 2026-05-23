@@ -1,4 +1,10 @@
 -- ============================================================================
+-- ⚠️  AVISO DE SEGURANÇA (auditoria 2026-05-23):
+--   Esta seed cria dados/contas DEMO com passwords públicas (admin123, etc.).
+--   As contas foram eliminadas de produção (Lote 2) e a criação de credenciais
+--   Auth foi desativada na 0003. NÃO correr esta seed contra produção. Serve
+--   apenas para ambientes de desenvolvimento descartáveis.
+-- ============================================================================
 -- EduFlow — 0002_seed.sql
 -- Seed determinístico a partir de src/data/mockData.ts e src/lib/servicos.ts.
 -- UUIDs fixos para entidades estáveis (idempotente). Aulas geradas via

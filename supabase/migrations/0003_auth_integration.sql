@@ -33,32 +33,14 @@ begin
 end $$;
 
 -- ── seed auth.users para os 11 utilizadores demo ───────────────────────────
--- IDs idênticos aos de public.users para preservar todas as FKs.
-insert into auth.users (
-  id, instance_id, aud, role, email, encrypted_password,
-  email_confirmed_at, created_at, updated_at,
-  raw_app_meta_data, raw_user_meta_data, is_super_admin
-)
-select u.id,
-       '00000000-0000-0000-0000-000000000000'::uuid,
-       'authenticated', 'authenticated',
-       u.email,
-       crypt(u.password_hash, gen_salt('bf')),
-       now(), now(), now(),
-       '{"provider":"email","providers":["email"]}'::jsonb,
-       jsonb_build_object('nome', u.nome),
-       false
-  from public.users u
- where not exists (select 1 from auth.users a where a.id = u.id);
-
-insert into auth.identities (id, user_id, provider, provider_id, identity_data, created_at, updated_at, last_sign_in_at)
-select gen_random_uuid(), u.id, 'email', u.id::text,
-       jsonb_build_object('sub', u.id::text, 'email', u.email),
-       now(), now(), now()
-  from auth.users u
- where not exists (
-   select 1 from auth.identities i where i.user_id = u.id and i.provider = 'email'
- );
+-- DESATIVADO (auditoria 2026-05-23, CRÍTICO-3): este bloco criava credenciais
+-- de login reais para as contas demo a partir de password_hash em texto simples
+-- do 0002_seed.sql (ex.: admin@eduflow.pt / admin123). Essas contas foram
+-- eliminadas de produção no Lote 2 da auditoria. Mantém-se desativado para que
+-- um rebuild do zero NÃO recrie logins públicos. NÃO reativar.
+--
+-- (bloco original `insert into auth.users ... / insert into auth.identities ...`
+--  removido — ver histórico git anterior a esta alteração se necessário.)
 
 -- ── adaptar public.users ──────────────────────────────────────────────────
 alter table public.users drop column if exists password_hash;
