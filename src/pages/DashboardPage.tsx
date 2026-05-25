@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Users, BookOpen, Wallet, CheckCircle2, CalendarDays, UserRound, MapPin } from "lucide-react";
 
 import { isToday, isTomorrow, parseISO, startOfWeek, endOfWeek, isWithinInterval } from "date-fns";
+import { calcularCobrancaAlunos } from "@/lib/faturacao";
 
 function relativeDay(dateStr: string): string {
   try {
@@ -49,25 +50,27 @@ export default function DashboardPage() {
       } catch { return false; }
     });
 
-    let receita = 0;
+    // Taxa de assiduidade: presentes / total de registos de presença preenchidos.
     let totalPresencas = 0;
     let totalPresente = 0;
     for (const aula of aulasDoMes) {
-      const disc = disciplinas.find(d => d.nome === aula.disciplina);
-      const precoHora = disc?.precoPorHora ?? 0;
-      const [h1, m1] = aula.horaInicio.split(":").map(Number);
-      const [h2, m2] = aula.horaFim.split(":").map(Number);
-      const duracao = (h2 * 60 + m2 - (h1 * 60 + m1)) / 60;
-      const preco = precoHora * duracao;
       for (const p of Object.values(aula.presencas)) {
         if (p !== null) {
           totalPresencas++;
-          if (p === "presente") { totalPresente++; receita += preco; }
+          if (p === "presente") totalPresente++;
         }
       }
     }
-
     const assiduidade = totalPresencas > 0 ? Math.round((totalPresente / totalPresencas) * 100) : 0;
+
+    // Receita mensal: mesma lógica da faturação (presenças "presente" × preço/hora
+    // × duração × (1 - desconto)). Reutiliza a lib para bater certo com a página Faturação.
+    const mm = String(currentMonth + 1).padStart(2, "0");
+    const receita = calcularCobrancaAlunos(
+      aulas, alunos, disciplinas,
+      `${currentYear}-${mm}-01`, `${currentYear}-${mm}-31`,
+    ).reduce((s, r) => s + r.valorTotal, 0);
+
     return { ativos, aulasEstaSemana, receita, assiduidade };
   }, [alunos, aulas, disciplinas, now]);
 
@@ -90,7 +93,7 @@ export default function DashboardPage() {
   }, [aulas, now]);
 
   const formatReceita = (v: number) =>
-    v >= 1000 ? `${(v / 1000).toFixed(1)}k €` : `${v} €`;
+    v >= 1000 ? `${(v / 1000).toFixed(1)}k €` : `${Math.round(v)} €`;
 
   const kpis = [
     { label: "Total de Alunos", value: stats.ativos.toLocaleString("pt-PT"), icon: Users, iconBg: "bg-slate-100", iconColor: "text-slate-600" },
