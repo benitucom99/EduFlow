@@ -44,14 +44,19 @@ export function calcularCobrancaAlunos(
 ): ResumoAluno[] {
   const aulasFiltradas = aulas.filter(a => a.data >= dataInicio && a.data <= dataFim);
   const alunoMap = new Map(alunos.map(a => [a.id, a]));
-  const discPriceMap = new Map(disciplinas.map(d => [d.nome, d.precoPorHora]));
+  const discByNome = new Map(disciplinas.map(d => [d.nome, d]));
   const resultado = new Map<string, AulaFaturacaoAluno[]>();
 
   for (const aula of aulasFiltradas) {
     for (const alunoId of aula.alunoIds) {
       const presenca = aula.presencas[alunoId] ?? null;
       const duracao = parseDurationHours(aula.horaInicio, aula.horaFim);
-      const precoPorHora = discPriceMap.get(aula.disciplina) ?? 0;
+      // Preço/hora efetivo conforme o tipo de aula. Em grupo, cada aluno paga o
+      // preço de grupo por hora (fixo por aluno, independente do nº de alunos).
+      const disc = discByNome.get(aula.disciplina);
+      const precoPorHora = aula.tipo === "grupo"
+        ? (disc?.precoHoraGrupo ?? 0)
+        : (disc?.precoHoraIndividual ?? 0);
       const cobrar = presenca === "presente";
       const aluno = alunoMap.get(alunoId);
       const descontoRatio = (aluno?.desconto || 0) / 100;
