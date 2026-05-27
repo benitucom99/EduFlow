@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import { Loader2, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -13,6 +13,7 @@ export default function ConfiguracoesCentroPage() {
   const navigate = useNavigate();
   const { profile, refreshProfile } = useAuth();
   const { toast } = useToast();
+  const allowed = profile?.role === "admin" || profile?.role === "rececionista";
 
   const [centroNome, setCentroNome] = useState("");
   const [centroMorada, setCentroMorada] = useState("");
@@ -23,7 +24,7 @@ export default function ConfiguracoesCentroPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!profile?.centro_id) return;
+    if (!allowed || !profile?.centro_id) return;
     setLoading(true);
     supabase
       .from("centros")
@@ -40,7 +41,7 @@ export default function ConfiguracoesCentroPage() {
         }
       })
       .finally(() => setLoading(false));
-  }, [profile?.centro_id]);
+  }, [allowed, profile?.centro_id]);
 
   const handleSave = async () => {
     if (!profile?.centro_id || !centroNome.trim()) return;
@@ -65,6 +66,9 @@ export default function ConfiguracoesCentroPage() {
       setSaving(false);
     }
   };
+
+  // Explicadores não têm acesso aos detalhes do centro.
+  if (!allowed) return <Navigate to="/configuracoes" replace />;
 
   return (
     <div className="space-y-6 animate-fade-in max-w-2xl">

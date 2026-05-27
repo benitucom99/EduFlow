@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { useData } from "@/contexts/DataContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Users, BookOpen, Wallet, CheckCircle2, CalendarDays, UserRound, MapPin } from "lucide-react";
@@ -19,6 +20,7 @@ function relativeDay(dateStr: string): string {
 }
 
 export default function DashboardPage() {
+  const { user } = useAuth();
   const { alunos, aulas, explicadores, salas, disciplinas } = useData();
 
   const [now, setNow] = useState(() => new Date());
@@ -101,6 +103,9 @@ export default function DashboardPage() {
     { label: "Receita Mensal", value: formatReceita(stats.receita), icon: Wallet, iconBg: "bg-emerald-100", iconColor: "text-emerald-500" },
     { label: "Taxa de Assiduidade", value: `${stats.assiduidade}%`, icon: CheckCircle2, iconBg: "bg-violet-100", iconColor: "text-violet-500" },
   ];
+
+  // Explicadores não têm Dashboard — entram diretamente no calendário.
+  if (user?.role === "explicador") return <Navigate to="/calendario" replace />;
 
   return (
     <div className="space-y-6 animate-fade-in">

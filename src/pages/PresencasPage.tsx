@@ -6,11 +6,14 @@ import { CalendarDays, ChevronDown, ChevronUp } from "lucide-react";
 import { format } from "date-fns";
 import { Presenca } from "@/contexts/DataContext";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 
 export default function PresencasPage() {
   const { aulas, setPresenca, alunos, explicadores } = useData();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isExplicador = user?.role === "explicador";
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [expFilter, setExpFilter] = useState("todos");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -18,9 +21,11 @@ export default function PresencasPage() {
   const aulasDoDia = useMemo(() =>
     aulas
       .filter(a => a.data === selectedDate && a.estado !== "cancelada")
+      // Explicador só vê as próprias aulas.
+      .filter(a => !isExplicador || a.explicadorId === user?.id)
       .filter(a => expFilter === "todos" || a.explicadorId === expFilter)
       .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio)),
-    [aulas, selectedDate, expFilter]
+    [aulas, selectedDate, expFilter, isExplicador, user?.id]
   );
 
   const updatePresenca = async (aulaId: string, alunoId: string, presenca: Presenca) => {
@@ -54,17 +59,19 @@ export default function PresencasPage() {
               className="pl-9 w-[180px] h-9"
             />
           </div>
-          <Select value={expFilter} onValueChange={setExpFilter}>
-            <SelectTrigger className="w-[200px] h-9">
-              <SelectValue placeholder="Todos os professores" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos os professores</SelectItem>
-              {explicadores
-                .filter(e => e.estado === "ativo")
-                .map(e => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          {!isExplicador && (
+            <Select value={expFilter} onValueChange={setExpFilter}>
+              <SelectTrigger className="w-[200px] h-9">
+                <SelectValue placeholder="Todos os professores" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os professores</SelectItem>
+                {explicadores
+                  .filter(e => e.estado === "ativo")
+                  .map(e => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
         </div>
       </div>
 

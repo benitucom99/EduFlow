@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { addDays, startOfWeek, format, isToday, addWeeks, subWeeks, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { Aula } from "@/contexts/DataContext";
 
 // ─── Layout constants ────────────────────────────────────────────────────────
@@ -82,6 +83,8 @@ export default function CalendarioPage() {
   const { aulas, createAulas, updateAula, cancelAula, alunos, explicadores, salas, disciplinas } = useData();
   const discNames = disciplinas.map(d => d.nome);
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isExplicador = user?.role === "explicador";
   const [view, setView] = useState<"semana" | "dia">("semana");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [expFilter, setExpFilter] = useState("todos");
@@ -108,10 +111,12 @@ export default function CalendarioPage() {
 
   const filteredAulas = useMemo(() => aulas.filter(a => {
     if (a.estado === "cancelada") return false;
+    // Explicador só vê as próprias aulas.
+    if (isExplicador && a.explicadorId !== user?.id) return false;
     if (expFilter !== "todos" && a.explicadorId !== expFilter) return false;
     if (salaFilter !== "todas" && a.salaId !== salaFilter) return false;
     return true;
-  }), [aulas, expFilter, salaFilter]);
+  }), [aulas, expFilter, salaFilter, isExplicador, user?.id]);
 
   const getAulasForDate = (dateStr: string) => filteredAulas.filter(a => a.data === dateStr);
 
@@ -183,20 +188,22 @@ export default function CalendarioPage() {
           </div>
 
           {/* Filters */}
-          <Select value={expFilter} onValueChange={setExpFilter}>
-            <SelectTrigger className="w-[140px] h-9"><SelectValue placeholder="Explicador" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos</SelectItem>
-              {explicadores.map(e => (
-                <SelectItem key={e.id} value={e.id}>
-                  <span className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: getProfPalette(e.id, explicadores).border }} />
-                    {e.nome}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {!isExplicador && (
+            <Select value={expFilter} onValueChange={setExpFilter}>
+              <SelectTrigger className="w-[140px] h-9"><SelectValue placeholder="Explicador" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                {explicadores.map(e => (
+                  <SelectItem key={e.id} value={e.id}>
+                    <span className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: getProfPalette(e.id, explicadores).border }} />
+                      {e.nome}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Select value={salaFilter} onValueChange={setSalaFilter}>
             <SelectTrigger className="w-[110px] h-9"><SelectValue placeholder="Sala" /></SelectTrigger>
             <SelectContent>
@@ -501,6 +508,8 @@ function AulaModal({ open, onClose, aula, prefill, onSave, onCancel }: {
   onSave: (aulas: any[]) => void; onCancel?: () => void;
 }) {
   const { alunos, explicadores, salas, aulas, disciplinas } = useData();
+  const { user } = useAuth();
+  const isExplicador = user?.role === "explicador";
   const discNames = disciplinas.map(d => d.nome);
   const [tipo, setTipo] = useState<"individual" | "grupo">(aula?.tipo || "individual");
   const [disciplina, setDisciplina] = useState(aula?.disciplina || "");
@@ -520,13 +529,13 @@ function AulaModal({ open, onClose, aula, prefill, onSave, onCancel }: {
       setTipo(aula?.tipo || "individual");
       setDisciplina(aula?.disciplina || "");
       setAlunoIds(aula?.alunoIds || []);
-      setExplicadorId(aula?.explicadorId || "");
+      setExplicadorId(aula?.explicadorId || (isExplicador ? user?.id ?? "" : ""));
       setSalaId(aula?.salaId || "auto");
       setData(aula?.data || prefill?.data || format(new Date(), "yyyy-MM-dd"));
       setHoraInicio(aula?.horaInicio || prefill?.horaInicio || "09:00");
       setNotas(aula?.notas || "");
     }
-  }, [open, aula, prefill]);
+  }, [open, aula, prefill, isExplicador, user?.id]);
 
   const expsFiltrados = disciplina
     ? explicadores.filter(e => e.disciplinas.includes(disciplina) && e.estado === "ativo")
@@ -730,19 +739,28 @@ function AulaModal({ open, onClose, aula, prefill, onSave, onCancel }: {
             {/* Explicador */}
             <div>
               <Label className="text-sm">Explicador <span className="text-destructive">*</span></Label>
-              <Select value={explicadorId} onValueChange={setExplicadorId}>
-                <SelectTrigger><SelectValue placeholder="Selecionar explicador" /></SelectTrigger>
-                <SelectContent>
-                  {expsFiltrados.map(e => (
-                    <SelectItem key={e.id} value={e.id}>
-                      <span className="flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: getProfPalette(e.id, explicadores).border }} />
-                        {e.nome} ({e.valorHora}€/h)
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {isExplicador ? (
+                <Input
+                  value={explicadores.find(e => e.id === (user?.id ?? ""))?.nome ?? "—"}
+                  readOnly
+                  disabled
+                  className="bg-muted text-muted-foreground cursor-not-allowed"
+                />
+              ) : (
+                <Select value={explicadorId} onValueChange={setExplicadorId}>
+                  <SelectTrigger><SelectValue placeholder="Selecionar explicador" /></SelectTrigger>
+                  <SelectContent>
+                    {expsFiltrados.map(e => (
+                      <SelectItem key={e.id} value={e.id}>
+                        <span className="flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: getProfPalette(e.id, explicadores).border }} />
+                          {e.nome} ({e.valorHora}€/h)
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             {/* Sala */}

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const navItems = [
-  { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "rececionista", "explicador"] },
+  { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "rececionista"] },
   { path: "/alunos", label: "Alunos", icon: Users, roles: ["admin", "rececionista"] },
   { path: "/explicadores", label: "Explicadores", icon: GraduationCap, roles: ["admin", "rececionista"] },
   { path: "/disciplinas", label: "Disciplinas", icon: BookOpen, roles: ["admin"] },
