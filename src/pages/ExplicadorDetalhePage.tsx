@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DiscBadge } from "@/components/DiscBadge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Mail, Phone, GraduationCap, Pencil, Landmark, CreditCard } from "lucide-react";
+import { ArrowLeft, Mail, Phone, GraduationCap, Pencil, Landmark, CreditCard, Send, Copy } from "lucide-react";
 import { useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -21,10 +21,33 @@ import { useEffect } from "react";
 export default function ExplicadorDetalhePage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { explicadores, updateExplicador, aulas, alunos } = useData();
+  const { explicadores, updateExplicador, inviteExplicador, aulas, alunos } = useData();
   const { toast } = useToast();
   const exp = explicadores.find(e => e.id === id);
   const [editOpen, setEditOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [inviting, setInviting] = useState(false);
+
+  const handleInvite = async () => {
+    if (!exp) return;
+    setInviting(true);
+    try {
+      const link = await inviteExplicador(exp.id, `${window.location.origin}/set-password`);
+      setInviteLink(link);
+      setInviteOpen(true);
+    } catch (e) {
+      toast({ title: "Erro ao gerar convite", description: e instanceof Error ? e.message : "Tenta novamente.", variant: "destructive" });
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const copyLink = async () => {
+    if (!inviteLink) return;
+    await navigator.clipboard.writeText(inviteLink);
+    toast({ title: "Link copiado" });
+  };
 
   const stats = useMemo(() => {
     const aulasExp = aulas.filter(a => a.explicadorId === id);
@@ -71,6 +94,24 @@ export default function ExplicadorDetalhePage() {
                   <span className="truncate">{exp.iban ? `IBAN: ${exp.iban}` : "IBAN: —"}</span>
                 </div>
               </div>
+            </div>
+            <div className="pt-4 border-t">
+              <p className="text-xs text-muted-foreground mb-2">Acesso à Plataforma</p>
+              {exp.acessoAtivadoEm ? (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-success/10 text-success">Acesso ativo</span>
+              ) : exp.conviteEnviadoEm ? (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-warning/10 text-warning">
+                  Convite pendente · {new Date(exp.conviteEnviadoEm).toLocaleDateString("pt-PT")}
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">Não convidado</span>
+              )}
+              {!exp.acessoAtivadoEm && (
+                <Button variant="outline" size="sm" className="w-full mt-3" onClick={handleInvite} disabled={inviting}>
+                  <Send className="h-4 w-4 mr-2" />
+                  {inviting ? "A gerar…" : exp.conviteEnviadoEm ? "Reenviar convite" : "Enviar acesso"}
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -124,6 +165,27 @@ export default function ExplicadorDetalhePage() {
           }
         }}
       />
+
+      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Convite de acesso</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Envie este link a <strong>{exp.nome}</strong> ({exp.email}). Ao abri-lo, poderá definir a palavra-passe e aceder à plataforma. O link é válido por tempo limitado.
+            </p>
+            {inviteLink ? (
+              <div className="flex items-center gap-2">
+                <Input readOnly value={inviteLink} className="text-xs" onFocus={e => e.target.select()} />
+                <Button variant="outline" size="icon" onClick={copyLink}><Copy className="h-4 w-4" /></Button>
+              </div>
+            ) : (
+              <p className="text-sm text-warning">
+                O convite foi registado, mas não foi possível gerar o link automaticamente. Verifica a configuração de email do Supabase ou tenta novamente.
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

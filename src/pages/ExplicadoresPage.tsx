@@ -84,7 +84,7 @@ export default function ExplicadoresPage() {
             </TableRow></TableHeader>
             <TableBody>
               {filtered.map(exp => (
-                <TableRow key={exp.id}>
+                <TableRow key={exp.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/explicadores/${exp.id}`)}>
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center text-xs font-bold text-accent-foreground">{exp.nome.split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
@@ -93,7 +93,7 @@ export default function ExplicadoresPage() {
                   </TableCell>
                   <TableCell><div className="flex gap-1 flex-wrap">{exp.disciplinas.map(d => <DiscBadge key={d} nome={d} className="text-[10px]" />)}</div></TableCell>
                   <TableCell className="font-medium">{exp.valorHora}€</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/explicadores/${exp.id}`)}><Eye className="h-4 w-4" /></Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditing(exp); setModalOpen(true); }}><Pencil className="h-4 w-4" /></Button>
@@ -112,7 +112,7 @@ export default function ExplicadoresPage() {
             <div className="col-span-full py-16 text-center text-muted-foreground">Nenhum explicador encontrado.</div>
           )}
           {filtered.map(exp => (
-            <Card key={exp.id} className="hover:shadow-md transition-shadow">
+            <Card key={exp.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate(`/explicadores/${exp.id}`)}>
               <CardContent className="p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="h-12 w-12 rounded-full bg-accent flex items-center justify-center text-lg font-bold text-accent-foreground">{exp.nome.split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
@@ -122,7 +122,7 @@ export default function ExplicadoresPage() {
                 </div>
                 <div className="flex flex-wrap gap-1 mb-3">{exp.disciplinas.map(d => <DiscBadge key={d} nome={d} />)}</div>
                 <p className="text-2xl font-bold text-primary mb-4">{exp.valorHora}€<span className="text-sm font-normal text-muted-foreground">/hora</span></p>
-                <div className="flex gap-2">
+                <div className="flex gap-2" onClick={e => e.stopPropagation()}>
                   <Button variant="outline" className="flex-1" onClick={() => navigate(`/explicadores/${exp.id}`)}>Ver perfil</Button>
                   <Button variant="outline" size="icon" onClick={() => { setEditing(exp); setModalOpen(true); }}><Pencil className="h-4 w-4" /></Button>
                   <Button variant="outline" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeleteTarget(exp)}><Trash2 className="h-4 w-4" /></Button>

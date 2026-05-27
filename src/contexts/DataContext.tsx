@@ -42,6 +42,8 @@ export interface Explicador {
   estado: "ativo" | "inativo";
   iban?: string;
   nif?: string;
+  conviteEnviadoEm?: string | null;
+  acessoAtivadoEm?: string | null;
 }
 
 export interface Sala {
@@ -96,6 +98,7 @@ interface DataContextType {
   createExplicador: (data: ExplicadorInput) => Promise<Explicador | null>;
   updateExplicador: (id: string, patch: Partial<Explicador>) => Promise<void>;
   deleteExplicador: (id: string) => Promise<void>;
+  inviteExplicador: (explicadorId: string, redirectTo: string) => Promise<string | null>;
 
   createSala: (data: SalaInput) => Promise<Sala | null>;
   updateSala: (id: string, patch: Partial<Sala>) => Promise<void>;
@@ -161,7 +164,7 @@ async function loadAlunos(centroId: string, discIdToName: Map<string, string>): 
 async function loadExplicadores(centroId: string, discIdToName: Map<string, string>): Promise<Explicador[]> {
   const { data, error } = await supabase
     .from("professor_perfis")
-    .select("user_id, telefone, valor_hora, habilitacoes, iban, nif, estado, users!inner(nome, email), professor_disciplinas(disciplina_id)")
+    .select("user_id, telefone, valor_hora, habilitacoes, iban, nif, estado, convite_enviado_em, acesso_ativado_em, users!inner(nome, email), professor_disciplinas(disciplina_id)")
     .eq("centro_id", centroId);
   if (error) throw error;
   return (data ?? []).map((r: any) => ({
@@ -175,6 +178,8 @@ async function loadExplicadores(centroId: string, discIdToName: Map<string, stri
     estado: r.estado,
     iban: r.iban ?? undefined,
     nif: r.nif ?? undefined,
+    conviteEnviadoEm: r.convite_enviado_em ?? null,
+    acessoAtivadoEm: r.acesso_ativado_em ?? null,
   }));
 }
 
@@ -466,6 +471,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     await Promise.all([refreshExplicadores(), refreshAulas()]);
   };
 
+  // A conta auth do explicador já existe (criada no createExplicador). "Convidar"
+  // gera um link de recovery para ele definir a própria password — não cria conta.
+  // Devolve o link para o admin copiar (o SMTP de produção não está garantido).
+  const inviteExplicador = async (explicadorId: string, redirectTo: string): Promise<string | null> => {
+    const { data, error } = await supabase.functions.invoke("invite-explicador", {
+      body: { explicador_id: explicadorId, redirect_to: redirectTo },
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    await refreshExplicadores();
+    return data?.action_link ?? null;
+  };
+
   // ── Salas ────────────────────────────────────────────────────────────────────
   const createSala = async (data: SalaInput): Promise<Sala | null> => {
     const cid = ensureCentro();
@@ -564,7 +582,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       disciplinas, alunos, explicadores, salas, aulas, loading, refresh,
       createDisciplina, updateDisciplina, deleteDisciplina,
       createAluno, updateAluno, deleteAluno, updateAlunoEstado,
-      createExplicador, updateExplicador, deleteExplicador,
+      createExplicador, updateExplicador, deleteExplicador, inviteExplicador,
       createSala, updateSala, deleteSala,
       createAulas, updateAula, cancelAula, setPresenca,
     }}>
