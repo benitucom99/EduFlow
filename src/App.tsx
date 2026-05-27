@@ -21,6 +21,8 @@ import SalasPage from "@/pages/SalasPage";
 import CalendarioPage from "@/pages/CalendarioPage";
 import PresencasPage from "@/pages/PresencasPage";
 import ConfiguracoesPage from "@/pages/ConfiguracoesPage";
+import ConfiguracoesPerfilPage from "@/pages/ConfiguracoesPerfilPage";
+import ConfiguracoesCentroPage from "@/pages/ConfiguracoesCentroPage";
 import FaturacaoPage from "@/pages/FaturacaoPage";
 import NotFound from "@/pages/NotFound";
 import DisciplinasPage from "@/pages/DisciplinasPage";
@@ -60,6 +62,8 @@ const App = () => (
                   <Route path="/calendario" element={<CalendarioPage />} />
                   <Route path="/presencas" element={<PresencasPage />} />
                   <Route path="/configuracoes" element={<ConfiguracoesPage />} />
+                  <Route path="/configuracoes/perfil" element={<ConfiguracoesPerfilPage />} />
+                  <Route path="/configuracoes/centro" element={<ConfiguracoesCentroPage />} />
                   <Route path="/faturacao" element={<FaturacaoPage />} />
                   {/* Disabled routes — redirect to dashboard */}
                   <Route path="/gestao-aluno" element={<Navigate to="/dashboard" replace />} />
