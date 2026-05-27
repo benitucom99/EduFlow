@@ -10,6 +10,9 @@ export interface Disciplina {
   id: string;
   nome: string;
   corHsl: string | null;
+  precoHoraIndividual: number;
+  precoHoraGrupo: number;
+  /** @deprecated alias temporário = precoHoraIndividual; remover após migrar UI/faturação. */
   precoPorHora: number;
 }
 
@@ -65,7 +68,12 @@ export interface Aula {
 }
 
 // ── Input types ───────────────────────────────────────────────────────────────
-export type DisciplinaInput = Omit<Disciplina, "id">;
+export type DisciplinaInput = Omit<Disciplina, "id" | "precoHoraIndividual" | "precoHoraGrupo" | "precoPorHora"> & {
+  precoHoraIndividual?: number;
+  precoHoraGrupo?: number;
+  /** @deprecated alias temporário para precoHoraIndividual. */
+  precoPorHora?: number;
+};
 export type AlunoInput = Omit<Aluno, "id" | "estado" | "dataInscricao"> & { estado?: Aluno["estado"]; dataInscricao?: string };
 export type ExplicadorInput = Omit<Explicador, "id" | "estado"> & { estado?: Explicador["estado"]; password?: string };
 export type SalaInput = Pick<Sala, "nome">;
@@ -109,16 +117,21 @@ const DataContext = createContext<DataContextType | null>(null);
 async function loadDisciplinas(centroId: string) {
   const { data, error } = await supabase
     .from("disciplinas")
-    .select("id, nome, cor_hsl, preco_por_hora")
+    .select("id, nome, cor_hsl, preco_hora_individual, preco_hora_grupo")
     .eq("centro_id", centroId)
     .order("nome");
   if (error) throw error;
-  const discs: Disciplina[] = (data ?? []).map((d: any) => ({
-    id: d.id,
-    nome: d.nome,
-    corHsl: d.cor_hsl ?? null,
-    precoPorHora: Number(d.preco_por_hora ?? 0),
-  }));
+  const discs: Disciplina[] = (data ?? []).map((d: any) => {
+    const individual = Number(d.preco_hora_individual ?? 0);
+    return {
+      id: d.id,
+      nome: d.nome,
+      corHsl: d.cor_hsl ?? null,
+      precoHoraIndividual: individual,
+      precoHoraGrupo: Number(d.preco_hora_grupo ?? 0),
+      precoPorHora: individual, // alias temporário
+    };
+  });
   const idToName = new Map<string, string>();
   const nameToId = new Map<string, string>();
   discs.forEach(d => { idToName.set(d.id, d.nome); nameToId.set(d.nome, d.id); });
@@ -304,22 +317,35 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // ── Disciplinas ─────────────────────────────────────────────────────────────
   const createDisciplina = async (data: DisciplinaInput): Promise<Disciplina | null> => {
     const cid = ensureCentro();
+    // Aceita os campos novos; recai no alias precoPorHora enquanto a UI não migra.
+    const individual = data.precoHoraIndividual ?? data.precoPorHora ?? 0;
+    const grupo = data.precoHoraGrupo ?? individual;
     const { data: row, error } = await supabase.from("disciplinas").insert({
       centro_id: cid,
       nome: data.nome,
       cor_hsl: data.corHsl || null,
-      preco_por_hora: data.precoPorHora,
+      preco_hora_individual: individual,
+      preco_hora_grupo: grupo,
     }).select().single();
     if (error) throw error;
     await refreshDisciplinas();
-    return { id: row.id, nome: row.nome, corHsl: row.cor_hsl ?? null, precoPorHora: Number(row.preco_por_hora) };
+    const ind = Number(row.preco_hora_individual ?? 0);
+    return {
+      id: row.id, nome: row.nome, corHsl: row.cor_hsl ?? null,
+      precoHoraIndividual: ind,
+      precoHoraGrupo: Number(row.preco_hora_grupo ?? 0),
+      precoPorHora: ind,
+    };
   };
 
   const updateDisciplina = async (id: string, patch: Partial<DisciplinaInput>) => {
     const upd: Record<string, unknown> = {};
     if (patch.nome !== undefined) upd.nome = patch.nome;
     if (patch.corHsl !== undefined) upd.cor_hsl = patch.corHsl || null;
-    if (patch.precoPorHora !== undefined) upd.preco_por_hora = patch.precoPorHora;
+    if (patch.precoHoraIndividual !== undefined) upd.preco_hora_individual = patch.precoHoraIndividual;
+    if (patch.precoHoraGrupo !== undefined) upd.preco_hora_grupo = patch.precoHoraGrupo;
+    // alias: UI antiga ainda envia precoPorHora → mapeia para o individual.
+    if (patch.precoPorHora !== undefined && patch.precoHoraIndividual === undefined) upd.preco_hora_individual = patch.precoPorHora;
     if (Object.keys(upd).length) await run(supabase.from("disciplinas").update(upd).eq("id", id));
     const idToName = await refreshDisciplinas();
     // Renomear afeta os nomes de disciplina embebidos noutras entidades.
