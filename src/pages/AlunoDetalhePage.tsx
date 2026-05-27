@@ -23,15 +23,19 @@ export default function AlunoDetalhePage() {
   const explicadorAtribuido = explicadores.find(e => e.id === aluno?.explicadorId);
 
   const aulasDoAluno = useMemo(() => {
-    return aulas.filter(a => a.alunoIds.includes(id!)).sort((a, b) => b.data.localeCompare(a.data));
+    return aulas
+      .filter(a => a.alunoIds.includes(id!) && a.estado !== "cancelada")
+      .sort((a, b) => b.data.localeCompare(a.data));
   }, [aulas, id]);
 
   const stats = useMemo(() => {
-    const total = aulasDoAluno.filter(a => a.estado === "realizada").length;
+    const total = aulasDoAluno.length;
     const presentes = aulasDoAluno.filter(a => a.presencas[id!] === "presente").length;
     const fj = aulasDoAluno.filter(a => a.presencas[id!] === "falta_justificada").length;
     const fi = aulasDoAluno.filter(a => a.presencas[id!] === "falta_injustificada").length;
-    return { total, presentes, fj, fi, taxa: total > 0 ? Math.round((presentes / total) * 100) : 0 };
+    // Taxa calculada sobre aulas com presença registada — exclui as ainda por realizar.
+    const comPresenca = presentes + fj + fi;
+    return { total, presentes, fj, fi, taxa: comPresenca > 0 ? Math.round((presentes / comPresenca) * 100) : 0 };
   }, [aulasDoAluno, id]);
 
   if (!aluno) return <div className="p-6">Aluno não encontrado</div>;
