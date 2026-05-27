@@ -88,6 +88,7 @@ export default function CalendarioPage() {
   const [salaFilter, setSalaFilter] = useState("todas");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAula, setEditingAula] = useState<Aula | null>(null);
+  const [prefill, setPrefill] = useState<{ data: string; horaInicio: string } | null>(null);
   const [detailAula, setDetailAula] = useState<Aula | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [now, setNow] = useState(new Date());
@@ -125,6 +126,19 @@ export default function CalendarioPage() {
   const dateLabel = view === "semana"
     ? `${format(weekDays[0], "d MMM", { locale: pt })} – ${format(weekDays[4], "d MMM yyyy", { locale: pt })}`
     : format(currentDate, "EEEE, d MMMM yyyy", { locale: pt });
+
+  const handleDayClick = (e: React.MouseEvent<HTMLDivElement>, dateStr: string) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const minutesFromStart = (y / HOUR_HEIGHT) * 60;
+    const totalMinutes = Math.round((START_HOUR * 60 + minutesFromStart) / 30) * 30;
+    const h = Math.min(Math.max(Math.floor(totalMinutes / 60), START_HOUR), END_HOUR - 1);
+    const m = totalMinutes % 60 < 30 ? 0 : 30;
+    const horaInicio = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    setPrefill({ data: dateStr, horaInicio });
+    setEditingAula(null);
+    setModalOpen(true);
+  };
 
   const handleCancelDetail = async () => {
     if (!detailAula) return;
@@ -242,7 +256,8 @@ export default function CalendarioPage() {
               return (
                 <div
                   key={dateStr}
-                  className={`flex-1 relative border-r last:border-r-0 overflow-hidden ${isToday(day) ? "bg-primary/[0.02]" : ""}`}
+                  className={`flex-1 relative border-r last:border-r-0 overflow-hidden cursor-crosshair ${isToday(day) ? "bg-primary/[0.02]" : ""}`}
+                  onClick={e => handleDayClick(e, dateStr)}
                 >
                   {/* Hour grid lines */}
                   {hours.map((h, i) => (
@@ -298,7 +313,7 @@ export default function CalendarioPage() {
                           color: palette.text,
                           borderLeft: `3px solid ${palette.border}`,
                         }}
-                        onClick={() => setDetailAula(aula)}
+                        onClick={e => { e.stopPropagation(); setDetailAula(aula); }}
                       >
                         {/* Time */}
                         <div className="flex items-center gap-1 leading-none">
@@ -421,8 +436,9 @@ export default function CalendarioPage() {
       {/* ── New/Edit Aula modal ────────────────────────────────────── */}
       <AulaModal
         open={modalOpen}
-        onClose={() => { setModalOpen(false); setEditingAula(null); }}
+        onClose={() => { setModalOpen(false); setEditingAula(null); setPrefill(null); }}
         aula={editingAula}
+        prefill={prefill ?? undefined}
         onSave={async (aulasToCreate) => {
           try {
             if (editingAula) {
@@ -434,7 +450,7 @@ export default function CalendarioPage() {
                 title: aulasToCreate.length > 1 ? `${aulasToCreate.length} aulas agendadas` : "Aula agendada com sucesso",
               });
             }
-            setModalOpen(false); setEditingAula(null);
+            setModalOpen(false); setEditingAula(null); setPrefill(null);
           } catch {
             toast({ title: "Erro ao guardar aula", description: "Tenta novamente.", variant: "destructive" });
           }
@@ -459,8 +475,9 @@ const horaOptions = Array.from({ length: 26 }, (_, i) => {
   return `${String(h).padStart(2, "0")}:${m}`;
 });
 
-function AulaModal({ open, onClose, aula, onSave, onCancel }: {
+function AulaModal({ open, onClose, aula, prefill, onSave, onCancel }: {
   open: boolean; onClose: () => void; aula: Aula | null;
+  prefill?: { data: string; horaInicio: string };
   onSave: (aulas: any[]) => void; onCancel?: () => void;
 }) {
   const { alunos, explicadores, salas, aulas, disciplinas } = useData();
@@ -485,11 +502,11 @@ function AulaModal({ open, onClose, aula, onSave, onCancel }: {
       setAlunoIds(aula?.alunoIds || []);
       setExplicadorId(aula?.explicadorId || "");
       setSalaId(aula?.salaId || "auto");
-      setData(aula?.data || format(new Date(), "yyyy-MM-dd"));
-      setHoraInicio(aula?.horaInicio || "09:00");
+      setData(aula?.data || prefill?.data || format(new Date(), "yyyy-MM-dd"));
+      setHoraInicio(aula?.horaInicio || prefill?.horaInicio || "09:00");
       setNotas(aula?.notas || "");
     }
-  }, [open, aula]);
+  }, [open, aula, prefill]);
 
   const expsFiltrados = disciplina
     ? explicadores.filter(e => e.disciplinas.includes(disciplina) && e.estado === "ativo")
