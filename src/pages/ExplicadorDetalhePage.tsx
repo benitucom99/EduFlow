@@ -2,7 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useData } from "@/contexts/DataContext";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { DiscBadge } from "@/components/DiscBadge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Mail, Phone, GraduationCap, Pencil, Landmark, CreditCard } from "lucide-react";
@@ -57,7 +57,7 @@ export default function ExplicadorDetalhePage() {
             </div>
             <div className="pt-4 border-t">
               <p className="text-xs text-muted-foreground mb-2">Disciplinas</p>
-              <div className="flex flex-wrap gap-1">{exp.disciplinas.map(d => <Badge key={d} variant="secondary" className="text-xs">{d}</Badge>)}</div>
+              <div className="flex flex-wrap gap-1">{exp.disciplinas.map(d => <DiscBadge key={d} nome={d} />)}</div>
             </div>
             <div className="pt-4 border-t">
               <p className="text-xs text-muted-foreground mb-2">Dados Financeiros</p>

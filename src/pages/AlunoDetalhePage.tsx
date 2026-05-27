@@ -2,6 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useData } from "@/contexts/DataContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { DiscBadge } from "@/components/DiscBadge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -69,7 +70,7 @@ export default function AlunoDetalhePage() {
             <div className="pt-4 border-t">
               <p className="text-xs text-muted-foreground mb-2">Disciplinas</p>
               <div className="flex flex-wrap gap-1">
-                {aluno.disciplinas.map(d => <Badge key={d} variant="secondary" className="text-xs">{d}</Badge>)}
+                {aluno.disciplinas.map(d => <DiscBadge key={d} nome={d} />)}
               </div>
             </div>
             <div className="pt-4 border-t">

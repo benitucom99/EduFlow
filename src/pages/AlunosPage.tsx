@@ -4,6 +4,7 @@ import { useData } from "@/contexts/DataContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { DiscBadge } from "@/components/DiscBadge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -182,7 +183,7 @@ export default function AlunosPage() {
                     <TableCell className="hidden md:table-cell">
                       <div className="flex gap-1 flex-wrap">
                         {aluno.disciplinas.slice(0, 3).map(d => (
-                          <Badge key={d} variant="secondary" className="text-[10px]">{d}</Badge>
+                          <DiscBadge key={d} nome={d} className="text-[10px]" />
                         ))}
                         {aluno.disciplinas.length > 3 && <Badge variant="outline" className="text-[10px]">+{aluno.disciplinas.length - 3}</Badge>}
                       </div>

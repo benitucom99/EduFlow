@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useData } from "@/contexts/DataContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { DiscBadge } from "@/components/DiscBadge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -91,7 +91,7 @@ export default function ExplicadoresPage() {
                       <div><p className="font-medium text-sm">{exp.nome}</p><p className="text-xs text-muted-foreground">{exp.email}</p></div>
                     </div>
                   </TableCell>
-                  <TableCell><div className="flex gap-1 flex-wrap">{exp.disciplinas.map(d => <Badge key={d} variant="secondary" className="text-[10px]">{d}</Badge>)}</div></TableCell>
+                  <TableCell><div className="flex gap-1 flex-wrap">{exp.disciplinas.map(d => <DiscBadge key={d} nome={d} className="text-[10px]" />)}</div></TableCell>
                   <TableCell className="font-medium">{exp.valorHora}€</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
@@ -120,7 +120,7 @@ export default function ExplicadoresPage() {
                     <p className="font-semibold">{exp.nome}</p>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-1 mb-3">{exp.disciplinas.map(d => <Badge key={d} variant="secondary" className="text-xs">{d}</Badge>)}</div>
+                <div className="flex flex-wrap gap-1 mb-3">{exp.disciplinas.map(d => <DiscBadge key={d} nome={d} />)}</div>
                 <p className="text-2xl font-bold text-primary mb-4">{exp.valorHora}€<span className="text-sm font-normal text-muted-foreground">/hora</span></p>
                 <div className="flex gap-2">
                   <Button variant="outline" className="flex-1" onClick={() => navigate(`/explicadores/${exp.id}`)}>Ver perfil</Button>
