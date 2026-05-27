@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, User, Building2 } from "lucide-react";
+import { ChevronRight, User, Building2, Paintbrush } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const items = [
@@ -18,6 +18,14 @@ const items = [
     title: "Detalhes do Centro",
     description: "Atualize as informações públicas e de contacto do centro",
     roles: ["admin", "rececionista"],
+  },
+  {
+    key: "personalizacao",
+    path: "/configuracoes/personalizacao",
+    icon: Paintbrush,
+    title: "Personalização",
+    description: "Ajuste o tamanho de letra da plataforma",
+    roles: ["admin", "rececionista", "explicador"],
   },
 ];
 
