@@ -39,7 +39,7 @@ export default function SetPasswordPage() {
     if (updErr) { setError(updErr.message); setSaving(false); return; }
     // Marca o acesso como ativado (RPC só toca na própria linha).
     await supabase.rpc("mark_acesso_ativado");
-    toast({ title: "Palavra-passe definida", description: "Bem-vindo ao EduFlow!" });
+    toast({ title: "Palavra-passe definida", description: "Já pode aceder à plataforma." });
     navigate("/dashboard");
   };
 
@@ -59,7 +59,7 @@ export default function SetPasswordPage() {
         ) : !hasSession ? (
           <div className="text-center space-y-4">
             <p className="text-sm text-muted-foreground">
-              Este link de convite é inválido ou expirou. Peça ao administrador para reenviar o convite.
+              Este link é inválido ou expirou. Peça um novo no login ("Esqueceu a palavra-passe?") ou ao administrador do centro.
             </p>
             <Link to="/login" className="text-sm text-secondary hover:underline">Ir para o login</Link>
           </div>
