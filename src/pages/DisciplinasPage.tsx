@@ -53,7 +53,8 @@ export default function DisciplinasPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Disciplina</TableHead>
-                  <TableHead>Preço por Hora</TableHead>
+                  <TableHead>Individual /h</TableHead>
+                  <TableHead>Grupo /h</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -69,7 +70,10 @@ export default function DisciplinasPage() {
                       </div>
                     </TableCell>
                     <TableCell className="font-semibold text-primary">
-                      {disc.precoPorHora.toFixed(2)} €
+                      {disc.precoHoraIndividual.toFixed(2)} €
+                    </TableCell>
+                    <TableCell className="font-semibold text-primary">
+                      {disc.precoHoraGrupo.toFixed(2)} €
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
@@ -136,14 +140,16 @@ function DisciplinaModal({ open, onClose, disciplina, onSave }: {
   onSave: (data: any) => void;
 }) {
   const [nome, setNome] = useState("");
-  const [precoPorHora, setPrecoPorHora] = useState("20");
+  const [precoIndividual, setPrecoIndividual] = useState("20");
+  const [precoGrupo, setPrecoGrupo] = useState("15");
   const [corHsl, setCorHsl] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (open) {
       setNome(disciplina?.nome || "");
-      setPrecoPorHora(String(disciplina?.precoPorHora ?? 20));
+      setPrecoIndividual(String(disciplina?.precoHoraIndividual ?? 20));
+      setPrecoGrupo(String(disciplina?.precoHoraGrupo ?? 15));
       setCorHsl(disciplina?.corHsl || "");
       setErrors({});
     }
@@ -152,16 +158,18 @@ function DisciplinaModal({ open, onClose, disciplina, onSave }: {
   const handleSave = () => {
     const e: Record<string, string> = {};
     if (!nome.trim()) e.nome = "Obrigatório";
-    const preco = parseFloat(precoPorHora);
-    if (isNaN(preco) || preco < 0) e.preco = "Valor inválido";
+    const ind = parseFloat(precoIndividual);
+    const grp = parseFloat(precoGrupo);
+    if (isNaN(ind) || ind < 0) e.precoInd = "Valor inválido";
+    if (isNaN(grp) || grp < 0) e.precoGrp = "Valor inválido";
     setErrors(e);
     if (Object.keys(e).length > 0) return;
-    onSave({ nome: nome.trim(), precoPorHora: preco, corHsl: corHsl || null });
+    onSave({ nome: nome.trim(), precoHoraIndividual: ind, precoHoraGrupo: grp, corHsl: corHsl || null });
   };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{disciplina ? "Editar Disciplina" : "Nova Disciplina"}</DialogTitle>
         </DialogHeader>
@@ -171,17 +179,31 @@ function DisciplinaModal({ open, onClose, disciplina, onSave }: {
             <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Matemática" />
             {errors.nome && <p className="text-xs text-destructive mt-1">{errors.nome}</p>}
           </div>
-          <div>
-            <Label>Preço por Hora (€)</Label>
-            <Input
-              type="number"
-              min={0}
-              step={0.5}
-              value={precoPorHora}
-              onChange={e => setPrecoPorHora(e.target.value)}
-              placeholder="20.00"
-            />
-            {errors.preco && <p className="text-xs text-destructive mt-1">{errors.preco}</p>}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Individual /h (€)</Label>
+              <Input
+                type="number"
+                min={0}
+                step={0.5}
+                value={precoIndividual}
+                onChange={e => setPrecoIndividual(e.target.value)}
+                placeholder="20.00"
+              />
+              {errors.precoInd && <p className="text-xs text-destructive mt-1">{errors.precoInd}</p>}
+            </div>
+            <div>
+              <Label>Grupo /h (€)</Label>
+              <Input
+                type="number"
+                min={0}
+                step={0.5}
+                value={precoGrupo}
+                onChange={e => setPrecoGrupo(e.target.value)}
+                placeholder="15.00"
+              />
+              {errors.precoGrp && <p className="text-xs text-destructive mt-1">{errors.precoGrp}</p>}
+            </div>
           </div>
           <div>
             <Label>Cor (opcional)</Label>
