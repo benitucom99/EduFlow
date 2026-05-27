@@ -18,7 +18,7 @@ const navItems = [
   { path: "/calendario", label: "Calendário", icon: CalendarDays, roles: ["admin", "rececionista", "explicador"] },
   { path: "/presencas", label: "Presenças", icon: ClipboardCheck, roles: ["admin", "rececionista", "explicador"] },
   { path: "/faturacao", label: "Faturação", icon: Receipt, roles: ["admin"] },
-  { path: "/configuracoes", label: "Configurações", icon: Settings, roles: ["admin"] },
+  { path: "/configuracoes", label: "Configurações", icon: Settings, roles: ["admin", "rececionista", "explicador"] },
 ];
 
 interface SidebarProps {

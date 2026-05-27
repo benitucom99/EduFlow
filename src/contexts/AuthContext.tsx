@@ -12,6 +12,7 @@ export interface Profile {
   role: UserRole | null;
   centro_id: string | null;
   centro?: string | null;
+  cargo?: string | null;
 }
 
 // Combined shape preserves compatibility with existing code that reads
@@ -44,7 +45,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 async function fetchProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from("users")
-    .select("id, nome, email, role, centro_id, centros(nome)")
+    .select("id, nome, email, role, centro_id, cargo, centros(nome)")
     .eq("id", userId)
     .maybeSingle();
   if (error) {
@@ -61,6 +62,7 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
     role: data.role as UserRole | null,
     centro_id: data.centro_id,
     centro: centroNome,
+    cargo: (data as any).cargo ?? null,
   };
 }
 
