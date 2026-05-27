@@ -3,11 +3,12 @@ import { useData } from "@/contexts/DataContext";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronLeft, ChevronRight, Plus, AlertTriangle, UserRound, MapPin, Clock, Users, ChevronsUpDown, Check, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, AlertTriangle, UserRound, MapPin, Clock, Users, ChevronsUpDown, Check, Search, Trash2 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -88,6 +89,7 @@ export default function CalendarioPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAula, setEditingAula] = useState<Aula | null>(null);
   const [detailAula, setDetailAula] = useState<Aula | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -123,6 +125,19 @@ export default function CalendarioPage() {
   const dateLabel = view === "semana"
     ? `${format(weekDays[0], "d MMM", { locale: pt })} – ${format(weekDays[4], "d MMM yyyy", { locale: pt })}`
     : format(currentDate, "EEEE, d MMMM yyyy", { locale: pt });
+
+  const handleCancelDetail = async () => {
+    if (!detailAula) return;
+    try {
+      await cancelAula(detailAula.id);
+      toast({ title: "Aula cancelada" });
+    } catch {
+      toast({ title: "Erro ao cancelar aula", description: "Tenta novamente.", variant: "destructive" });
+    } finally {
+      setConfirmCancel(false);
+      setDetailAula(null);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4 animate-fade-in h-full">
@@ -366,15 +381,42 @@ export default function CalendarioPage() {
                     <p>{detailAula.notas}</p>
                   </div>
                 )}
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button variant="outline" onClick={() => setDetailAula(null)}>Fechar</Button>
-                  <Button onClick={() => { setEditingAula(detailAula); setModalOpen(true); setDetailAula(null); }}>Editar</Button>
+                <div className="flex justify-between items-center gap-2 pt-2">
+                  <div>
+                    {detailAula.estado !== "cancelada" && (
+                      <Button variant="destructive" onClick={() => setConfirmCancel(true)}>
+                        <Trash2 className="h-4 w-4 mr-1" /> Cancelar Aula
+                      </Button>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setDetailAula(null)}>Fechar</Button>
+                    <Button onClick={() => { setEditingAula(detailAula); setModalOpen(true); setDetailAula(null); }}>Editar</Button>
+                  </div>
                 </div>
               </div>
             );
           })()}
         </DialogContent>
       </Dialog>
+
+      {/* ── Confirmação de cancelamento da aula ────────────────────── */}
+      <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar esta aula?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tens a certeza que queres cancelar esta aula? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancelDetail} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Cancelar Aula
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── New/Edit Aula modal ────────────────────────────────────── */}
       <AulaModal
