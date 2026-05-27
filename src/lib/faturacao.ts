@@ -57,7 +57,8 @@ export function calcularCobrancaAlunos(
       const precoPorHora = aula.tipo === "grupo"
         ? (disc?.precoHoraGrupo ?? 0)
         : (disc?.precoHoraIndividual ?? 0);
-      const cobrar = presenca === "presente";
+      // Cobra "presente" e "falta_injustificada" (penalização); "falta_justificada" e null não cobram.
+      const cobrar = presenca === "presente" || presenca === "falta_injustificada";
       const aluno = alunoMap.get(alunoId);
       const descontoRatio = (aluno?.desconto || 0) / 100;
       const valorSessao = (precoPorHora * duracao) * (1 - descontoRatio);

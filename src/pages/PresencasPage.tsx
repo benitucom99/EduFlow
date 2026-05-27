@@ -183,7 +183,7 @@ function PresencaButtons({ presenca, onChange }: {
     <div className="flex items-center gap-1 shrink-0">
       <button
         type="button"
-        onClick={() => onChange("presente")}
+        onClick={() => onChange(presenca === "presente" ? null : "presente")}
         className={cn(BUTTON_BASE, presenca === "presente"
           ? "bg-success border-success text-success-foreground"
           : BUTTON_INACTIVE)}
@@ -192,7 +192,7 @@ function PresencaButtons({ presenca, onChange }: {
       </button>
       <button
         type="button"
-        onClick={() => onChange("falta_justificada")}
+        onClick={() => onChange(presenca === "falta_justificada" ? null : "falta_justificada")}
         className={cn(BUTTON_BASE, presenca === "falta_justificada"
           ? "bg-warning border-warning text-warning-foreground"
           : BUTTON_INACTIVE)}
@@ -201,7 +201,7 @@ function PresencaButtons({ presenca, onChange }: {
       </button>
       <button
         type="button"
-        onClick={() => onChange("falta_injustificada")}
+        onClick={() => onChange(presenca === "falta_injustificada" ? null : "falta_injustificada")}
         className={cn(BUTTON_BASE, presenca === "falta_injustificada"
           ? "bg-destructive border-destructive text-destructive-foreground"
           : BUTTON_INACTIVE)}
