@@ -256,7 +256,7 @@ export default function CalendarioPage() {
               return (
                 <div
                   key={dateStr}
-                  className={`flex-1 relative border-r last:border-r-0 overflow-hidden cursor-crosshair ${isToday(day) ? "bg-primary/[0.02]" : ""}`}
+                  className={`flex-1 relative border-r last:border-r-0 overflow-hidden ${isToday(day) ? "bg-primary/[0.02]" : ""}`}
                   onClick={e => handleDayClick(e, dateStr)}
                 >
                   {/* Hour grid lines */}
@@ -286,6 +286,26 @@ export default function CalendarioPage() {
                       <div className="flex-1 h-[2px] bg-red-500" />
                     </div>
                   )}
+
+                  {/* Draft card — visible while create modal is open */}
+                  {prefill && prefill.data === dateStr && modalOpen && (() => {
+                    const draftTop = (timeToMin(prefill.horaInicio) - START_HOUR * 60) * (HOUR_HEIGHT / 60);
+                    const endMin = timeToMin(prefill.horaInicio) + 60;
+                    const draftEnd = `${String(Math.floor(endMin / 60)).padStart(2, "0")}:${String(endMin % 60).padStart(2, "0")}`;
+                    return (
+                      <div
+                        className="absolute rounded-lg px-2 py-1.5 border-2 border-dashed border-primary/60 bg-primary/10 pointer-events-none animate-pulse z-10 select-none overflow-hidden"
+                        style={{ top: draftTop + 2, height: HOUR_HEIGHT - 3, left: 2, right: 2 }}
+                      >
+                        <p className="text-[9px] font-sans tabular-nums text-primary/70 leading-none">
+                          {prefill.horaInicio} – {draftEnd}
+                        </p>
+                        <p className="text-[11px] font-bold font-heading text-primary leading-tight mt-0.5">
+                          Nova Aula
+                        </p>
+                      </div>
+                    );
+                  })()}
 
                   {/* Aula cards */}
                   {dayLayout.map(({ aula, col, totalCols }) => {
