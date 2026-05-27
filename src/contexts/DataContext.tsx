@@ -12,6 +12,7 @@ export interface Disciplina {
   corHsl: string | null;
   precoHoraIndividual: number;
   precoHoraGrupo: number;
+  parentId: string | null;
 }
 
 export interface Aluno {
@@ -20,8 +21,12 @@ export interface Aluno {
   email: string;
   telefone: string;
   escola: string;
+  morada?: string;
   anoLetivo: number;
   disciplinas: string[];
+  // Tutor atribuído por-disciplina. Chaveado por disciplinaId (estável), à parte
+  // de `disciplinas` (nomes) para não quebrar consumidores existentes.
+  disciplinaExplicadores?: Record<string, string | null>;
   encarregado: { nome: string; email: string; telefone: string };
   estado: "ativo" | "inativo" | "pre-inscrito";
   dataInscricao: string;
@@ -38,12 +43,21 @@ export interface Explicador {
   telefone: string;
   disciplinas: string[];
   valorHora: number;
+  // Valor/hora por-disciplina. Chaveado por disciplinaId, à parte de `disciplinas`
+  // (nomes). Usado quando o centro está em modo "por_disciplina".
+  disciplinaValores?: Record<string, number>;
   habilitacoes: string;
   estado: "ativo" | "inativo";
   iban?: string;
   nif?: string;
   conviteEnviadoEm?: string | null;
   acessoAtivadoEm?: string | null;
+}
+
+export type ModoPagamentoProfessor = "base" | "por_disciplina";
+
+export interface CentroConfig {
+  modoPagamentoProfessor: ModoPagamentoProfessor;
 }
 
 export interface Sala {
@@ -68,9 +82,10 @@ export interface Aula {
 }
 
 // ── Input types ───────────────────────────────────────────────────────────────
-export type DisciplinaInput = Omit<Disciplina, "id" | "precoHoraIndividual" | "precoHoraGrupo"> & {
+export type DisciplinaInput = Omit<Disciplina, "id" | "precoHoraIndividual" | "precoHoraGrupo" | "parentId"> & {
   precoHoraIndividual?: number;
   precoHoraGrupo?: number;
+  parentId?: string | null;
 };
 export type AlunoInput = Omit<Aluno, "id" | "estado" | "dataInscricao"> & { estado?: Aluno["estado"]; dataInscricao?: string };
 export type ExplicadorInput = Omit<Explicador, "id" | "estado"> & { estado?: Explicador["estado"]; password?: string };
@@ -83,8 +98,11 @@ interface DataContextType {
   explicadores: Explicador[];
   salas: Sala[];
   aulas: Aula[];
+  centroConfig: CentroConfig;
   loading: boolean;
   refresh: () => Promise<void>;
+
+  updateCentroConfig: (patch: Partial<CentroConfig>) => Promise<void>;
 
   createDisciplina: (data: DisciplinaInput) => Promise<Disciplina | null>;
   updateDisciplina: (id: string, patch: Partial<DisciplinaInput>) => Promise<void>;
@@ -116,7 +134,7 @@ const DataContext = createContext<DataContextType | null>(null);
 async function loadDisciplinas(centroId: string) {
   const { data, error } = await supabase
     .from("disciplinas")
-    .select("id, nome, cor_hsl, preco_hora_individual, preco_hora_grupo")
+    .select("id, nome, cor_hsl, preco_hora_individual, preco_hora_grupo, parent_id")
     .eq("centro_id", centroId)
     .order("nome");
   if (error) throw error;
@@ -128,6 +146,7 @@ async function loadDisciplinas(centroId: string) {
       corHsl: d.cor_hsl ?? null,
       precoHoraIndividual: individual,
       precoHoraGrupo: Number(d.preco_hora_grupo ?? 0),
+      parentId: d.parent_id ?? null,
     };
   });
   const idToName = new Map<string, string>();
@@ -139,48 +158,72 @@ async function loadDisciplinas(centroId: string) {
 async function loadAlunos(centroId: string, discIdToName: Map<string, string>): Promise<Aluno[]> {
   const { data, error } = await supabase
     .from("alunos")
-    .select("id, nome, email, telefone, escola, ano_letivo, estado, data_inscricao, valor_hora, explicador_user_id, encarregado_nome, encarregado_email, encarregado_telefone, encarregado_nif, desconto, alunos_disciplinas(disciplina_id)")
+    .select("id, nome, email, telefone, escola, morada, ano_letivo, estado, data_inscricao, valor_hora, explicador_user_id, encarregado_nome, encarregado_email, encarregado_telefone, encarregado_nif, desconto, alunos_disciplinas(disciplina_id, explicador_id)")
     .eq("centro_id", centroId)
     .order("nome");
   if (error) throw error;
-  return (data ?? []).map((r: any) => ({
-    id: r.id,
-    nome: r.nome,
-    email: r.email ?? "",
-    telefone: r.telefone ?? "",
-    escola: r.escola ?? "",
-    anoLetivo: r.ano_letivo ?? 0,
-    disciplinas: (r.alunos_disciplinas ?? []).map((ad: any) => discIdToName.get(ad.disciplina_id) ?? "").filter(Boolean),
-    encarregado: { nome: r.encarregado_nome ?? "", email: r.encarregado_email ?? "", telefone: r.encarregado_telefone ?? "" },
-    estado: r.estado,
-    dataInscricao: r.data_inscricao,
-    valorHora: r.valor_hora != null ? Number(r.valor_hora) : undefined,
-    explicadorId: r.explicador_user_id ?? undefined,
-    nifEncarregado: r.encarregado_nif ?? undefined,
-    desconto: r.desconto ?? 0,
-  }));
+  return (data ?? []).map((r: any) => {
+    const adRows = r.alunos_disciplinas ?? [];
+    const disciplinaExplicadores: Record<string, string | null> = {};
+    adRows.forEach((ad: any) => { disciplinaExplicadores[ad.disciplina_id] = ad.explicador_id ?? null; });
+    return {
+      id: r.id,
+      nome: r.nome,
+      email: r.email ?? "",
+      telefone: r.telefone ?? "",
+      escola: r.escola ?? "",
+      morada: r.morada ?? undefined,
+      anoLetivo: r.ano_letivo ?? 0,
+      disciplinas: adRows.map((ad: any) => discIdToName.get(ad.disciplina_id) ?? "").filter(Boolean),
+      disciplinaExplicadores,
+      encarregado: { nome: r.encarregado_nome ?? "", email: r.encarregado_email ?? "", telefone: r.encarregado_telefone ?? "" },
+      estado: r.estado,
+      dataInscricao: r.data_inscricao,
+      valorHora: r.valor_hora != null ? Number(r.valor_hora) : undefined,
+      explicadorId: r.explicador_user_id ?? undefined,
+      nifEncarregado: r.encarregado_nif ?? undefined,
+      desconto: r.desconto ?? 0,
+    };
+  });
 }
 
 async function loadExplicadores(centroId: string, discIdToName: Map<string, string>): Promise<Explicador[]> {
   const { data, error } = await supabase
     .from("professor_perfis")
-    .select("user_id, telefone, valor_hora, habilitacoes, iban, nif, estado, convite_enviado_em, acesso_ativado_em, users!inner(nome, email), professor_disciplinas(disciplina_id)")
+    .select("user_id, telefone, valor_hora, habilitacoes, iban, nif, estado, convite_enviado_em, acesso_ativado_em, users!inner(nome, email), professor_disciplinas(disciplina_id, valor_hora)")
     .eq("centro_id", centroId);
   if (error) throw error;
-  return (data ?? []).map((r: any) => ({
-    id: r.user_id,
-    nome: r.users?.nome ?? "",
-    email: r.users?.email ?? "",
-    telefone: r.telefone ?? "",
-    disciplinas: (r.professor_disciplinas ?? []).map((pd: any) => discIdToName.get(pd.disciplina_id) ?? "").filter(Boolean),
-    valorHora: Number(r.valor_hora ?? 0),
-    habilitacoes: r.habilitacoes ?? "",
-    estado: r.estado,
-    iban: r.iban ?? undefined,
-    nif: r.nif ?? undefined,
-    conviteEnviadoEm: r.convite_enviado_em ?? null,
-    acessoAtivadoEm: r.acesso_ativado_em ?? null,
-  }));
+  return (data ?? []).map((r: any) => {
+    const pdRows = r.professor_disciplinas ?? [];
+    const disciplinaValores: Record<string, number> = {};
+    pdRows.forEach((pd: any) => { if (pd.valor_hora != null) disciplinaValores[pd.disciplina_id] = Number(pd.valor_hora); });
+    return {
+      id: r.user_id,
+      nome: r.users?.nome ?? "",
+      email: r.users?.email ?? "",
+      telefone: r.telefone ?? "",
+      disciplinas: pdRows.map((pd: any) => discIdToName.get(pd.disciplina_id) ?? "").filter(Boolean),
+      valorHora: Number(r.valor_hora ?? 0),
+      disciplinaValores,
+      habilitacoes: r.habilitacoes ?? "",
+      estado: r.estado,
+      iban: r.iban ?? undefined,
+      nif: r.nif ?? undefined,
+      conviteEnviadoEm: r.convite_enviado_em ?? null,
+      acessoAtivadoEm: r.acesso_ativado_em ?? null,
+    };
+  });
+}
+
+async function loadCentroConfig(centroId: string): Promise<CentroConfig> {
+  const { data, error } = await supabase
+    .from("centros")
+    .select("modo_pagamento_professor")
+    .eq("id", centroId)
+    .single();
+  if (error) throw error;
+  const modo = (data as any)?.modo_pagamento_professor;
+  return { modoPagamentoProfessor: modo === "por_disciplina" ? "por_disciplina" : "base" };
 }
 
 async function loadSalas(centroId: string): Promise<Sala[]> {
@@ -243,12 +286,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [explicadores, setExplicadores] = useState<Explicador[]>([]);
   const [salas, setSalas] = useState<Sala[]>([]);
   const [aulas, setAulas] = useState<Aula[]>([]);
+  const [centroConfig, setCentroConfig] = useState<CentroConfig>({ modoPagamentoProfessor: "base" });
   const [loading, setLoading] = useState(false);
   const [discMaps, setDiscMaps] = useState<{ idToName: Map<string, string>; nameToId: Map<string, string> }>({ idToName: new Map(), nameToId: new Map() });
 
   const refresh = useCallback(async () => {
     if (!centroId) {
       setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]);
+      setCentroConfig({ modoPagamentoProfessor: "base" });
       return;
     }
     setLoading(true);
@@ -256,13 +301,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       const { discs, idToName, nameToId } = await loadDisciplinas(centroId);
       setDisciplinas(discs);
       setDiscMaps({ idToName, nameToId });
-      const [al, ex, sa, au] = await Promise.all([
+      const [al, ex, sa, au, cfg] = await Promise.all([
         loadAlunos(centroId, idToName),
         loadExplicadores(centroId, idToName),
         loadSalas(centroId),
         loadAulas(centroId, idToName),
+        loadCentroConfig(centroId),
       ]);
-      setAlunos(al); setExplicadores(ex); setSalas(sa); setAulas(au);
+      setAlunos(al); setExplicadores(ex); setSalas(sa); setAulas(au); setCentroConfig(cfg);
     } catch (e) {
       console.error("Data refresh failed", e);
       toast({
@@ -277,7 +323,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isAuthenticated && centroId) refresh();
-    else { setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]); }
+    else { setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]); setCentroConfig({ modoPagamentoProfessor: "base" }); }
   }, [isAuthenticated, centroId, refresh]);
 
   // ── Refreshes granulares ──────────────────────────────────────────────────────
@@ -307,12 +353,25 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (!centroId) return;
     setAulas(await loadAulas(centroId, idToName));
   };
+  const refreshCentroConfig = async () => {
+    if (!centroId) return;
+    setCentroConfig(await loadCentroConfig(centroId));
+  };
 
   const ensureCentro = () => {
     if (!centroId) throw new Error("Sem centro ativo");
     return centroId;
   };
   const discIdFor = (nome: string) => discMaps.nameToId.get(nome) ?? null;
+
+  // ── Centro (config) ───────────────────────────────────────────────────────────
+  const updateCentroConfig = async (patch: Partial<CentroConfig>) => {
+    const cid = ensureCentro();
+    const upd: Record<string, unknown> = {};
+    if (patch.modoPagamentoProfessor !== undefined) upd.modo_pagamento_professor = patch.modoPagamentoProfessor;
+    if (Object.keys(upd).length) await run(supabase.from("centros").update(upd).eq("id", cid));
+    await refreshCentroConfig();
+  };
 
   // ── Disciplinas ─────────────────────────────────────────────────────────────
   const createDisciplina = async (data: DisciplinaInput): Promise<Disciplina | null> => {
@@ -325,6 +384,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       cor_hsl: data.corHsl || null,
       preco_hora_individual: individual,
       preco_hora_grupo: grupo,
+      parent_id: data.parentId ?? null,
     }).select().single();
     if (error) throw error;
     await refreshDisciplinas();
@@ -333,6 +393,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       id: row.id, nome: row.nome, corHsl: row.cor_hsl ?? null,
       precoHoraIndividual: ind,
       precoHoraGrupo: Number(row.preco_hora_grupo ?? 0),
+      parentId: row.parent_id ?? null,
     };
   };
 
@@ -342,6 +403,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (patch.corHsl !== undefined) upd.cor_hsl = patch.corHsl || null;
     if (patch.precoHoraIndividual !== undefined) upd.preco_hora_individual = patch.precoHoraIndividual;
     if (patch.precoHoraGrupo !== undefined) upd.preco_hora_grupo = patch.precoHoraGrupo;
+    if (patch.parentId !== undefined) upd.parent_id = patch.parentId ?? null;
     if (Object.keys(upd).length) await run(supabase.from("disciplinas").update(upd).eq("id", id));
     const idToName = await refreshDisciplinas();
     // Renomear afeta os nomes de disciplina embebidos noutras entidades.
@@ -365,12 +427,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       email: data.email || null,
       telefone: data.telefone || null,
       escola: data.escola || null,
+      morada: data.morada || null,
       ano_letivo: data.anoLetivo || null,
       estado: data.estado ?? "ativo",
       data_inscricao: data.dataInscricao ?? new Date().toISOString().slice(0, 10),
       valor_hora: data.valorHora ?? null,
       explicador_user_id: data.explicadorId || null,
-      encarregado_nome: data.encarregado.nome,
+      encarregado_nome: data.encarregado.nome || null,
       encarregado_email: data.encarregado.email || null,
       encarregado_telefone: data.encarregado.telefone || null,
       encarregado_nif: data.nifEncarregado || null,
@@ -378,7 +441,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }).select().single();
     if (error) throw error;
     const ids = (data.disciplinas ?? []).map(discIdFor).filter(Boolean) as string[];
-    if (ids.length) await run(supabase.from("alunos_disciplinas").insert(ids.map(d => ({ aluno_id: row.id, disciplina_id: d }))));
+    if (ids.length) {
+      await run(supabase.from("alunos_disciplinas").insert(
+        ids.map(d => ({ aluno_id: row.id, disciplina_id: d, explicador_id: data.disciplinaExplicadores?.[d] ?? null }))
+      ));
+    }
     await refreshAlunos();
     return row as any;
   };
@@ -389,12 +456,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (patch.email !== undefined) updates.email = patch.email || null;
     if (patch.telefone !== undefined) updates.telefone = patch.telefone || null;
     if (patch.escola !== undefined) updates.escola = patch.escola || null;
+    if (patch.morada !== undefined) updates.morada = patch.morada || null;
     if (patch.anoLetivo !== undefined) updates.ano_letivo = patch.anoLetivo || null;
     if (patch.estado !== undefined) updates.estado = patch.estado;
     if (patch.valorHora !== undefined) updates.valor_hora = patch.valorHora ?? null;
     if (patch.explicadorId !== undefined) updates.explicador_user_id = patch.explicadorId || null;
     if (patch.encarregado) {
-      updates.encarregado_nome = patch.encarregado.nome;
+      updates.encarregado_nome = patch.encarregado.nome || null;
       updates.encarregado_email = patch.encarregado.email || null;
       updates.encarregado_telefone = patch.encarregado.telefone || null;
     }
@@ -402,9 +470,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (patch.desconto !== undefined) updates.desconto = patch.desconto ?? 0;
     if (Object.keys(updates).length) await run(supabase.from("alunos").update(updates).eq("id", id));
     if (patch.disciplinas) {
+      // Reescreve a junção; aplica o tutor por-disciplina se fornecido.
       await run(supabase.from("alunos_disciplinas").delete().eq("aluno_id", id));
       const ids = patch.disciplinas.map(discIdFor).filter(Boolean) as string[];
-      if (ids.length) await run(supabase.from("alunos_disciplinas").insert(ids.map(d => ({ aluno_id: id, disciplina_id: d }))));
+      if (ids.length) await run(supabase.from("alunos_disciplinas").insert(
+        ids.map(d => ({ aluno_id: id, disciplina_id: d, explicador_id: patch.disciplinaExplicadores?.[d] ?? null }))
+      ));
+    } else if (patch.disciplinaExplicadores) {
+      // Só mudou o tutor por-disciplina, sem mexer no conjunto de disciplinas.
+      for (const [discId, expId] of Object.entries(patch.disciplinaExplicadores)) {
+        await run(supabase.from("alunos_disciplinas").update({ explicador_id: expId ?? null }).eq("aluno_id", id).eq("disciplina_id", discId));
+      }
     }
     await refreshAlunos();
   };
@@ -439,7 +515,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       estado: data.estado ?? "ativo",
     }));
     const ids = (data.disciplinas ?? []).map(discIdFor).filter(Boolean) as string[];
-    if (ids.length) await run(supabase.from("professor_disciplinas").insert(ids.map(d => ({ professor_user_id: newUserId, disciplina_id: d }))));
+    if (ids.length) await run(supabase.from("professor_disciplinas").insert(
+      ids.map(d => ({ professor_user_id: newUserId, disciplina_id: d, valor_hora: data.disciplinaValores?.[d] ?? null }))
+    ));
     await refreshExplicadores();
     return null;
   };
@@ -458,9 +536,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (patch.estado !== undefined) perfUpd.estado = patch.estado;
     if (Object.keys(perfUpd).length) await run(supabase.from("professor_perfis").update(perfUpd).eq("user_id", id));
     if (patch.disciplinas) {
+      // Reescreve a junção; aplica o valor/hora por-disciplina se fornecido.
       await run(supabase.from("professor_disciplinas").delete().eq("professor_user_id", id));
       const ids = patch.disciplinas.map(discIdFor).filter(Boolean) as string[];
-      if (ids.length) await run(supabase.from("professor_disciplinas").insert(ids.map(d => ({ professor_user_id: id, disciplina_id: d }))));
+      if (ids.length) await run(supabase.from("professor_disciplinas").insert(
+        ids.map(d => ({ professor_user_id: id, disciplina_id: d, valor_hora: patch.disciplinaValores?.[d] ?? null }))
+      ));
+    } else if (patch.disciplinaValores) {
+      // Só mudaram os valores por-disciplina, sem mexer no conjunto de disciplinas.
+      for (const [discId, valor] of Object.entries(patch.disciplinaValores)) {
+        await run(supabase.from("professor_disciplinas").update({ valor_hora: valor ?? null }).eq("professor_user_id", id).eq("disciplina_id", discId));
+      }
     }
     await refreshExplicadores();
   };
@@ -578,7 +664,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <DataContext.Provider value={{
-      disciplinas, alunos, explicadores, salas, aulas, loading, refresh,
+      disciplinas, alunos, explicadores, salas, aulas, centroConfig, loading, refresh,
+      updateCentroConfig,
       createDisciplina, updateDisciplina, deleteDisciplina,
       createAluno, updateAluno, deleteAluno, updateAlunoEstado,
       createExplicador, updateExplicador, deleteExplicador, inviteExplicador,
