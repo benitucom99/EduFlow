@@ -1,28 +1,24 @@
+import { useState, useMemo, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useState } from "react";
-import { useData } from "@/contexts/DataContext";
+import { useData, Explicador } from "@/contexts/DataContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { DiscBadge } from "@/components/DiscBadge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Mail, Phone, GraduationCap, Pencil, Landmark, CreditCard, Send } from "lucide-react";
-import { useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
-
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Explicador } from "@/contexts/DataContext";
 import { folhasAgrupadas } from "@/lib/disciplinas";
-import { useEffect } from "react";
+import { parseDurationHours } from "@/lib/faturacao";
 
 export default function ExplicadorDetalhePage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { explicadores, updateExplicador, inviteExplicador, aulas, alunos } = useData();
+  const { explicadores, updateExplicador, inviteExplicador, aulas, disciplinas, centroConfig } = useData();
   const { toast } = useToast();
   const exp = explicadores.find(e => e.id === id);
   const [editOpen, setEditOpen] = useState(false);
@@ -42,11 +38,24 @@ export default function ExplicadorDetalhePage() {
   };
 
   const stats = useMemo(() => {
-    const aulasExp = aulas.filter(a => a.explicadorId === id);
-    const esteMes = aulasExp.filter(a => a.estado !== "cancelada").length;
+    const aulasExp = aulas.filter(a => a.explicadorId === id && a.estado !== "cancelada");
     const alunosAtivos = new Set(aulasExp.flatMap(a => a.alunoIds)).size;
-    return { esteMes, alunosAtivos, valorEstimado: esteMes * (exp?.valorHora || 0) };
-  }, [aulas, id, exp]);
+    const discByNome = new Map(disciplinas.map(d => [d.nome, d]));
+    let valorEstimado = 0;
+    for (const aula of aulasExp) {
+      const duracao = parseDurationHours(aula.horaInicio, aula.horaFim);
+      let valorHora = exp?.valorHora ?? 0;
+      if (centroConfig.modoPagamentoProfessor === "por_disciplina" && exp?.disciplinaValores) {
+        const disc = discByNome.get(aula.disciplina);
+        if (disc) {
+          const vd = exp.disciplinaValores[disc.id];
+          if (vd != null) valorHora = vd;
+        }
+      }
+      valorEstimado += duracao * valorHora;
+    }
+    return { esteMes: aulasExp.length, alunosAtivos, valorEstimado };
+  }, [aulas, id, exp, disciplinas, centroConfig]);
 
   if (!exp) return <div className="p-6">Explicador não encontrado</div>;
 
@@ -63,7 +72,11 @@ export default function ExplicadorDetalhePage() {
               <div className="h-20 w-20 mx-auto rounded-full bg-accent flex items-center justify-center text-2xl font-bold text-accent-foreground mb-3">{exp.nome.split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
               <h2 className="text-xl font-bold">{exp.nome}</h2>
               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${exp.estado === "ativo" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>{exp.estado}</span>
-              <p className="text-3xl font-bold text-primary mt-3">{exp.valorHora}€<span className="text-sm font-normal text-muted-foreground">/hora</span></p>
+              <p className="text-3xl font-bold text-primary mt-3">
+                {centroConfig.modoPagamentoProfessor === "por_disciplina"
+                  ? <span className="text-base font-normal text-muted-foreground">valor por disciplina</span>
+                  : <>{exp.valorHora}€<span className="text-sm font-normal text-muted-foreground">/hora</span></>}
+              </p>
             </div>
             <div className="space-y-3 pt-4 border-t">
               <div className="flex items-center gap-3 text-sm"><Mail className="h-4 w-4 text-muted-foreground" /> {exp.email}</div>
@@ -131,9 +144,9 @@ export default function ExplicadorDetalhePage() {
             <TabsContent value="estatisticas">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {[
-                  { label: "Horas Este Mês", value: stats.esteMes },
+                  { label: "Aulas Realizadas", value: stats.esteMes },
                   { label: "Alunos Ativos", value: stats.alunosAtivos },
-                  { label: "Valor Estimado", value: `${stats.valorEstimado}€` },
+                  { label: "Valor Estimado", value: `${stats.valorEstimado.toFixed(2)}€` },
                 ].map(s => (
                   <Card key={s.label}><CardContent className="p-6 text-center"><p className="text-3xl font-bold">{s.value}</p><p className="text-sm text-muted-foreground mt-1">{s.label}</p></CardContent></Card>
                 ))}
@@ -157,14 +170,18 @@ export default function ExplicadorDetalhePage() {
           }
         }}
       />
-
-
     </div>
   );
 }
 
-function EditExplicadorModal({ open, onClose, explicador, onSave }: { open: boolean; onClose: () => void; explicador: Explicador; onSave: (data: any) => void; }) {
-  const { disciplinas } = useData();
+function EditExplicadorModal({ open, onClose, explicador, onSave }: {
+  open: boolean;
+  onClose: () => void;
+  explicador: Explicador;
+  onSave: (data: any) => void;
+}) {
+  const { disciplinas, centroConfig } = useData();
+  const modoPag = centroConfig.modoPagamentoProfessor;
   const grupos = folhasAgrupadas(disciplinas);
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
@@ -172,6 +189,7 @@ function EditExplicadorModal({ open, onClose, explicador, onSave }: { open: bool
   const [habilitacoes, setHabilitacoes] = useState("");
   const [valorHora, setValorHora] = useState("15");
   const [selectedDisc, setSelectedDisc] = useState<string[]>([]);
+  const [disciplinaValores, setDisciplinaValores] = useState<Record<string, number>>({});
   const [iban, setIban] = useState("");
   const [nif, setNif] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -184,6 +202,7 @@ function EditExplicadorModal({ open, onClose, explicador, onSave }: { open: bool
       setHabilitacoes(explicador.habilitacoes);
       setValorHora(String(explicador.valorHora));
       setSelectedDisc(explicador.disciplinas);
+      setDisciplinaValores(explicador.disciplinaValores ?? {});
       setIban(explicador.iban || "");
       setNif(explicador.nif || "");
       setErrors({});
@@ -201,6 +220,7 @@ function EditExplicadorModal({ open, onClose, explicador, onSave }: { open: bool
       nome, email, telefone, habilitacoes,
       valorHora: parseFloat(valorHora),
       disciplinas: selectedDisc,
+      disciplinaValores,
       iban: iban || undefined,
       nif: nif || undefined,
     });
@@ -222,8 +242,15 @@ function EditExplicadorModal({ open, onClose, explicador, onSave }: { open: bool
               <div><Label>Telefone</Label><Input value={telefone} onChange={e => setTelefone(e.target.value)} /></div>
             </div>
             <div><Label>Habilitações</Label><Textarea value={habilitacoes} onChange={e => setHabilitacoes(e.target.value)} /></div>
-            <div><Label>Valor/Hora (€)</Label><Input type="number" value={valorHora} onChange={e => setValorHora(e.target.value)} /></div>
-            <div><Label>Disciplinas leccionadas *</Label>{errors.disc && <p className="text-xs text-destructive">{errors.disc}</p>}
+            {modoPag === "base" && (
+              <div><Label>Valor/Hora (€)</Label><Input type="number" value={valorHora} onChange={e => setValorHora(e.target.value)} /></div>
+            )}
+            <div>
+              <Label>Disciplinas leccionadas *</Label>
+              {modoPag === "por_disciplina" && (
+                <p className="text-xs text-muted-foreground mt-0.5">Define o valor/hora por disciplina à direita de cada seleção.</p>
+              )}
+              {errors.disc && <p className="text-xs text-destructive">{errors.disc}</p>}
               {grupos.length === 0 ? (
                 <p className="text-sm text-muted-foreground mt-2">Ainda não há disciplinas. Crie disciplinas primeiro.</p>
               ) : (
@@ -231,9 +258,32 @@ function EditExplicadorModal({ open, onClose, explicador, onSave }: { open: bool
                   {grupos.map((g, gi) => (
                     <div key={g.categoriaNome ?? `__sem__${gi}`} className="space-y-1.5">
                       {g.categoriaNome && <p className="text-xs font-medium text-muted-foreground">{g.categoriaNome}</p>}
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className={modoPag === "por_disciplina" ? "space-y-1.5" : "grid grid-cols-2 gap-2"}>
                         {g.folhas.map(f => (
-                          <div key={f.id} className="flex items-center gap-2"><Checkbox checked={selectedDisc.includes(f.nome)} onCheckedChange={c => setSelectedDisc(prev => c ? [...prev, f.nome] : prev.filter(x => x !== f.nome))} /><span className="text-sm">{f.nome}</span></div>
+                          <div key={f.id} className="flex items-center gap-2">
+                            <Checkbox
+                              checked={selectedDisc.includes(f.nome)}
+                              onCheckedChange={c => setSelectedDisc(prev => c ? [...prev, f.nome] : prev.filter(x => x !== f.nome))}
+                            />
+                            <span className="flex-1 text-sm">{f.nome}</span>
+                            {modoPag === "por_disciplina" && selectedDisc.includes(f.nome) && (
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.5"
+                                placeholder="€/h"
+                                className="w-20 h-7 text-xs"
+                                value={disciplinaValores[f.id] ?? ""}
+                                onChange={e => {
+                                  const v = e.target.value;
+                                  setDisciplinaValores(prev => ({
+                                    ...prev,
+                                    [f.id]: v === "" ? 0 : parseFloat(v),
+                                  }));
+                                }}
+                              />
+                            )}
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -251,10 +301,7 @@ function EditExplicadorModal({ open, onClose, explicador, onSave }: { open: bool
               <Label>NIF</Label>
               <Input
                 value={nif}
-                onChange={e => {
-                  const v = e.target.value.replace(/\D/g, "").slice(0, 9);
-                  setNif(v);
-                }}
+                onChange={e => setNif(e.target.value.replace(/\D/g, "").slice(0, 9))}
                 placeholder="123456789"
                 maxLength={9}
                 inputMode="numeric"
