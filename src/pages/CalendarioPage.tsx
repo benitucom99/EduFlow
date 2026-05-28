@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useData } from "@/contexts/DataContext";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import { addDays, startOfWeek, format, isToday, addWeeks, subWeeks, parseISO } f
 import { pt } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { folhasAgrupadas } from "@/lib/disciplinas";
 import { Aula } from "@/contexts/DataContext";
 
 // ─── Layout constants ────────────────────────────────────────────────────────
@@ -510,7 +511,7 @@ function AulaModal({ open, onClose, aula, prefill, onSave, onCancel }: {
   const { alunos, explicadores, salas, aulas, disciplinas } = useData();
   const { user } = useAuth();
   const isExplicador = user?.role === "explicador";
-  const discNames = disciplinas.map(d => d.nome);
+  const discGrupos = folhasAgrupadas(disciplinas);
   const [tipo, setTipo] = useState<"individual" | "grupo">(aula?.tipo || "individual");
   const [disciplina, setDisciplina] = useState(aula?.disciplina || "");
   const [alunoIds, setAlunoIds] = useState<string[]>(aula?.alunoIds || []);
@@ -536,6 +537,19 @@ function AulaModal({ open, onClose, aula, prefill, onSave, onCancel }: {
       setNotas(aula?.notas || "");
     }
   }, [open, aula, prefill, isExplicador, user?.id]);
+
+  // Ao criar uma aula, se o aluno tiver um professor atribuído a esta disciplina
+  // na ficha dele, sugere-o automaticamente (o admin pode na mesma alterar).
+  const primeiroAluno = alunoIds[0];
+  useEffect(() => {
+    if (!open || aula || isExplicador) return;
+    if (!disciplina || !primeiroAluno) return;
+    const leaf = disciplinas.find(d => d.nome === disciplina);
+    if (!leaf) return;
+    const al = alunos.find(a => a.id === primeiroAluno);
+    const tutor = al?.disciplinaExplicadores?.[leaf.id];
+    if (tutor) setExplicadorId(tutor);
+  }, [open, aula, isExplicador, disciplina, primeiroAluno, disciplinas, alunos]);
 
   const expsFiltrados = disciplina
     ? explicadores.filter(e => e.disciplinas.includes(disciplina) && e.estado === "ativo")
@@ -732,7 +746,14 @@ function AulaModal({ open, onClose, aula, prefill, onSave, onCancel }: {
               <Label className="text-sm">Disciplina <span className="text-destructive">*</span></Label>
               <Select value={disciplina} onValueChange={setDisciplina}>
                 <SelectTrigger><SelectValue placeholder="Selecionar disciplina" /></SelectTrigger>
-                <SelectContent>{discNames.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  {discGrupos.map((g, gi) => (
+                    <SelectGroup key={g.categoriaNome ?? `__sem__${gi}`}>
+                      {g.categoriaNome && <SelectLabel>{g.categoriaNome}</SelectLabel>}
+                      {g.folhas.map(f => <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>)}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
 

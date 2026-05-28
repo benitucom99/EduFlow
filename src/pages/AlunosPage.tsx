@@ -17,6 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, MoreHorizontal, Eye, Pencil, X, UserPlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Aluno } from "@/contexts/DataContext";
+import { folhas, folhasAgrupadas } from "@/lib/disciplinas";
 
 const ESTADO_CONFIG = {
   ativo: { label: "Ativo", dot: "bg-green-500", badge: "bg-success text-success-foreground" },
@@ -52,8 +53,8 @@ function EstadoBadge({ estado, alunoId, onMudar }: { estado: string; alunoId: st
 }
 
 export default function AlunosPage() {
-  const { alunos, explicadores, disciplinas, createAluno, updateAluno, deleteAluno, updateAlunoEstado } = useData();
-  const discNames = disciplinas.map(d => d.nome);
+  const { alunos, disciplinas, createAluno, updateAluno, deleteAluno, updateAlunoEstado } = useData();
+  const leafNames = folhas(disciplinas).map(d => d.nome);
   const navigate = useNavigate();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
@@ -136,7 +137,7 @@ export default function AlunosPage() {
             <SelectTrigger className="w-[180px]"><SelectValue placeholder="Disciplina" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todas">Todas</SelectItem>
-              {discNames.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+              {leafNames.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
             </SelectContent>
           </Select>
           <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setEstadoFilter("todos"); setAnoFilter("todos"); setDiscFilter("todas"); }}>
@@ -230,8 +231,6 @@ export default function AlunosPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         aluno={editingAluno}
-        explicadores={explicadores}
-        discNames={discNames}
         onSave={async (data) => {
           try {
             if (editingAluno) {
@@ -265,27 +264,31 @@ export default function AlunosPage() {
   );
 }
 
-function AlunoModal({ open, onClose, aluno, explicadores, discNames, onSave }: {
+function AlunoModal({ open, onClose, aluno, onSave }: {
   open: boolean;
   onClose: () => void;
   aluno: Aluno | null;
-  explicadores: { id: string; nome: string; estado: string }[];
-  discNames: string[];
   onSave: (data: any) => void;
 }) {
+  const { disciplinas, explicadores } = useData();
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
   const [escola, setEscola] = useState("");
+  const [morada, setMorada] = useState("");
   const [anoLetivo, setAnoLetivo] = useState("10");
-  const [selectedDisc, setSelectedDisc] = useState<string[]>([]);
+  // Inscrição por-folha: ids selecionados + tutor por-disciplina (id da folha → id do explicador).
+  const [selectedDiscIds, setSelectedDiscIds] = useState<string[]>([]);
+  const [discTutores, setDiscTutores] = useState<Record<string, string>>({});
   const [encNome, setEncNome] = useState("");
   const [encEmail, setEncEmail] = useState("");
   const [encTelefone, setEncTelefone] = useState("");
-  const [explicadorId, setExplicadorId] = useState("");
   const [nifEncarregado, setNifEncarregado] = useState("");
   const [desconto, setDesconto] = useState("0");
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const grupos = folhasAgrupadas(disciplinas);
+  const explicadoresAtivos = explicadores.filter(e => e.estado === "ativo");
 
   // Reset all fields when modal opens or aluno changes
   useEffect(() => {
@@ -294,39 +297,54 @@ function AlunoModal({ open, onClose, aluno, explicadores, discNames, onSave }: {
       setEmail(aluno?.email || "");
       setTelefone(aluno?.telefone || "");
       setEscola(aluno?.escola || "");
+      setMorada(aluno?.morada || "");
       setAnoLetivo(String(aluno?.anoLetivo || 10));
-      setSelectedDisc(aluno?.disciplinas || []);
+      // disciplinaExplicadores tem uma entrada por folha inscrita (valor null se sem tutor).
+      const mapa = aluno?.disciplinaExplicadores ?? {};
+      setSelectedDiscIds(Object.keys(mapa));
+      setDiscTutores(Object.fromEntries(Object.entries(mapa).map(([k, v]) => [k, v ?? ""])));
       setEncNome(aluno?.encarregado?.nome || "");
       setEncEmail(aluno?.encarregado?.email || "");
       setEncTelefone(aluno?.encarregado?.telefone || "");
-      setExplicadorId(aluno?.explicadorId || "");
       setNifEncarregado(aluno?.nifEncarregado || "");
       setDesconto(String(aluno?.desconto ?? 0));
       setErrors({});
     }
   }, [open, aluno]);
 
+  const toggleDisc = (id: string, checked: boolean) => {
+    setSelectedDiscIds(prev => checked ? [...prev, id] : prev.filter(x => x !== id));
+    if (!checked) setDiscTutores(prev => { const n = { ...prev }; delete n[id]; return n; });
+  };
+
+  // Professores que lecionam esta folha (por nome); fallback a todos os ativos.
+  const tutoresPara = (leafNome: string) => {
+    const lecionam = explicadoresAtivos.filter(e => e.disciplinas.includes(leafNome));
+    return lecionam.length > 0 ? lecionam : explicadoresAtivos;
+  };
+
   const handleSave = () => {
     const e: Record<string, string> = {};
     if (!nome.trim()) e.nome = "Obrigatório";
-    if (!encNome.trim()) e.encNome = "Obrigatório";
-    if (!encEmail.trim()) e.encEmail = "Obrigatório";
     if (nifEncarregado && !/^\d{9}$/.test(nifEncarregado)) e.nifEncarregado = "NIF deve ter 9 dígitos";
     setErrors(e);
     if (Object.keys(e).length > 0) return;
 
+    const nomePorId = new Map(disciplinas.map(d => [d.id, d.nome]));
+    const disciplinasNomes = selectedDiscIds.map(id => nomePorId.get(id)).filter(Boolean) as string[];
+    const disciplinaExplicadores: Record<string, string | null> = {};
+    selectedDiscIds.forEach(id => { disciplinaExplicadores[id] = discTutores[id] || null; });
+
     onSave({
-      nome, email, telefone, escola,
+      nome, email, telefone, escola, morada,
       anoLetivo: parseInt(anoLetivo),
-      disciplinas: selectedDisc,
+      disciplinas: disciplinasNomes,
+      disciplinaExplicadores,
       encarregado: { nome: encNome, email: encEmail, telefone: encTelefone },
-      explicadorId: explicadorId && explicadorId !== "none" ? explicadorId : undefined,
       nifEncarregado: nifEncarregado || undefined,
       desconto: Math.min(100, Math.max(0, parseInt(desconto) || 0)),
     });
   };
-
-  const explicadoresAtivos = explicadores.filter(e => e.estado === "ativo");
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -359,16 +377,53 @@ function AlunoModal({ open, onClose, aluno, explicadores, discNames, onSave }: {
                 </Select>
               </div>
             </div>
+
+            {/* Disciplinas + tutor por-disciplina */}
             <div>
-              <Label>Explicador Atribuído</Label>
-              <Select value={explicadorId} onValueChange={setExplicadorId}>
-                <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Nenhum</SelectItem>
-                  {explicadoresAtivos.map(e => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label>Disciplinas</Label>
+              {grupos.length === 0 ? (
+                <p className="text-sm text-muted-foreground mt-2">Ainda não há disciplinas. Crie disciplinas primeiro.</p>
+              ) : (
+                <div className="space-y-3 mt-2">
+                  {grupos.map((g, gi) => (
+                    <div key={g.categoriaNome ?? `__sem__${gi}`} className="space-y-1.5">
+                      {g.categoriaNome && (
+                        <p className="text-xs font-medium text-muted-foreground">{g.categoriaNome}</p>
+                      )}
+                      {g.folhas.map(f => {
+                        const checked = selectedDiscIds.includes(f.id);
+                        const tutores = tutoresPara(f.nome);
+                        return (
+                          <div key={f.id} className="rounded-lg border border-border p-2.5">
+                            <div className="flex items-center gap-2">
+                              <Checkbox checked={checked} onCheckedChange={c => toggleDisc(f.id, !!c)} />
+                              <span className="text-sm flex-1">{f.nome}</span>
+                            </div>
+                            {checked && (
+                              <div className="mt-2 pl-6">
+                                <Select
+                                  value={discTutores[f.id] || "none"}
+                                  onValueChange={v => setDiscTutores(prev => ({ ...prev, [f.id]: v === "none" ? "" : v }))}
+                                >
+                                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Professor (opcional)" /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">Sem professor atribuído</SelectItem>
+                                    {tutores.map(e => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+
+            <div><Label>Morada</Label><Input value={morada} onChange={e => setMorada(e.target.value)} placeholder="Rua, número, localidade" /></div>
+
             <div>
               <Label>Desconto (%)</Label>
               <div className="relative">
@@ -383,30 +438,15 @@ function AlunoModal({ open, onClose, aluno, explicadores, discNames, onSave }: {
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
               </div>
             </div>
-            <div>
-              <Label>Disciplinas</Label>
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                {discNames.map(d => (
-                  <div key={d} className="flex items-center gap-2">
-                    <Checkbox checked={selectedDisc.includes(d)} onCheckedChange={checked => {
-                      setSelectedDisc(prev => checked ? [...prev, d] : prev.filter(x => x !== d));
-                    }} />
-                    <span className="text-sm">{d}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
           </TabsContent>
           <TabsContent value="encarregado" className="space-y-4 mt-4">
             <div>
-              <Label>Nome *</Label>
+              <Label>Nome</Label>
               <Input value={encNome} onChange={e => setEncNome(e.target.value)} />
-              {errors.encNome && <p className="text-xs text-destructive mt-1">{errors.encNome}</p>}
             </div>
             <div>
-              <Label>Email *</Label>
+              <Label>Email</Label>
               <Input value={encEmail} onChange={e => setEncEmail(e.target.value)} />
-              {errors.encEmail && <p className="text-xs text-destructive mt-1">{errors.encEmail}</p>}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

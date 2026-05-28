@@ -6,7 +6,7 @@ import { DiscBadge } from "@/components/DiscBadge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Mail, Phone, School, Calendar } from "lucide-react";
+import { ArrowLeft, Mail, Phone, School, Calendar, MapPin } from "lucide-react";
 import { useMemo } from "react";
 
 const presencaBadge = (p: string | null) => {
@@ -19,9 +19,8 @@ const presencaBadge = (p: string | null) => {
 export default function AlunoDetalhePage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { alunos, aulas, explicadores } = useData();
+  const { alunos, aulas, explicadores, disciplinas } = useData();
   const aluno = alunos.find(a => a.id === id);
-  const explicadorAtribuido = explicadores.find(e => e.id === aluno?.explicadorId);
 
   const aulasDoAluno = useMemo(() => {
     return aulas
@@ -65,13 +64,32 @@ export default function AlunoDetalhePage() {
               <div className="flex items-center gap-3 text-sm"><Mail className="h-4 w-4 text-muted-foreground" /> {aluno.email}</div>
               <div className="flex items-center gap-3 text-sm"><Phone className="h-4 w-4 text-muted-foreground" /> {aluno.telefone}</div>
               <div className="flex items-center gap-3 text-sm"><School className="h-4 w-4 text-muted-foreground" /> {aluno.escola}</div>
+              {aluno.morada && <div className="flex items-center gap-3 text-sm"><MapPin className="h-4 w-4 text-muted-foreground shrink-0" /> {aluno.morada}</div>}
               <div className="flex items-center gap-3 text-sm"><Calendar className="h-4 w-4 text-muted-foreground" /> {aluno.dataInscricao}</div>
             </div>
             <div className="pt-4 border-t">
               <p className="text-xs text-muted-foreground mb-2">Disciplinas</p>
-              <div className="flex flex-wrap gap-1">
-                {aluno.disciplinas.map(d => <DiscBadge key={d} nome={d} />)}
-              </div>
+              {(() => {
+                const entries = Object.entries(aluno.disciplinaExplicadores ?? {});
+                if (entries.length === 0) {
+                  return <div className="flex flex-wrap gap-1">{aluno.disciplinas.map(d => <DiscBadge key={d} nome={d} />)}</div>;
+                }
+                return (
+                  <div className="space-y-2">
+                    {entries.map(([discId, expId]) => {
+                      const nome = disciplinas.find(d => d.id === discId)?.nome;
+                      if (!nome) return null;
+                      const tutor = expId ? explicadores.find(e => e.id === expId)?.nome : null;
+                      return (
+                        <div key={discId} className="flex items-center justify-between gap-2">
+                          <DiscBadge nome={nome} />
+                          <span className="text-xs text-muted-foreground truncate">{tutor ?? "Sem professor"}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
             <div className="pt-4 border-t">
               <p className="text-xs text-muted-foreground mb-2">Encarregado de Educação</p>
@@ -80,12 +98,6 @@ export default function AlunoDetalhePage() {
               <p className="text-xs text-muted-foreground">{aluno.encarregado.telefone}</p>
               {aluno.nifEncarregado && <p className="text-xs text-muted-foreground">NIF: {aluno.nifEncarregado}</p>}
             </div>
-            {explicadorAtribuido && (
-              <div className="pt-4 border-t">
-                <p className="text-xs text-muted-foreground mb-2">Explicador Atribuído</p>
-                <p className="text-sm font-medium">{explicadorAtribuido.nome}</p>
-              </div>
-            )}
           </CardContent>
         </Card>
 

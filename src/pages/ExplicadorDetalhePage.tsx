@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Explicador } from "@/contexts/DataContext";
+import { folhasAgrupadas } from "@/lib/disciplinas";
 import { useEffect } from "react";
 
 export default function ExplicadorDetalhePage() {
@@ -164,6 +165,7 @@ export default function ExplicadorDetalhePage() {
 
 function EditExplicadorModal({ open, onClose, explicador, onSave }: { open: boolean; onClose: () => void; explicador: Explicador; onSave: (data: any) => void; }) {
   const { disciplinas } = useData();
+  const grupos = folhasAgrupadas(disciplinas);
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
@@ -222,9 +224,22 @@ function EditExplicadorModal({ open, onClose, explicador, onSave }: { open: bool
             <div><Label>Habilitações</Label><Textarea value={habilitacoes} onChange={e => setHabilitacoes(e.target.value)} /></div>
             <div><Label>Valor/Hora (€)</Label><Input type="number" value={valorHora} onChange={e => setValorHora(e.target.value)} /></div>
             <div><Label>Disciplinas *</Label>{errors.disc && <p className="text-xs text-destructive">{errors.disc}</p>}
-              <div className="grid grid-cols-2 gap-2 mt-2">{disciplinas.map(d => (
-                <div key={d.nome} className="flex items-center gap-2"><Checkbox checked={selectedDisc.includes(d.nome)} onCheckedChange={c => setSelectedDisc(prev => c ? [...prev, d.nome] : prev.filter(x => x !== d.nome))} /><span className="text-sm">{d.nome}</span></div>
-              ))}</div>
+              {grupos.length === 0 ? (
+                <p className="text-sm text-muted-foreground mt-2">Ainda não há disciplinas. Crie disciplinas primeiro.</p>
+              ) : (
+                <div className="space-y-3 mt-2">
+                  {grupos.map((g, gi) => (
+                    <div key={g.categoriaNome ?? `__sem__${gi}`} className="space-y-1.5">
+                      {g.categoriaNome && <p className="text-xs font-medium text-muted-foreground">{g.categoriaNome}</p>}
+                      <div className="grid grid-cols-2 gap-2">
+                        {g.folhas.map(f => (
+                          <div key={f.id} className="flex items-center gap-2"><Checkbox checked={selectedDisc.includes(f.nome)} onCheckedChange={c => setSelectedDisc(prev => c ? [...prev, f.nome] : prev.filter(x => x !== f.nome))} /><span className="text-sm">{f.nome}</span></div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </TabsContent>
           <TabsContent value="financeiro" className="space-y-4 mt-4">

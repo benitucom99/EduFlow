@@ -15,10 +15,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, Eye, Pencil, LayoutGrid, LayoutList, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Explicador } from "@/contexts/DataContext";
+import { folhas, folhasAgrupadas } from "@/lib/disciplinas";
 
 export default function ExplicadoresPage() {
   const { explicadores, disciplinas, createExplicador, updateExplicador, deleteExplicador } = useData();
-  const discNames = disciplinas.map(d => d.nome);
+  const leafNames = folhas(disciplinas).map(d => d.nome);
   const navigate = useNavigate();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
@@ -66,7 +67,7 @@ export default function ExplicadoresPage() {
         </div>
         <Select value={discFilter} onValueChange={setDiscFilter}>
           <SelectTrigger className="w-[180px]"><SelectValue placeholder="Disciplina" /></SelectTrigger>
-          <SelectContent><SelectItem value="todas">Todas</SelectItem>{discNames.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+          <SelectContent><SelectItem value="todas">Todas</SelectItem>{leafNames.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
         </Select>
       </CardContent></Card>
 
@@ -137,7 +138,6 @@ export default function ExplicadoresPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         explicador={editing}
-        discNames={discNames}
         onSave={async (data) => {
           try {
             if (editing) {
@@ -174,13 +174,14 @@ export default function ExplicadoresPage() {
   );
 }
 
-function ExplicadorModal({ open, onClose, explicador, discNames, onSave }: {
+function ExplicadorModal({ open, onClose, explicador, onSave }: {
   open: boolean;
   onClose: () => void;
   explicador: Explicador | null;
-  discNames: string[];
   onSave: (data: any) => void;
 }) {
+  const { disciplinas } = useData();
+  const grupos = folhasAgrupadas(disciplinas);
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
@@ -249,14 +250,25 @@ function ExplicadorModal({ open, onClose, explicador, discNames, onSave }: {
             <div>
               <Label>Disciplinas *</Label>
               {errors.disc && <p className="text-xs text-destructive">{errors.disc}</p>}
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                {discNames.map(d => (
-                  <div key={d} className="flex items-center gap-2">
-                    <Checkbox checked={selectedDisc.includes(d)} onCheckedChange={c => setSelectedDisc(prev => c ? [...prev, d] : prev.filter(x => x !== d))} />
-                    <span className="text-sm">{d}</span>
-                  </div>
-                ))}
-              </div>
+              {grupos.length === 0 ? (
+                <p className="text-sm text-muted-foreground mt-2">Ainda não há disciplinas. Crie disciplinas primeiro.</p>
+              ) : (
+                <div className="space-y-3 mt-2">
+                  {grupos.map((g, gi) => (
+                    <div key={g.categoriaNome ?? `__sem__${gi}`} className="space-y-1.5">
+                      {g.categoriaNome && <p className="text-xs font-medium text-muted-foreground">{g.categoriaNome}</p>}
+                      <div className="grid grid-cols-2 gap-2">
+                        {g.folhas.map(f => (
+                          <div key={f.id} className="flex items-center gap-2">
+                            <Checkbox checked={selectedDisc.includes(f.nome)} onCheckedChange={c => setSelectedDisc(prev => c ? [...prev, f.nome] : prev.filter(x => x !== f.nome))} />
+                            <span className="text-sm">{f.nome}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </TabsContent>
 
