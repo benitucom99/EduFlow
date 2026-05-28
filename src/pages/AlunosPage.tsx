@@ -6,15 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DiscBadge } from "@/components/DiscBadge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, MoreHorizontal, Eye, Pencil, X, UserPlus } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, X, UserPlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Aluno } from "@/contexts/DataContext";
 import { folhas, folhasAgrupadas } from "@/lib/disciplinas";
@@ -286,8 +285,12 @@ function AlunoModal({ open, onClose, aluno, onSave }: {
   const [nifEncarregado, setNifEncarregado] = useState("");
   const [desconto, setDesconto] = useState("0");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [addKey, setAddKey] = useState(0);
 
   const grupos = folhasAgrupadas(disciplinas);
+  const availableGrupos = grupos
+    .map(g => ({ ...g, folhas: g.folhas.filter(f => !selectedDiscIds.includes(f.id)) }))
+    .filter(g => g.folhas.length > 0);
   const explicadoresAtivos = explicadores.filter(e => e.estado === "ativo");
 
   // Reset all fields when modal opens or aluno changes
@@ -309,6 +312,7 @@ function AlunoModal({ open, onClose, aluno, onSave }: {
       setNifEncarregado(aluno?.nifEncarregado || "");
       setDesconto(String(aluno?.desconto ?? 0));
       setErrors({});
+      setAddKey(0);
     }
   }, [open, aluno]);
 
@@ -378,46 +382,75 @@ function AlunoModal({ open, onClose, aluno, onSave }: {
               </div>
             </div>
 
-            {/* Disciplinas + tutor por-disciplina */}
+            {/* Disciplinas Frequentadas */}
             <div>
-              <Label>Disciplinas</Label>
+              <Label>Disciplinas Frequentadas</Label>
               {grupos.length === 0 ? (
                 <p className="text-sm text-muted-foreground mt-2">Ainda não há disciplinas. Crie disciplinas primeiro.</p>
               ) : (
-                <div className="space-y-3 mt-2">
-                  {grupos.map((g, gi) => (
-                    <div key={g.categoriaNome ?? `__sem__${gi}`} className="space-y-1.5">
-                      {g.categoriaNome && (
-                        <p className="text-xs font-medium text-muted-foreground">{g.categoriaNome}</p>
-                      )}
-                      {g.folhas.map(f => {
-                        const checked = selectedDiscIds.includes(f.id);
-                        const tutores = tutoresPara(f.nome);
+                <div className="mt-2 space-y-2">
+                  {selectedDiscIds.length > 0 && (
+                    <div className="rounded-lg border border-border divide-y divide-border">
+                      {selectedDiscIds.map(id => {
+                        const disc = disciplinas.find(d => d.id === id);
+                        if (!disc) return null;
+                        const parentDisc = disc.parentId ? disciplinas.find(d => d.id === disc.parentId) : null;
+                        const tutores = tutoresPara(disc.nome);
                         return (
-                          <div key={f.id} className="rounded-lg border border-border p-2.5">
-                            <div className="flex items-center gap-2">
-                              <Checkbox checked={checked} onCheckedChange={c => toggleDisc(f.id, !!c)} />
-                              <span className="text-sm flex-1">{f.nome}</span>
+                          <div key={id} className="flex items-center gap-2 px-3 py-2.5">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium leading-tight truncate">{disc.nome}</p>
+                              {parentDisc && <p className="text-[11px] text-muted-foreground mt-0.5">{parentDisc.nome}</p>}
                             </div>
-                            {checked && (
-                              <div className="mt-2 pl-6">
-                                <Select
-                                  value={discTutores[f.id] || "none"}
-                                  onValueChange={v => setDiscTutores(prev => ({ ...prev, [f.id]: v === "none" ? "" : v }))}
-                                >
-                                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Professor (opcional)" /></SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="none">Sem professor atribuído</SelectItem>
-                                    {tutores.map(e => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            )}
+                            <Select
+                              value={discTutores[id] || "none"}
+                              onValueChange={v => setDiscTutores(prev => ({ ...prev, [id]: v === "none" ? "" : v }))}
+                            >
+                              <SelectTrigger className="w-36 h-8 text-xs shrink-0">
+                                <SelectValue placeholder="Professor" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Sem professor</SelectItem>
+                                {tutores.map(e => <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => toggleDisc(id, false)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         );
                       })}
                     </div>
-                  ))}
+                  )}
+                  {availableGrupos.length > 0 && (
+                    <Select key={addKey} onValueChange={id => { toggleDisc(id, true); setAddKey(k => k + 1); }}>
+                      <SelectTrigger className="h-9 border-dashed">
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <Plus className="h-3.5 w-3.5 shrink-0" />
+                          <span className="text-sm">Adicionar disciplina...</span>
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableGrupos.map((g, gi) => (
+                          <SelectGroup key={g.categoriaNome ?? `__sem__${gi}`}>
+                            {g.categoriaNome && <SelectLabel>{g.categoriaNome}</SelectLabel>}
+                            {g.folhas.map(f => (
+                              <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
+                            ))}
+                          </SelectGroup>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {selectedDiscIds.length > 0 && availableGrupos.length === 0 && (
+                    <p className="text-xs text-muted-foreground text-center py-1">Todas as disciplinas disponíveis já foram adicionadas.</p>
+                  )}
                 </div>
               )}
             </div>
