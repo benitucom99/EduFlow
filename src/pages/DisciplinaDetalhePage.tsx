@@ -54,8 +54,11 @@ export default function DisciplinaDetalhePage() {
     try {
       await deleteDisciplina(deleteTarget.id);
       toast({ title: "Sub-disciplina eliminada" });
-    } catch {
-      toast({ title: "Erro ao eliminar", description: "Tenta novamente.", variant: "destructive" });
+    } catch (e: any) {
+      const msg = e?.code === "23503"
+        ? "Não é possível eliminar: existem aulas associadas a esta sub-disciplina."
+        : "Tenta novamente.";
+      toast({ title: "Erro ao eliminar", description: msg, variant: "destructive" });
     } finally {
       setDeleteTarget(null);
     }

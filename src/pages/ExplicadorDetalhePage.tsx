@@ -71,7 +71,7 @@ export default function ExplicadorDetalhePage() {
               <div className="flex items-center gap-3 text-sm"><GraduationCap className="h-4 w-4 text-muted-foreground" /> {exp.habilitacoes}</div>
             </div>
             <div className="pt-4 border-t">
-              <p className="text-xs text-muted-foreground mb-2">Disciplinas</p>
+              <p className="text-xs text-muted-foreground mb-2">Disciplinas leccionadas</p>
               <div className="flex flex-wrap gap-1">{exp.disciplinas.map(d => <DiscBadge key={d} nome={d} />)}</div>
             </div>
             <div className="pt-4 border-t">
@@ -223,7 +223,7 @@ function EditExplicadorModal({ open, onClose, explicador, onSave }: { open: bool
             </div>
             <div><Label>Habilitações</Label><Textarea value={habilitacoes} onChange={e => setHabilitacoes(e.target.value)} /></div>
             <div><Label>Valor/Hora (€)</Label><Input type="number" value={valorHora} onChange={e => setValorHora(e.target.value)} /></div>
-            <div><Label>Disciplinas *</Label>{errors.disc && <p className="text-xs text-destructive">{errors.disc}</p>}
+            <div><Label>Disciplinas leccionadas *</Label>{errors.disc && <p className="text-xs text-destructive">{errors.disc}</p>}
               {grupos.length === 0 ? (
                 <p className="text-sm text-muted-foreground mt-2">Ainda não há disciplinas. Crie disciplinas primeiro.</p>
               ) : (

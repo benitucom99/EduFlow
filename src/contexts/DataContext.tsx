@@ -152,10 +152,14 @@ async function loadDisciplinas(centroId: string) {
   const idToName = new Map<string, string>();
   const nameToId = new Map<string, string>();
   discs.forEach(d => { idToName.set(d.id, d.nome); nameToId.set(d.nome, d.id); });
-  return { discs, idToName, nameToId };
+  // Folhas (sub-disciplinas): têm pai e não têm filhos. São as únicas a que
+  // alunos/professores se podem associar. Categorias (topo) são organizativas.
+  const parentIds = new Set(discs.map(d => d.parentId).filter(Boolean) as string[]);
+  const leafIds = new Set(discs.filter(d => d.parentId != null && !parentIds.has(d.id)).map(d => d.id));
+  return { discs, idToName, nameToId, leafIds };
 }
 
-async function loadAlunos(centroId: string, discIdToName: Map<string, string>): Promise<Aluno[]> {
+async function loadAlunos(centroId: string, discIdToName: Map<string, string>, leafIds: Set<string>): Promise<Aluno[]> {
   const { data, error } = await supabase
     .from("alunos")
     .select("id, nome, email, telefone, escola, morada, ano_letivo, estado, data_inscricao, valor_hora, explicador_user_id, encarregado_nome, encarregado_email, encarregado_telefone, encarregado_nif, desconto, alunos_disciplinas(disciplina_id, explicador_id)")
@@ -163,7 +167,8 @@ async function loadAlunos(centroId: string, discIdToName: Map<string, string>): 
     .order("nome");
   if (error) throw error;
   return (data ?? []).map((r: any) => {
-    const adRows = r.alunos_disciplinas ?? [];
+    // Só associações a folhas (sub-disciplinas) são válidas; ignora ligações a categorias.
+    const adRows = (r.alunos_disciplinas ?? []).filter((ad: any) => leafIds.has(ad.disciplina_id));
     const disciplinaExplicadores: Record<string, string | null> = {};
     adRows.forEach((ad: any) => { disciplinaExplicadores[ad.disciplina_id] = ad.explicador_id ?? null; });
     return {
@@ -187,14 +192,15 @@ async function loadAlunos(centroId: string, discIdToName: Map<string, string>): 
   });
 }
 
-async function loadExplicadores(centroId: string, discIdToName: Map<string, string>): Promise<Explicador[]> {
+async function loadExplicadores(centroId: string, discIdToName: Map<string, string>, leafIds: Set<string>): Promise<Explicador[]> {
   const { data, error } = await supabase
     .from("professor_perfis")
     .select("user_id, telefone, valor_hora, habilitacoes, iban, nif, estado, convite_enviado_em, acesso_ativado_em, users!inner(nome, email), professor_disciplinas(disciplina_id, valor_hora)")
     .eq("centro_id", centroId);
   if (error) throw error;
   return (data ?? []).map((r: any) => {
-    const pdRows = r.professor_disciplinas ?? [];
+    // Só associações a folhas (sub-disciplinas) são válidas; ignora ligações a categorias.
+    const pdRows = (r.professor_disciplinas ?? []).filter((pd: any) => leafIds.has(pd.disciplina_id));
     const disciplinaValores: Record<string, number> = {};
     pdRows.forEach((pd: any) => { if (pd.valor_hora != null) disciplinaValores[pd.disciplina_id] = Number(pd.valor_hora); });
     return {
@@ -288,7 +294,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [aulas, setAulas] = useState<Aula[]>([]);
   const [centroConfig, setCentroConfig] = useState<CentroConfig>({ modoPagamentoProfessor: "base" });
   const [loading, setLoading] = useState(false);
-  const [discMaps, setDiscMaps] = useState<{ idToName: Map<string, string>; nameToId: Map<string, string> }>({ idToName: new Map(), nameToId: new Map() });
+  const [discMaps, setDiscMaps] = useState<{ idToName: Map<string, string>; nameToId: Map<string, string>; leafIds: Set<string> }>({ idToName: new Map(), nameToId: new Map(), leafIds: new Set() });
 
   const refresh = useCallback(async () => {
     if (!centroId) {
@@ -298,12 +304,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
     setLoading(true);
     try {
-      const { discs, idToName, nameToId } = await loadDisciplinas(centroId);
+      const { discs, idToName, nameToId, leafIds } = await loadDisciplinas(centroId);
       setDisciplinas(discs);
-      setDiscMaps({ idToName, nameToId });
+      setDiscMaps({ idToName, nameToId, leafIds });
       const [al, ex, sa, au, cfg] = await Promise.all([
-        loadAlunos(centroId, idToName),
-        loadExplicadores(centroId, idToName),
+        loadAlunos(centroId, idToName, leafIds),
+        loadExplicadores(centroId, idToName, leafIds),
         loadSalas(centroId),
         loadAulas(centroId, idToName),
         loadCentroConfig(centroId),
@@ -330,20 +336,20 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Cada mutação recarrega apenas a(s) entidade(s) que mexeu, em vez de refazer
   // o download das 5 tabelas. refreshDisciplinas devolve o novo mapa id→nome,
   // porque os nomes de disciplina ficam embebidos em alunos/explicadores/aulas.
-  const refreshDisciplinas = async (): Promise<Map<string, string>> => {
-    if (!centroId) return new Map();
-    const { discs, idToName, nameToId } = await loadDisciplinas(centroId);
+  const refreshDisciplinas = async (): Promise<{ idToName: Map<string, string>; leafIds: Set<string> }> => {
+    if (!centroId) return { idToName: new Map(), leafIds: new Set() };
+    const { discs, idToName, nameToId, leafIds } = await loadDisciplinas(centroId);
     setDisciplinas(discs);
-    setDiscMaps({ idToName, nameToId });
-    return idToName;
+    setDiscMaps({ idToName, nameToId, leafIds });
+    return { idToName, leafIds };
   };
-  const refreshAlunos = async (idToName: Map<string, string> = discMaps.idToName) => {
+  const refreshAlunos = async (idToName: Map<string, string> = discMaps.idToName, leafIds: Set<string> = discMaps.leafIds) => {
     if (!centroId) return;
-    setAlunos(await loadAlunos(centroId, idToName));
+    setAlunos(await loadAlunos(centroId, idToName, leafIds));
   };
-  const refreshExplicadores = async (idToName: Map<string, string> = discMaps.idToName) => {
+  const refreshExplicadores = async (idToName: Map<string, string> = discMaps.idToName, leafIds: Set<string> = discMaps.leafIds) => {
     if (!centroId) return;
-    setExplicadores(await loadExplicadores(centroId, idToName));
+    setExplicadores(await loadExplicadores(centroId, idToName, leafIds));
   };
   const refreshSalas = async () => {
     if (!centroId) return;
@@ -405,17 +411,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (patch.precoHoraGrupo !== undefined) upd.preco_hora_grupo = patch.precoHoraGrupo;
     if (patch.parentId !== undefined) upd.parent_id = patch.parentId ?? null;
     if (Object.keys(upd).length) await run(supabase.from("disciplinas").update(upd).eq("id", id));
-    const idToName = await refreshDisciplinas();
+    const { idToName, leafIds } = await refreshDisciplinas();
     // Renomear afeta os nomes de disciplina embebidos noutras entidades.
     if (patch.nome !== undefined) {
-      await Promise.all([refreshAlunos(idToName), refreshExplicadores(idToName), refreshAulas(idToName)]);
+      await Promise.all([refreshAlunos(idToName, leafIds), refreshExplicadores(idToName, leafIds), refreshAulas(idToName)]);
     }
   };
 
   const deleteDisciplina = async (id: string) => {
     await run(supabase.from("disciplinas").delete().eq("id", id));
-    const idToName = await refreshDisciplinas();
-    await Promise.all([refreshAlunos(idToName), refreshExplicadores(idToName), refreshAulas(idToName)]);
+    const { idToName, leafIds } = await refreshDisciplinas();
+    await Promise.all([refreshAlunos(idToName, leafIds), refreshExplicadores(idToName, leafIds), refreshAulas(idToName)]);
   };
 
   // ── Alunos ──────────────────────────────────────────────────────────────────

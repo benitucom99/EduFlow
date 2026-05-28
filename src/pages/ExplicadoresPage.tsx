@@ -79,7 +79,7 @@ export default function ExplicadoresPage() {
           <Table>
             <TableHeader><TableRow>
               <TableHead>Nome</TableHead>
-              <TableHead>Disciplinas</TableHead>
+              <TableHead>Disciplinas leccionadas</TableHead>
               <TableHead>Valor/Hora</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow></TableHeader>
@@ -248,7 +248,7 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
               <Input type="number" value={valorHora} onChange={e => setValorHora(e.target.value)} />
             </div>
             <div>
-              <Label>Disciplinas *</Label>
+              <Label>Disciplinas leccionadas *</Label>
               {errors.disc && <p className="text-xs text-destructive">{errors.disc}</p>}
               {grupos.length === 0 ? (
                 <p className="text-sm text-muted-foreground mt-2">Ainda não há disciplinas. Crie disciplinas primeiro.</p>
