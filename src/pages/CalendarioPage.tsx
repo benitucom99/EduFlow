@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronLeft, ChevronRight, Plus, AlertTriangle, UserRound, MapPin, Clock, Users, ChevronsUpDown, Check, Search, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, AlertTriangle, UserRound, MapPin, Clock, Users, ChevronsUpDown, Check, Search, Trash2, Printer } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -160,14 +160,14 @@ export default function CalendarioPage() {
   };
 
   return (
-    <div className="flex flex-col gap-4 animate-fade-in h-full">
+    <div className="flex flex-col gap-4 animate-fade-in h-full print:h-auto">
       {/* ── Header ─────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Calendário</h1>
           <p className="text-sm text-muted-foreground capitalize">{dateLabel}</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap print:hidden">
           {/* Navigation */}
           <div className="flex items-center gap-1">
             <Button variant="outline" size="icon" onClick={() => navigate(-1)}><ChevronLeft className="h-4 w-4" /></Button>
@@ -213,6 +213,10 @@ export default function CalendarioPage() {
             </SelectContent>
           </Select>
 
+          <Button size="sm" variant="outline" onClick={() => window.print()}>
+            <Printer className="h-4 w-4 mr-1" /> Exportar PDF
+          </Button>
+
           <Button size="sm" onClick={() => { setEditingAula(null); setModalOpen(true); }}>
             <Plus className="h-4 w-4 mr-1" /> Nova Aula
           </Button>
@@ -220,7 +224,7 @@ export default function CalendarioPage() {
       </div>
 
       {/* ── Calendar grid ──────────────────────────────────────────── */}
-      <div className="flex flex-col border rounded-xl overflow-hidden bg-card shadow-sm flex-1 min-h-0">
+      <div className="flex flex-col border rounded-xl overflow-hidden bg-card shadow-sm flex-1 min-h-0 print:overflow-visible print:flex-none print:shadow-none">
         {/* Day header row */}
         <div className="flex border-b bg-card shrink-0 z-10">
           <div className="w-14 shrink-0 border-r" />
@@ -240,7 +244,7 @@ export default function CalendarioPage() {
         </div>
 
         {/* Scrollable time grid */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto print:overflow-visible">
           <div className="flex relative" style={{ height: TOTAL_HOURS * HOUR_HEIGHT }}>
 
             {/* Time labels */}
