@@ -371,6 +371,8 @@ function AlunoModal({ open, onClose, aluno, onSave }: {
               <div><Label>Email</Label><Input value={email} onChange={e => setEmail(e.target.value)} /></div>
               <div><Label>Telefone</Label><Input value={telefone} onChange={e => setTelefone(e.target.value)} /></div>
             </div>
+            <div><Label>Morada</Label><Input value={morada} onChange={e => setMorada(e.target.value)} placeholder="Rua, número, localidade" /></div>
+
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Escola</Label><Input value={escola} onChange={e => setEscola(e.target.value)} /></div>
               <div>
@@ -439,9 +441,13 @@ function AlunoModal({ open, onClose, aluno, onSave }: {
                       <SelectContent>
                         {availableGrupos.map((g, gi) => (
                           <SelectGroup key={g.categoriaNome ?? `__sem__${gi}`}>
-                            {g.categoriaNome && <SelectLabel>{g.categoriaNome}</SelectLabel>}
+                            {g.categoriaNome && (
+                              <SelectLabel className="px-3 py-2 text-sm font-bold text-foreground">
+                                {g.categoriaNome}
+                              </SelectLabel>
+                            )}
                             {g.folhas.map(f => (
-                              <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
+                              <SelectItem key={f.id} value={f.id} className="text-muted-foreground">{f.nome}</SelectItem>
                             ))}
                           </SelectGroup>
                         ))}
@@ -454,8 +460,6 @@ function AlunoModal({ open, onClose, aluno, onSave }: {
                 </div>
               )}
             </div>
-
-            <div><Label>Morada</Label><Input value={morada} onChange={e => setMorada(e.target.value)} placeholder="Rua, número, localidade" /></div>
 
             <div>
               <Label>Desconto (%)</Label>
