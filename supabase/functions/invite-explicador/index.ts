@@ -12,65 +12,6 @@ function json(body: unknown, status: number) {
   });
 }
 
-async function sendInviteEmail(to: string, nome: string, actionLink: string) {
-  const resendKey = Deno.env.get('RESEND_API_KEY');
-  if (!resendKey) throw new Error('RESEND_API_KEY não configurado');
-
-  const html = `
-<!DOCTYPE html>
-<html lang="pt">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f4f4f5;font-family:system-ui,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 16px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:480px;background:#ffffff;border-radius:12px;border:1px solid #e4e4e7;overflow:hidden;">
-        <tr><td style="background:#6366f1;padding:24px 32px;text-align:center;">
-          <span style="font-size:22px;font-weight:700;color:#ffffff;">EduFlow</span>
-        </td></tr>
-        <tr><td style="padding:32px;">
-          <p style="margin:0 0 8px;font-size:18px;font-weight:600;color:#18181b;">Olá, ${nome}!</p>
-          <p style="margin:0 0 24px;font-size:14px;color:#71717a;line-height:1.6;">
-            Foste convidado(a) para aceder à plataforma <strong>EduFlow</strong>.
-            Clica no botão abaixo para definir a tua palavra-passe e ativar o acesso.
-          </p>
-          <div style="text-align:center;margin:0 0 24px;">
-            <a href="${actionLink}"
-               style="display:inline-block;background:#6366f1;color:#ffffff;font-size:14px;font-weight:600;
-                      text-decoration:none;padding:12px 28px;border-radius:8px;">
-              Ativar acesso
-            </a>
-          </div>
-          <p style="margin:0;font-size:12px;color:#a1a1aa;line-height:1.5;">
-            Se não esperavas este email, podes ignorá-lo em segurança.<br>
-            O link expira em 24 horas.
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
-
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${resendKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: 'EduFlow <noreply@eduflow.pt>',
-      to: [to],
-      subject: 'O teu acesso à plataforma EduFlow',
-      html,
-    }),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Resend error ${res.status}: ${err}`);
-  }
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -136,14 +77,12 @@ Deno.serve(async (req) => {
     const actionLink = linkData.properties?.action_link;
     if (!actionLink) return json({ error: 'Link não gerado' }, 500);
 
-    await sendInviteEmail(email, nome, actionLink);
-
     await admin
       .from('professor_perfis')
       .update({ convite_enviado_em: new Date().toISOString() })
       .eq('user_id', explicador_id);
 
-    return json({ success: true, email }, 200);
+    return json({ success: true, email, link: actionLink }, 200);
   } catch (err) {
     return json({ error: String(err) }, 500);
   }

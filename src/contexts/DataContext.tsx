@@ -116,7 +116,7 @@ interface DataContextType {
   createExplicador: (data: ExplicadorInput) => Promise<Explicador | null>;
   updateExplicador: (id: string, patch: Partial<Explicador>) => Promise<void>;
   deleteExplicador: (id: string) => Promise<void>;
-  inviteExplicador: (explicadorId: string, redirectTo: string) => Promise<void>;
+  inviteExplicador: (explicadorId: string, redirectTo: string) => Promise<string>;
 
   createSala: (data: SalaInput) => Promise<Sala | null>;
   updateSala: (id: string, patch: Partial<Sala>) => Promise<void>;
@@ -566,13 +566,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // A conta auth do explicador já existe (criada no createExplicador). "Convidar"
   // gera um link de recovery para ele definir a própria password — não cria conta.
   // Devolve o link para o admin copiar (o SMTP de produção não está garantido).
-  const inviteExplicador = async (explicadorId: string, redirectTo: string): Promise<void> => {
+  const inviteExplicador = async (explicadorId: string, redirectTo: string): Promise<string> => {
     const { data, error } = await supabase.functions.invoke("invite-explicador", {
       body: { explicador_id: explicadorId, redirect_to: redirectTo },
     });
     if (error) throw error;
     if (data?.error) throw new Error(data.error);
     await refreshExplicadores();
+    return data.link as string;
   };
 
   // ── Salas ────────────────────────────────────────────────────────────────────

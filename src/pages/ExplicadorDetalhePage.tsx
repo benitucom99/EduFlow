@@ -28,10 +28,11 @@ export default function ExplicadorDetalhePage() {
     if (!exp) return;
     setInviting(true);
     try {
-      await inviteExplicador(exp.id, `${window.location.origin}/set-password`);
-      toast({ title: "Convite enviado", description: `Email enviado para ${exp.email}.` });
+      const link = await inviteExplicador(exp.id, `${window.location.origin}/set-password`);
+      await navigator.clipboard.writeText(link);
+      toast({ title: "Link Copiado!", description: "O link de acesso foi copiado. Cola-o e envia diretamente ao professor." });
     } catch (e) {
-      toast({ title: "Erro ao enviar convite", description: e instanceof Error ? e.message : "Tenta novamente.", variant: "destructive" });
+      toast({ title: "Erro ao gerar link", description: e instanceof Error ? e.message : "Tenta novamente.", variant: "destructive" });
     } finally {
       setInviting(false);
     }
