@@ -2,16 +2,19 @@ import { useState, useEffect } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { Loader2, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useData, ModoPagamentoProfessor } from "@/contexts/DataContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function ConfiguracoesCentroPage() {
   const navigate = useNavigate();
   const { profile, refreshProfile } = useAuth();
+  const { centroConfig, updateCentroConfig } = useData();
   const { toast } = useToast();
   const allowed = profile?.role === "admin" || profile?.role === "rececionista";
 
@@ -20,6 +23,7 @@ export default function ConfiguracoesCentroPage() {
   const [centroNif, setCentroNif] = useState("");
   const [centroEmail, setCentroEmail] = useState("");
   const [centroTelefone, setCentroTelefone] = useState("");
+  const [modoPagamento, setModoPagamento] = useState<ModoPagamentoProfessor>("base");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -43,6 +47,10 @@ export default function ConfiguracoesCentroPage() {
       .finally(() => setLoading(false));
   }, [allowed, profile?.centro_id]);
 
+  useEffect(() => {
+    setModoPagamento(centroConfig.modoPagamentoProfessor);
+  }, [centroConfig.modoPagamentoProfessor]);
+
   const handleSave = async () => {
     if (!profile?.centro_id || !centroNome.trim()) return;
     setSaving(true);
@@ -58,6 +66,7 @@ export default function ConfiguracoesCentroPage() {
         })
         .eq("id", profile.centro_id);
       if (error) throw error;
+      await updateCentroConfig({ modoPagamentoProfessor: modoPagamento });
       await refreshProfile();
       toast({ title: "Centro guardado" });
     } catch (e: any) {
@@ -119,6 +128,18 @@ export default function ConfiguracoesCentroPage() {
               <div className="space-y-2">
                 <Label>Email de contacto</Label>
                 <Input type="email" value={centroEmail} onChange={e => setCentroEmail(e.target.value)} placeholder="geral@centro.pt" />
+              </div>
+              <div className="space-y-2">
+                <Label>Modo de pagamento dos Explicadores</Label>
+                <Select value={modoPagamento} onValueChange={(v) => setModoPagamento(v as ModoPagamentoProfessor)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="base">Valor/hora base (igual para todas as disciplinas)</SelectItem>
+                    <SelectItem value="por_disciplina">Por disciplina (valor/hora diferente por disciplina)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <Button onClick={handleSave} disabled={saving || !centroNome.trim()}>
                 {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}

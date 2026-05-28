@@ -18,7 +18,7 @@ import { Explicador } from "@/contexts/DataContext";
 import { folhas, folhasAgrupadas } from "@/lib/disciplinas";
 
 export default function ExplicadoresPage() {
-  const { explicadores, disciplinas, createExplicador, updateExplicador, deleteExplicador } = useData();
+  const { explicadores, disciplinas, centroConfig, createExplicador, updateExplicador, deleteExplicador } = useData();
   const leafNames = folhas(disciplinas).map(d => d.nome);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -93,7 +93,11 @@ export default function ExplicadoresPage() {
                     </div>
                   </TableCell>
                   <TableCell><div className="flex gap-1 flex-wrap">{exp.disciplinas.map(d => <DiscBadge key={d} nome={d} className="text-[10px]" />)}</div></TableCell>
-                  <TableCell className="font-medium">{exp.valorHora}€</TableCell>
+                  <TableCell className="font-medium">
+                    {centroConfig.modoPagamentoProfessor === "por_disciplina"
+                      ? <span className="text-xs text-muted-foreground">por disciplina</span>
+                      : `${exp.valorHora}€`}
+                  </TableCell>
                   <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/explicadores/${exp.id}`)}><Eye className="h-4 w-4" /></Button>
@@ -122,7 +126,11 @@ export default function ExplicadoresPage() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-1 mb-3">{exp.disciplinas.map(d => <DiscBadge key={d} nome={d} />)}</div>
-                <p className="text-2xl font-bold text-primary mb-4">{exp.valorHora}€<span className="text-sm font-normal text-muted-foreground">/hora</span></p>
+                <p className="text-2xl font-bold text-primary mb-4">
+                  {centroConfig.modoPagamentoProfessor === "por_disciplina"
+                    ? <span className="text-base font-normal text-muted-foreground">valor por disciplina</span>
+                    : <>{exp.valorHora}€<span className="text-sm font-normal text-muted-foreground">/hora</span></>}
+                </p>
                 <div className="flex gap-2" onClick={e => e.stopPropagation()}>
                   <Button variant="outline" className="flex-1" onClick={() => navigate(`/explicadores/${exp.id}`)}>Ver perfil</Button>
                   <Button variant="outline" size="icon" onClick={() => { setEditing(exp); setModalOpen(true); }}><Pencil className="h-4 w-4" /></Button>
@@ -180,13 +188,15 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
   explicador: Explicador | null;
   onSave: (data: any) => void;
 }) {
-  const { disciplinas } = useData();
+  const { disciplinas, centroConfig } = useData();
+  const modoPag = centroConfig.modoPagamentoProfessor;
   const grupos = folhasAgrupadas(disciplinas);
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
   const [valorHora, setValorHora] = useState("15");
   const [selectedDisc, setSelectedDisc] = useState<string[]>([]);
+  const [disciplinaValores, setDisciplinaValores] = useState<Record<string, number>>({});
   const [iban, setIban] = useState("");
   const [nif, setNif] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -198,6 +208,7 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
       setTelefone(explicador?.telefone || "");
       setValorHora(String(explicador?.valorHora || 15));
       setSelectedDisc(explicador?.disciplinas || []);
+      setDisciplinaValores(explicador?.disciplinaValores ?? {});
       setIban(explicador?.iban || "");
       setNif(explicador?.nif || "");
       setErrors({});
@@ -216,6 +227,7 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
       habilitacoes: explicador?.habilitacoes || "",
       valorHora: parseFloat(valorHora),
       disciplinas: selectedDisc,
+      disciplinaValores,
       iban: iban || undefined,
       nif: nif || undefined,
     });
@@ -243,12 +255,17 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
               <div><Label>Email</Label><Input value={email} onChange={e => setEmail(e.target.value)} /></div>
               <div><Label>Telefone</Label><Input value={telefone} onChange={e => setTelefone(e.target.value)} /></div>
             </div>
-            <div>
-              <Label>Valor/Hora (€)</Label>
-              <Input type="number" value={valorHora} onChange={e => setValorHora(e.target.value)} />
-            </div>
+            {modoPag === "base" && (
+              <div>
+                <Label>Valor/Hora (€)</Label>
+                <Input type="number" value={valorHora} onChange={e => setValorHora(e.target.value)} />
+              </div>
+            )}
             <div>
               <Label>Disciplinas leccionadas *</Label>
+              {modoPag === "por_disciplina" && (
+                <p className="text-xs text-muted-foreground mt-0.5">Define o valor/hora por disciplina à direita de cada seleção.</p>
+              )}
               {errors.disc && <p className="text-xs text-destructive">{errors.disc}</p>}
               {grupos.length === 0 ? (
                 <p className="text-sm text-muted-foreground mt-2">Ainda não há disciplinas. Crie disciplinas primeiro.</p>
@@ -257,11 +274,31 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
                   {grupos.map((g, gi) => (
                     <div key={g.categoriaNome ?? `__sem__${gi}`} className="space-y-1.5">
                       {g.categoriaNome && <p className="text-xs font-medium text-muted-foreground">{g.categoriaNome}</p>}
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className={modoPag === "por_disciplina" ? "space-y-1.5" : "grid grid-cols-2 gap-2"}>
                         {g.folhas.map(f => (
                           <div key={f.id} className="flex items-center gap-2">
-                            <Checkbox checked={selectedDisc.includes(f.nome)} onCheckedChange={c => setSelectedDisc(prev => c ? [...prev, f.nome] : prev.filter(x => x !== f.nome))} />
-                            <span className="text-sm">{f.nome}</span>
+                            <Checkbox
+                              checked={selectedDisc.includes(f.nome)}
+                              onCheckedChange={c => setSelectedDisc(prev => c ? [...prev, f.nome] : prev.filter(x => x !== f.nome))}
+                            />
+                            <span className="flex-1 text-sm">{f.nome}</span>
+                            {modoPag === "por_disciplina" && selectedDisc.includes(f.nome) && (
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.5"
+                                placeholder="€/h"
+                                className="w-20 h-7 text-xs"
+                                value={disciplinaValores[f.id] ?? ""}
+                                onChange={e => {
+                                  const v = e.target.value;
+                                  setDisciplinaValores(prev => ({
+                                    ...prev,
+                                    [f.id]: v === "" ? 0 : parseFloat(v),
+                                  }));
+                                }}
+                              />
+                            )}
                           </div>
                         ))}
                       </div>

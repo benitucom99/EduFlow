@@ -1,4 +1,4 @@
-import { Aula, Aluno, Explicador, Disciplina } from "@/contexts/DataContext";
+import { Aula, Aluno, Explicador, Disciplina, ModoPagamentoProfessor } from "@/contexts/DataContext";
 
 export function formatCurrency(value: number): string {
   return value.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -107,10 +107,14 @@ export function calcularPagamentoExplicadores(
   aulas: Aula[],
   explicadores: Explicador[],
   dataInicio: string,
-  dataFim: string
+  dataFim: string,
+  disciplinas: Disciplina[] = [],
+  modoPagamento: ModoPagamentoProfessor = "base"
 ): ResumoExplicador[] {
   const aulasFiltradas = aulas.filter(a => a.data >= dataInicio && a.data <= dataFim);
   const expMap = new Map(explicadores.map(e => [e.id, e]));
+  // Mapa nome→Disciplina para resolver disciplinaValores (indexados por UUID)
+  const discByNome = new Map(disciplinas.map(d => [d.nome, d]));
   const resultado = new Map<string, AulaFaturacaoExplicador[]>();
 
   for (const aula of aulasFiltradas) {
@@ -120,11 +124,20 @@ export function calcularPagamentoExplicadores(
     const duracao = parseDurationHours(aula.horaInicio, aula.horaFim);
     const contabilizado = alunosPresentes;
 
+    let valorHora = explicador.valorHora;
+    if (modoPagamento === "por_disciplina" && explicador.disciplinaValores) {
+      const disc = discByNome.get(aula.disciplina);
+      if (disc != null) {
+        const vd = explicador.disciplinaValores[disc.id];
+        if (vd != null) valorHora = vd;
+      }
+    }
+
     if (!resultado.has(aula.explicadorId)) resultado.set(aula.explicadorId, []);
     resultado.get(aula.explicadorId)!.push({
       aula, alunosPresentes, duracao,
-      valorHora: explicador.valorHora,
-      valorSessao: duracao * explicador.valorHora,
+      valorHora,
+      valorSessao: duracao * valorHora,
       contabilizado,
     });
   }
@@ -220,11 +233,15 @@ export function exportPagamentoDetalhado(resumos: ResumoExplicador[], alunos: Al
   downloadCsv(`pagamento_explicadores_${periodo}.csv`, csv);
 }
 
-export function exportPagamentoResumo(resumos: ResumoExplicador[], periodo: string) {
+export function exportPagamentoResumo(resumos: ResumoExplicador[], periodo: string, modoPagamento: ModoPagamentoProfessor = "base") {
   let csv = csvLine(["Explicador", "Email", "Telefone", "Nº Aulas", "Horas Totais", "Valor/Hora (€)", "Total a Pagar (€)"]);
   let total = 0;
   for (const r of resumos) {
-    csv += csvLine([r.explicador.nome, r.explicador.email, r.explicador.telefone, String(r.aulasRealizadas), formatDuration(r.horasTotais), r.explicador.valorHora.toFixed(2), r.totalPagar.toFixed(2)]);
+    // Em por_disciplina, a taxa varia por aula: mostrar média efectiva para referência.
+    const valorHoraLabel = modoPagamento === "por_disciplina"
+      ? (r.horasTotais > 0 ? (r.totalPagar / r.horasTotais).toFixed(2) + " (méd.)" : "—")
+      : r.explicador.valorHora.toFixed(2);
+    csv += csvLine([r.explicador.nome, r.explicador.email, r.explicador.telefone, String(r.aulasRealizadas), formatDuration(r.horasTotais), valorHoraLabel, r.totalPagar.toFixed(2)]);
     total += r.totalPagar;
   }
   csv += csvLine(["TOTAL GERAL", "", "", "", "", "", total.toFixed(2)]);

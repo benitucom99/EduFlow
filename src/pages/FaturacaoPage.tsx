@@ -61,7 +61,7 @@ function SortHeader({ label, sortKey, currentSort, currentDir, onSort }: {
 }
 
 export default function FaturacaoPage() {
-  const { aulas, alunos, explicadores, disciplinas } = useData();
+  const { aulas, alunos, explicadores, disciplinas, centroConfig } = useData();
   const discColorMap = new Map(disciplinas.map(d => [d.nome, d.corHsl || "#6366f1"]));
   const now = new Date();
   const [dataInicio, setDataInicio] = useState<Date>(startOfMonth(now));
@@ -77,7 +77,10 @@ export default function FaturacaoPage() {
   const df = format(dataFim, "yyyy-MM-dd");
 
   const resumoAlunos = useMemo(() => calcularCobrancaAlunos(aulas, alunos, disciplinas, di, df), [aulas, alunos, disciplinas, di, df]);
-  const resumoExplicadores = useMemo(() => calcularPagamentoExplicadores(aulas, explicadores, di, df), [aulas, explicadores, di, df]);
+  const resumoExplicadores = useMemo(
+    () => calcularPagamentoExplicadores(aulas, explicadores, di, df, disciplinas, centroConfig.modoPagamentoProfessor),
+    [aulas, explicadores, di, df, disciplinas, centroConfig.modoPagamentoProfessor]
+  );
 
   const totalCobrar = useMemo(() => resumoAlunos.reduce((s, r) => s + r.valorTotal, 0), [resumoAlunos]);
   const totalPagar = useMemo(() => resumoExplicadores.reduce((s, r) => s + r.totalPagar, 0), [resumoExplicadores]);
@@ -340,7 +343,7 @@ export default function FaturacaoPage() {
             <Button size="sm" className={exportBtnClass} onClick={() => window.print()}>
               <Download className="h-4 w-4 mr-1" /> Exportar PDF
             </Button>
-            <Button size="sm" className={exportBtnClass} onClick={() => { exportPagamentoResumo(resumoExplicadores, periodoStr); toast.success("Ficheiro exportado com sucesso"); }}>
+            <Button size="sm" className={exportBtnClass} onClick={() => { exportPagamentoResumo(resumoExplicadores, periodoStr, centroConfig.modoPagamentoProfessor); toast.success("Ficheiro exportado com sucesso"); }}>
               <FileText className="h-4 w-4 mr-1" /> Exportar Resumo (CSV)
             </Button>
           </div>
@@ -370,7 +373,11 @@ export default function FaturacaoPage() {
                           <td className="p-3"><div className="flex flex-wrap gap-1">{r.disciplinasLecionadas.map(d => <DisciplinaBadge key={d} disciplina={d} colorMap={discColorMap} />)}</div></td>
                           <td className="p-3 text-sm">{r.aulasRealizadas}</td>
                           <td className="p-3 text-sm">{formatDuration(r.horasTotais)}</td>
-                          <td className="p-3 text-sm">{formatCurrency(r.explicador.valorHora)}</td>
+                          <td className="p-3 text-sm">
+                            {centroConfig.modoPagamentoProfessor === "por_disciplina"
+                              ? <span className="text-xs text-muted-foreground">por disciplina</span>
+                              : formatCurrency(r.explicador.valorHora)}
+                          </td>
                           <td className="p-3 font-semibold">{formatCurrency(r.totalPagar)}</td>
                           <td className="p-3 print:hidden">
                             <Button variant="ghost" size="sm" onClick={() => setExpandedExp(expandedExp === r.explicador.id ? null : r.explicador.id)}>
