@@ -180,7 +180,7 @@ export default function CalendarioPage() {
 
           {/* View selector */}
           <div className="flex border rounded-lg overflow-hidden text-sm">
-            {(["semana", "dia", "mes"] as const).map(v => (
+            {(["mes", "semana", "dia"] as const).map(v => (
               <button
                 key={v}
                 onClick={() => setView(v)}
