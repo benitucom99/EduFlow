@@ -13,7 +13,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-import { addDays, startOfWeek, format, isToday, addWeeks, subWeeks, parseISO } from "date-fns";
+import { addDays, startOfWeek, startOfMonth, format, isToday, addWeeks, subWeeks, addMonths, subMonths, isSameMonth, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -86,7 +86,7 @@ export default function CalendarioPage() {
   const { toast } = useToast();
   const { user } = useAuth();
   const isExplicador = user?.role === "explicador";
-  const [view, setView] = useState<"semana" | "dia">("semana");
+  const [view, setView] = useState<"semana" | "dia" | "mes">("semana");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [expFilter, setExpFilter] = useState("todos");
   const [salaFilter, setSalaFilter] = useState("todas");
@@ -107,6 +107,7 @@ export default function CalendarioPage() {
 
   const navigate = (dir: number) => {
     if (view === "semana") setCurrentDate(d => dir > 0 ? addWeeks(d, 1) : subWeeks(d, 1));
+    else if (view === "mes") setCurrentDate(d => dir > 0 ? addMonths(d, 1) : subMonths(d, 1));
     else setCurrentDate(d => addDays(d, dir));
   };
 
@@ -131,6 +132,8 @@ export default function CalendarioPage() {
 
   const dateLabel = view === "semana"
     ? `${format(weekDays[0], "d MMM", { locale: pt })} – ${format(weekDays[4], "d MMM yyyy", { locale: pt })}`
+    : view === "mes"
+    ? format(currentDate, "MMMM yyyy", { locale: pt })
     : format(currentDate, "EEEE, d MMMM yyyy", { locale: pt });
 
   const handleDayClick = (e: React.MouseEvent<HTMLDivElement>, dateStr: string) => {
@@ -177,13 +180,13 @@ export default function CalendarioPage() {
 
           {/* View selector */}
           <div className="flex border rounded-lg overflow-hidden text-sm">
-            {(["semana", "dia"] as const).map(v => (
+            {(["semana", "dia", "mes"] as const).map(v => (
               <button
                 key={v}
                 onClick={() => setView(v)}
                 className={`px-3 py-1.5 font-medium capitalize transition-colors ${view === v ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
               >
-                {v.charAt(0).toUpperCase() + v.slice(1)}
+                {v === "mes" ? "Mês" : v.charAt(0).toUpperCase() + v.slice(1)}
               </button>
             ))}
           </div>
@@ -224,6 +227,19 @@ export default function CalendarioPage() {
       </div>
 
       {/* ── Calendar grid ──────────────────────────────────────────── */}
+      {view === "mes" ? (
+        <MonthView
+          currentDate={currentDate}
+          filteredAulas={filteredAulas}
+          explicadores={explicadores}
+          onCellClick={(dateStr) => {
+            setPrefill({ data: dateStr, horaInicio: "09:00" });
+            setEditingAula(null);
+            setModalOpen(true);
+          }}
+          onAulaClick={(aula) => setDetailAula(aula)}
+        />
+      ) : (
       <div className="flex flex-col border rounded-xl overflow-hidden bg-card shadow-sm flex-1 min-h-0 print:overflow-visible print:flex-none print:shadow-none">
         {/* Day header row */}
         <div className="flex border-b bg-card shrink-0 z-10">
@@ -392,6 +408,7 @@ export default function CalendarioPage() {
           </div>
         </div>
       </div>
+      )}
 
       {/* ── Aula detail dialog ─────────────────────────────────────── */}
       <Dialog open={!!detailAula} onOpenChange={() => setDetailAula(null)}>
@@ -496,6 +513,88 @@ export default function CalendarioPage() {
           }
         } : undefined}
       />
+    </div>
+  );
+}
+
+// ─── MonthView ────────────────────────────────────────────────────────────────
+const MONTH_DAY_LABELS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+
+function MonthView({ currentDate, filteredAulas, explicadores, onCellClick, onAulaClick }: {
+  currentDate: Date;
+  filteredAulas: Aula[];
+  explicadores: { id: string }[];
+  onCellClick: (dateStr: string) => void;
+  onAulaClick: (aula: Aula) => void;
+}) {
+  const gridStart = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 });
+  const cells = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+
+  return (
+    <div className="flex flex-col border rounded-xl overflow-hidden bg-card shadow-sm flex-1 min-h-0">
+      {/* Week day headers */}
+      <div className="grid grid-cols-7 border-b bg-card shrink-0">
+        {MONTH_DAY_LABELS.map(d => (
+          <div key={d} className="py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide border-r last:border-r-0">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Day cells */}
+      <div className="grid grid-cols-7 flex-1 overflow-y-auto">
+        {cells.map((day, i) => {
+          const dateStr = format(day, "yyyy-MM-dd");
+          const inMonth = isSameMonth(day, currentDate);
+          const dayAulas = filteredAulas.filter(a => a.data === dateStr);
+          const visible = dayAulas.slice(0, 3);
+          const overflow = dayAulas.length - 3;
+          const today = isToday(day);
+          const isLastRow = i >= 35;
+
+          return (
+            <div
+              key={dateStr}
+              className={cn(
+                "min-h-[90px] border-b border-r p-1 cursor-pointer transition-colors select-none",
+                i % 7 === 6 && "border-r-0",
+                isLastRow && "border-b-0",
+                !inMonth ? "bg-muted/20" : "hover:bg-muted/30"
+              )}
+              onClick={() => onCellClick(dateStr)}
+            >
+              <div className="mb-1">
+                <span className={cn(
+                  "text-xs font-semibold w-5 h-5 flex items-center justify-center rounded-full",
+                  today && "bg-primary text-primary-foreground",
+                  !today && inMonth && "text-foreground",
+                  !today && !inMonth && "text-muted-foreground"
+                )}>
+                  {format(day, "d")}
+                </span>
+              </div>
+              <div className="space-y-px">
+                {visible.map(aula => {
+                  const palette = getProfPalette(aula.explicadorId, explicadores);
+                  return (
+                    <button
+                      key={aula.id}
+                      className="w-full text-left text-[10px] rounded px-1 py-px truncate font-medium leading-tight block"
+                      style={{ backgroundColor: palette.bg, color: palette.text, borderLeft: `2px solid ${palette.border}` }}
+                      onClick={e => { e.stopPropagation(); onAulaClick(aula); }}
+                    >
+                      {aula.horaInicio} {aula.disciplina}
+                    </button>
+                  );
+                })}
+                {overflow > 0 && (
+                  <p className="text-[10px] text-muted-foreground pl-1">+{overflow} mais</p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
