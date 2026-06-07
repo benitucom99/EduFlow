@@ -11,7 +11,7 @@ export default function AppHeader({ breadcrumb, onMenuClick }: { breadcrumb?: st
   const navigate = useNavigate();
 
   return (
-    <header className="h-16 border-b border-border bg-card flex items-center justify-between px-4 sm:px-6 sticky top-0 z-30">
+    <header className="h-12 border-b border-border bg-card flex items-center justify-between px-4 sm:px-6 sticky top-0 z-30">
       <div className="flex items-center gap-3">
         <Button
           variant="ghost"

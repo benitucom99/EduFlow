@@ -28,7 +28,7 @@ export default function AppLayout() {
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent
           side="left"
-          className="w-60 p-0 bg-sidebar text-sidebar-foreground border-sidebar-border lg:hidden"
+          className="w-56 p-0 bg-sidebar text-sidebar-foreground border-sidebar-border lg:hidden"
         >
           <SheetTitle className="sr-only">Menu de navegação</SheetTitle>
           <SidebarBody
@@ -40,7 +40,7 @@ export default function AppLayout() {
         </SheetContent>
       </Sheet>
 
-      <div className={cn("transition-all duration-300 print:ml-0", collapsed ? "lg:ml-16" : "lg:ml-60")}>
+      <div className={cn("transition-all duration-300 print:ml-0", collapsed ? "lg:ml-14" : "lg:ml-56")}>
         <div className="print:hidden">
           <AppHeader onMenuClick={() => setMobileOpen(true)} />
         </div>

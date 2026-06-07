@@ -40,13 +40,13 @@ export function SidebarBody({ collapsed, onToggle, onNavigate, showCollapseToggl
   return (
     <div className="flex h-full flex-col">
       {/* Logo */}
-      <div className="flex items-center gap-2 px-4 h-16 border-b border-sidebar-border">
-        <GraduationCap className="h-7 w-7 shrink-0" />
-        {!collapsed && <span className="font-bold text-lg tracking-tight">EduFlow</span>}
+      <div className="flex items-center gap-2 px-3 h-12 border-b border-sidebar-border">
+        <GraduationCap className="h-5 w-5 shrink-0" />
+        {!collapsed && <span className="font-bold text-base tracking-tight">EduFlow</span>}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-4 space-y-1 px-2 overflow-y-auto scrollbar-thin">
+      <nav className="flex-1 py-3 space-y-0.5 px-2 overflow-y-auto scrollbar-thin">
         {visibleItems.map(item => {
           const isActive = location.pathname.startsWith(item.path);
           const Icon = item.icon;
@@ -55,13 +55,13 @@ export function SidebarBody({ collapsed, onToggle, onNavigate, showCollapseToggl
               to={item.path}
               onClick={onNavigate}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                 isActive
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
                   : "text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
               )}
             >
-              <Icon className="h-5 w-5 shrink-0" />
+              <Icon className="h-4 w-4 shrink-0" />
               {!collapsed && (
                 <span className="truncate">{item.label}</span>
               )}
@@ -81,7 +81,7 @@ export function SidebarBody({ collapsed, onToggle, onNavigate, showCollapseToggl
       </nav>
 
       {/* User & Collapse */}
-      <div className="border-t border-sidebar-border p-3 space-y-2">
+      <div className="border-t border-sidebar-border p-2 space-y-1.5">
         {user && (
           <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
             <div className="h-8 w-8 rounded-full bg-sidebar-accent flex items-center justify-center text-xs font-bold shrink-0">
@@ -125,7 +125,7 @@ export default function AppSidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside className={cn(
       "fixed left-0 top-0 z-40 h-screen bg-sidebar text-sidebar-foreground transition-all duration-300",
-      collapsed ? "w-16" : "w-60"
+      collapsed ? "w-14" : "w-56"
     )}>
       <SidebarBody collapsed={collapsed} onToggle={onToggle} />
     </aside>
