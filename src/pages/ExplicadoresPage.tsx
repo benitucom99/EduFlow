@@ -156,8 +156,11 @@ export default function ExplicadoresPage() {
               toast({ title: "Explicador adicionado" });
             }
             setModalOpen(false);
-          } catch {
-            toast({ title: "Erro ao guardar explicador", description: "Verifica os dados e tenta novamente.", variant: "destructive" });
+          } catch (err) {
+            const description = err instanceof Error && err.message
+              ? err.message
+              : "Verifica os dados e tenta novamente.";
+            toast({ title: "Erro ao guardar explicador", description, variant: "destructive" });
           }
         }}
       />
@@ -218,12 +221,16 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
   const handleSave = () => {
     const e: Record<string, string> = {};
     if (!nome.trim()) e.nome = "Obrigatório";
+    // O email é obrigatório no backend (create-explicador) — é o login do explicador.
+    // Validar aqui evita um 400 da Edge Function por "Missing required fields".
+    if (!email.trim()) e.email = "Obrigatório";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) e.email = "Email inválido";
     if (selectedDisc.length === 0) e.disc = "Selecione pelo menos 1";
     if (nif && !/^\d{9}$/.test(nif)) e.nif = "NIF deve ter 9 dígitos";
     setErrors(e);
     if (Object.keys(e).length > 0) return;
     onSave({
-      nome, email, telefone,
+      nome: nome.trim(), email: email.trim(), telefone,
       habilitacoes: explicador?.habilitacoes || "",
       valorHora: parseFloat(valorHora),
       disciplinas: selectedDisc,
@@ -252,7 +259,11 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
               {errors.nome && <p className="text-xs text-destructive mt-1">{errors.nome}</p>}
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Email</Label><Input value={email} onChange={e => setEmail(e.target.value)} /></div>
+              <div>
+                <Label>Email *</Label>
+                <Input type="email" value={email} onChange={e => setEmail(e.target.value)} />
+                {errors.email && <p className="text-xs text-destructive mt-1">{errors.email}</p>}
+              </div>
               <div><Label>Telefone</Label><Input value={telefone} onChange={e => setTelefone(e.target.value)} /></div>
             </div>
             {modoPag === "base" && (

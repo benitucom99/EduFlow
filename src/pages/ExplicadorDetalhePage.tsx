@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DiscBadge } from "@/components/DiscBadge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Mail, Phone, GraduationCap, Pencil, Landmark, CreditCard, Send } from "lucide-react";
+import { ArrowLeft, Mail, Phone, GraduationCap, Pencil, Landmark, CreditCard, Send, Copy, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -23,18 +23,30 @@ export default function ExplicadorDetalhePage() {
   const exp = explicadores.find(e => e.id === id);
   const [editOpen, setEditOpen] = useState(false);
   const [inviting, setInviting] = useState(false);
+  const [generatedLink, setGeneratedLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const handleInvite = async () => {
     if (!exp) return;
     setInviting(true);
     try {
       const link = await inviteExplicador(exp.id, `${window.location.origin}/set-password`);
-      await navigator.clipboard.writeText(link);
-      toast({ title: "Link Copiado!", description: "O link de acesso foi copiado. Cola-o e envia diretamente ao professor." });
+      setGeneratedLink(link);
     } catch (e) {
       toast({ title: "Erro ao gerar link", description: e instanceof Error ? e.message : "Tenta novamente.", variant: "destructive" });
     } finally {
       setInviting(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (!generatedLink) return;
+    try {
+      await navigator.clipboard.writeText(generatedLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast({ title: "Não foi possível copiar", description: "Copia o link manualmente.", variant: "destructive" });
     }
   };
 
@@ -171,6 +183,27 @@ export default function ExplicadorDetalhePage() {
           }
         }}
       />
+
+      <Dialog
+        open={!!generatedLink}
+        onOpenChange={open => { if (!open) { setGeneratedLink(null); setCopied(false); } }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Convite Gerado com Sucesso</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Copia o link abaixo e envia-o diretamente ao professor. Ao abri-lo, ele poderá definir a sua password e ativar o acesso.
+            </p>
+            <div className="flex items-center gap-2">
+              <Input readOnly value={generatedLink ?? ""} onFocus={e => e.currentTarget.select()} className="font-mono text-xs" />
+              <Button type="button" variant="outline" size="icon" className="shrink-0" onClick={handleCopyLink}>
+                {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            {copied && <p className="text-xs text-success">Link copiado!</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
