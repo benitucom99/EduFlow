@@ -1,22 +1,30 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useData } from "@/contexts/DataContext";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { CalendarDays, ChevronDown, ChevronUp } from "lucide-react";
 import { format } from "date-fns";
-import { Presenca } from "@/contexts/DataContext";
+import { Presenca, ReposicaoEstado } from "@/contexts/DataContext";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+
+// Falta a confirmar via pop-up: que aula/aluno e qual o tipo de falta marcado.
+type PendingFalta = { aulaId: string; alunoId: string; tipo: "justificada" | "injustificada" };
 
 export default function PresencasPage() {
   const { aulas, setPresenca, alunos, explicadores } = useData();
   const { toast } = useToast();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const isExplicador = user?.role === "explicador";
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [expFilter, setExpFilter] = useState("todos");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [pendingFalta, setPendingFalta] = useState<PendingFalta | null>(null);
 
   const aulasDoDia = useMemo(() =>
     aulas
@@ -28,12 +36,45 @@ export default function PresencasPage() {
     [aulas, selectedDate, expFilter, isExplicador, user?.id]
   );
 
-  const updatePresenca = async (aulaId: string, alunoId: string, presenca: Presenca) => {
+  const updatePresenca = async (
+    aulaId: string,
+    alunoId: string,
+    presenca: Presenca,
+    extra?: { reposicaoEstado?: ReposicaoEstado; cobrarFalta?: boolean | null }
+  ) => {
     try {
-      await setPresenca(aulaId, alunoId, presenca);
+      await setPresenca(aulaId, alunoId, presenca, extra);
     } catch {
       toast({ title: "Erro ao registar presença", description: "A alteração foi revertida. Tenta novamente.", variant: "destructive" });
     }
+  };
+
+  // Ponto de interceção: marcar uma falta abre o pop-up correspondente; presente
+  // ou limpar (toggle off) gravam direto.
+  const requestPresenca = (aulaId: string, alunoId: string, presenca: Presenca) => {
+    if (presenca === "falta_justificada") {
+      setPendingFalta({ aulaId, alunoId, tipo: "justificada" });
+    } else if (presenca === "falta_injustificada") {
+      setPendingFalta({ aulaId, alunoId, tipo: "injustificada" });
+    } else {
+      updatePresenca(aulaId, alunoId, presenca);
+    }
+  };
+
+  // ── Resolução dos pop-ups ───────────────────────────────────────────────────
+  const confirmReposicao = (estado: Exclude<ReposicaoEstado, null>, redirect: boolean) => {
+    if (!pendingFalta) return;
+    const { aulaId, alunoId } = pendingFalta;
+    updatePresenca(aulaId, alunoId, "falta_justificada", { reposicaoEstado: estado });
+    setPendingFalta(null);
+    if (redirect) navigate("/calendario");
+  };
+
+  const confirmInjustificada = (cobrar: boolean) => {
+    if (!pendingFalta) return;
+    const { aulaId, alunoId } = pendingFalta;
+    updatePresenca(aulaId, alunoId, "falta_injustificada", { cobrarFalta: cobrar });
+    setPendingFalta(null);
   };
 
   const toggle = (aulaId: string) => {
@@ -107,7 +148,8 @@ export default function PresencasPage() {
                         </div>
                         <PresencaButtons
                           presenca={aula.presencas[alunoId]}
-                          onChange={p => updatePresenca(aula.id, alunoId, p)}
+                          reposicaoEstado={aula.presencaInfo[alunoId]?.reposicaoEstado}
+                          onChange={p => requestPresenca(aula.id, alunoId, p)}
                         />
                       </div>
                     );
@@ -153,7 +195,8 @@ export default function PresencasPage() {
                               </div>
                               <PresencaButtons
                                 presenca={aula.presencas[alunoId]}
-                                onChange={p => updatePresenca(aula.id, alunoId, p)}
+                                reposicaoEstado={aula.presencaInfo[alunoId]?.reposicaoEstado}
+                                onChange={p => requestPresenca(aula.id, alunoId, p)}
                               />
                             </div>
                           );
@@ -167,6 +210,35 @@ export default function PresencasPage() {
           })
         )}
       </div>
+
+      {/* Pop-up Falta Justificada — agendar reposição? */}
+      <Dialog open={pendingFalta?.tipo === "justificada"} onOpenChange={open => { if (!open) setPendingFalta(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Falta Justificada</DialogTitle>
+            <DialogDescription>Deseja agendar aula de reposição?</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" className="border-success/30 bg-success/15 text-success hover:bg-success/25" onClick={() => confirmReposicao("pendente", true)}>Sim</Button>
+            <Button variant="outline" className="border-warning/30 bg-warning/15 text-warning hover:bg-warning/25" onClick={() => confirmReposicao("pendente", false)}>Pendente</Button>
+            <Button variant="outline" className="border-destructive/30 bg-destructive/15 text-destructive hover:bg-destructive/25" onClick={() => confirmReposicao("nao", false)}>Não</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pop-up Falta Injustificada — cobrar ao aluno? */}
+      <Dialog open={pendingFalta?.tipo === "injustificada"} onOpenChange={open => { if (!open) setPendingFalta(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Falta Injustificada</DialogTitle>
+            <DialogDescription>Cobrar ao Aluno?</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button autoFocus variant="outline" className="border-success/30 bg-success/15 text-success hover:bg-success/25" onClick={() => confirmInjustificada(true)}>Sim</Button>
+            <Button variant="outline" className="border-destructive/30 bg-destructive/15 text-destructive hover:bg-destructive/25" onClick={() => confirmInjustificada(false)}>Não</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -182,8 +254,9 @@ function TimeCell({ hora, fim }: { hora: string; fim: string }) {
 const BUTTON_BASE = "px-3 py-1.5 rounded-md text-xs font-medium border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const BUTTON_INACTIVE = "bg-background border-border text-muted-foreground hover:bg-muted hover:text-foreground";
 
-function PresencaButtons({ presenca, onChange }: {
+function PresencaButtons({ presenca, reposicaoEstado, onChange }: {
   presenca?: Presenca;
+  reposicaoEstado?: ReposicaoEstado;
   onChange: (p: Presenca) => void;
 }) {
   return (
@@ -203,8 +276,10 @@ function PresencaButtons({ presenca, onChange }: {
         className={cn(BUTTON_BASE, presenca === "falta_justificada"
           ? "bg-warning border-warning text-warning-foreground"
           : BUTTON_INACTIVE)}
+        title={presenca === "falta_justificada" && reposicaoEstado === "pendente" ? "Reposição pendente" : undefined}
       >
         F. Just.
+        {presenca === "falta_justificada" && reposicaoEstado === "pendente" && " ·"}
       </button>
       <button
         type="button"

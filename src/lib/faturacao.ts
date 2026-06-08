@@ -1,4 +1,53 @@
-import { Aula, Aluno, Explicador, Disciplina, ModoPagamentoProfessor } from "@/contexts/DataContext";
+import { Aula, Aluno, Explicador, Disciplina, ModoPagamentoProfessor, MomentoPagamento, Presenca } from "@/contexts/DataContext";
+
+function hojeISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Decide a cobrança ao aluno por aula×aluno, segundo o momento de pagamento.
+ * Função pura (sem dependências externas) — `hoje` injetável para testes.
+ *
+ * - "fim": comportamento histórico — só cobra presença efetiva (e falta
+ *   injustificada conforme a decisão por-aula). Reposição não tem efeito especial.
+ * - "inicio": mensalidade — cobra agendadas futuras (projeção) e faltas
+ *   justificadas (já pagas); reposição custa 0€ (a falta original já foi paga).
+ *
+ * A falta injustificada respeita SEMPRE a decisão por-aula (cobrarFaltaDecisao),
+ * em ambos os momentos.
+ */
+export function calcularCobrancaAula(args: {
+  presenca: Presenca;
+  cobrarFaltaDecisao: boolean;
+  isReposicao: boolean;
+  data: string;
+  momento: MomentoPagamento;
+  precoBase: number;
+  hoje?: string;
+}): { cobrar: boolean; valor: number } {
+  const { presenca, cobrarFaltaDecisao, isReposicao, data, momento, precoBase } = args;
+  const hoje = args.hoje ?? hojeISO();
+
+  // Falta injustificada: decisão por-aula manda, em qualquer momento.
+  if (presenca === "falta_injustificada") {
+    return cobrarFaltaDecisao ? { cobrar: true, valor: precoBase } : { cobrar: false, valor: 0 };
+  }
+
+  if (momento === "inicio") {
+    // Reposição já foi paga (via a falta justificada original) → 0€ ao aluno,
+    // mas continua a aparecer na fatura (cobrar=true) com valor zero.
+    if (isReposicao) return { cobrar: true, valor: 0 };
+    if (presenca === "presente") return { cobrar: true, valor: precoBase };
+    if (presenca === "falta_justificada") return { cobrar: true, valor: precoBase };
+    // Sem marcação: cobra só se ainda é futura (mensalidade avança = projeção).
+    if (presenca === null && data > hoje) return { cobrar: true, valor: precoBase };
+    return { cobrar: false, valor: 0 };
+  }
+
+  // momento === "fim" (comportamento atual): só presença efetiva cobra.
+  if (presenca === "presente") return { cobrar: true, valor: precoBase };
+  return { cobrar: false, valor: 0 };
+}
 
 export function formatCurrency(value: number): string {
   return value.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -42,7 +91,10 @@ export function calcularCobrancaAlunos(
   alunos: Aluno[],
   disciplinas: Disciplina[],
   dataInicio: string,
-  dataFim: string
+  dataFim: string,
+  // Momento de pagamento do centro. Default "fim" = comportamento histórico.
+  momento: MomentoPagamento = "fim",
+  hoje?: string
 ): ResumoAluno[] {
   // Aulas canceladas nunca são cobradas, independentemente da presença registada.
   const aulasFiltradas = aulas.filter(a => a.estado !== "cancelada" && a.data >= dataInicio && a.data <= dataFim);
@@ -60,11 +112,22 @@ export function calcularCobrancaAlunos(
       const precoPorHora = aula.tipo === "grupo"
         ? (disc?.precoHoraGrupo ?? 0)
         : (disc?.precoHoraIndividual ?? 0);
-      // Cobra "presente" e "falta_injustificada" (penalização); "falta_justificada" e null não cobram.
-      const cobrar = presenca === "presente" || presenca === "falta_injustificada";
       const aluno = alunoMap.get(alunoId);
       const descontoRatio = (aluno?.desconto || 0) / 100;
-      const valorSessao = (precoPorHora * duracao) * (1 - descontoRatio);
+      const precoBase = (precoPorHora * duracao) * (1 - descontoRatio);
+      // Decisão de cobrança conforme o momento de pagamento do centro (tabela
+      // da verdade isolada em calcularCobrancaAula). Sem decisão explícita de
+      // falta injustificada (faltas antigas) assume-se cobrar (retrocompat).
+      const cobrarFaltaDecisao = aula.presencaInfo[alunoId]?.cobrarFalta ?? true;
+      const { cobrar, valor: valorSessao } = calcularCobrancaAula({
+        presenca,
+        cobrarFaltaDecisao,
+        isReposicao: aula.isReposicao,
+        data: aula.data,
+        momento,
+        precoBase,
+        hoje,
+      });
 
       if (!resultado.has(alunoId)) resultado.set(alunoId, []);
       resultado.get(alunoId)!.push({ aula, presenca, duracao, precoPorHora, valorSessao, cobrar });
@@ -126,7 +189,17 @@ export function calcularPagamentoExplicadores(
     if (!explicador) continue;
     const alunosPresentes = aula.alunoIds.some(id => aula.presencas[id] === "presente");
     const duracao = parseDurationHours(aula.horaInicio, aula.horaFim);
-    const contabilizado = alunosPresentes;
+    // O professor é remunerado pela sessão se houver pelo menos um aluno
+    // "cobrável": presente, OU com falta injustificada cuja decisão foi cobrar
+    // (cobrar ao aluno e pagar ao professor estão interligados). Sem decisão
+    // explícita (faltas antigas) assume-se cobrar. Falta justificada não conta.
+    const algumCobravel = aula.alunoIds.some(id => {
+      const p = aula.presencas[id];
+      if (p === "presente") return true;
+      if (p === "falta_injustificada") return aula.presencaInfo[id]?.cobrarFalta ?? true;
+      return false;
+    });
+    const contabilizado = algumCobravel;
 
     let valorHora = explicador.valorHora;
     if (modoPagamento === "por_disciplina" && explicador.disciplinaValores) {

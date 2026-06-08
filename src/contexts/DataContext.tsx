@@ -6,6 +6,19 @@ import { useToast } from "@/hooks/use-toast";
 // ── Types ─────────────────────────────────────────────────────────────────────
 export type Presenca = "presente" | "falta_justificada" | "falta_injustificada" | null;
 
+// Estado de reposição de uma falta justificada (decidido no pop-up de presenças).
+export type ReposicaoEstado = "pendente" | "agendada" | "nao" | null;
+
+// Metadata por aluno×aula que acompanha a presença, decidida no momento do
+// registo. Mapa paralelo a `presencas` para não tocar nos consumidores que só
+// leem o estado de presença.
+export interface PresencaInfo {
+  reposicaoEstado: ReposicaoEstado;
+  // Falta injustificada: cobrar ao aluno (e pagar ao professor) esta sessão.
+  // null = sem decisão explícita (faltas antigas) → faturação assume cobrar+pagar.
+  cobrarFalta: boolean | null;
+}
+
 export interface Disciplina {
   id: string;
   nome: string;
@@ -56,8 +69,13 @@ export interface Explicador {
 
 export type ModoPagamentoProfessor = "base" | "por_disciplina";
 
+// Momento de pagamento do centro: 'fim' = à hora conforme presença (atual);
+// 'inicio' = mensalidade antecipada (cobra agendadas/justificadas, reposição 0€).
+export type MomentoPagamento = "inicio" | "fim";
+
 export interface CentroConfig {
   modoPagamentoProfessor: ModoPagamentoProfessor;
+  momentoPagamento: MomentoPagamento;
 }
 
 export interface Sala {
@@ -83,6 +101,10 @@ export interface Aula {
   tipo: "individual" | "grupo";
   estado: "agendada" | "realizada" | "cancelada";
   presencas: Record<string, Presenca>;
+  // Metadata por aluno (reposição / decisão de cobrança), a par de `presencas`.
+  presencaInfo: Record<string, PresencaInfo>;
+  // Aula criada para repor uma falta justificada anterior.
+  isReposicao: boolean;
   notas?: string;
   recorrencia: string;
 }
@@ -135,7 +157,8 @@ interface DataContextType {
   createAulas: (entries: AulaInput[]) => Promise<void>;
   updateAula: (id: string, patch: Partial<Aula>) => Promise<void>;
   cancelAula: (id: string) => Promise<void>;
-  setPresenca: (aulaId: string, alunoId: string, presenca: Presenca) => Promise<void>;
+  setPresenca: (aulaId: string, alunoId: string, presenca: Presenca, extra?: { reposicaoEstado?: ReposicaoEstado; cobrarFalta?: boolean | null }) => Promise<void>;
+  marcarReposicaoAgendada: (aulaId: string, alunoId: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -231,15 +254,22 @@ async function loadExplicadores(centroId: string, discIdToName: Map<string, stri
   });
 }
 
+// Default de arranque (antes de carregar o centro). 'fim' mantém o
+// comportamento histórico de faturação.
+const DEFAULT_CENTRO_CONFIG: CentroConfig = { modoPagamentoProfessor: "base", momentoPagamento: "fim" };
+
 async function loadCentroConfig(centroId: string): Promise<CentroConfig> {
   const { data, error } = await supabase
     .from("centros")
-    .select("modo_pagamento_professor")
+    .select("modo_pagamento_professor, momento_pagamento")
     .eq("id", centroId)
     .single();
   if (error) throw error;
-  const modo = (data as any)?.modo_pagamento_professor;
-  return { modoPagamentoProfessor: modo === "por_disciplina" ? "por_disciplina" : "base" };
+  const row = data as any;
+  return {
+    modoPagamentoProfessor: row?.modo_pagamento_professor === "por_disciplina" ? "por_disciplina" : "base",
+    momentoPagamento: row?.momento_pagamento === "inicio" ? "inicio" : "fim",
+  };
 }
 
 async function loadSalas(centroId: string): Promise<Sala[]> {
@@ -255,16 +285,21 @@ async function loadSalas(centroId: string): Promise<Sala[]> {
 async function loadAulas(centroId: string, discIdToName: Map<string, string>): Promise<Aula[]> {
   const { data, error } = await supabase
     .from("aulas")
-    .select("id, sala_id, disciplina_id, data, hora_inicio, hora_fim, tipo, estado, recorrencia, notas, aula_alunos(aluno_id, presenca), aula_professores(professor_user_id)")
+    .select("id, sala_id, disciplina_id, data, hora_inicio, hora_fim, tipo, estado, recorrencia, notas, is_reposicao, aula_alunos(aluno_id, presenca, reposicao_estado, cobrar_falta), aula_professores(professor_user_id)")
     .eq("centro_id", centroId)
     .order("data");
   if (error) throw error;
   return (data ?? []).map((r: any) => {
     const presencas: Record<string, Presenca> = {};
+    const presencaInfo: Record<string, PresencaInfo> = {};
     const alunoIds: string[] = [];
     (r.aula_alunos ?? []).forEach((aa: any) => {
       alunoIds.push(aa.aluno_id);
       presencas[aa.aluno_id] = aa.presenca ?? null;
+      presencaInfo[aa.aluno_id] = {
+        reposicaoEstado: aa.reposicao_estado ?? null,
+        cobrarFalta: aa.cobrar_falta ?? null,
+      };
     });
     return {
       id: r.id,
@@ -278,6 +313,8 @@ async function loadAulas(centroId: string, discIdToName: Map<string, string>): P
       tipo: r.tipo,
       estado: r.estado,
       presencas,
+      presencaInfo,
+      isReposicao: r.is_reposicao ?? false,
       notas: r.notas ?? undefined,
       recorrencia: r.recorrencia,
     };
@@ -333,14 +370,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [salas, setSalas] = useState<Sala[]>([]);
   const [aulas, setAulas] = useState<Aula[]>([]);
   const [assistentes, setAssistentes] = useState<Assistente[]>([]);
-  const [centroConfig, setCentroConfig] = useState<CentroConfig>({ modoPagamentoProfessor: "base" });
+  const [centroConfig, setCentroConfig] = useState<CentroConfig>(DEFAULT_CENTRO_CONFIG);
   const [loading, setLoading] = useState(false);
   const [discMaps, setDiscMaps] = useState<{ idToName: Map<string, string>; nameToId: Map<string, string>; leafIds: Set<string> }>({ idToName: new Map(), nameToId: new Map(), leafIds: new Set() });
 
   const refresh = useCallback(async () => {
     if (!centroId) {
       setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]); setAssistentes([]);
-      setCentroConfig({ modoPagamentoProfessor: "base" });
+      setCentroConfig(DEFAULT_CENTRO_CONFIG);
       return;
     }
     setLoading(true);
@@ -371,7 +408,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isAuthenticated && centroId) refresh();
-    else { setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]); setAssistentes([]); setCentroConfig({ modoPagamentoProfessor: "base" }); }
+    else { setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]); setAssistentes([]); setCentroConfig(DEFAULT_CENTRO_CONFIG); }
   }, [isAuthenticated, centroId, refresh]);
 
   // ── Refreshes granulares ──────────────────────────────────────────────────────
@@ -421,6 +458,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const cid = ensureCentro();
     const upd: Record<string, unknown> = {};
     if (patch.modoPagamentoProfessor !== undefined) upd.modo_pagamento_professor = patch.modoPagamentoProfessor;
+    if (patch.momentoPagamento !== undefined) upd.momento_pagamento = patch.momentoPagamento;
     if (Object.keys(upd).length) await run(supabase.from("centros").update(upd).eq("id", cid));
     await refreshCentroConfig();
   };
@@ -684,6 +722,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       estado: e.estado ?? "agendada",
       recorrencia: e.recorrencia ?? "unica",
       notas: e.notas ?? null,
+      is_reposicao: e.isReposicao ?? false,
     }));
     const { data: created, error } = await supabase.from("aulas").insert(rows).select("id");
     if (error || !created) throw error ?? new Error("aulas: insert retornou sem dados");
@@ -727,16 +766,59 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     await refreshAulas();
   };
 
-  const setPresenca = async (aulaId: string, alunoId: string, presenca: Presenca) => {
+  const setPresenca = async (
+    aulaId: string,
+    alunoId: string,
+    presenca: Presenca,
+    extra?: { reposicaoEstado?: ReposicaoEstado; cobrarFalta?: boolean | null }
+  ) => {
+    // A metadata (reposição / decisão de cobrança) só faz sentido com uma falta.
+    // Ao limpar a presença (null) ou marcar presente, repõe ambos a null para
+    // não deixar decisões órfãs de uma falta anterior.
+    const aula = aulas.find(a => a.id === aulaId);
+    const prevPresenca: Presenca = aula?.presencas[alunoId] ?? null;
+    const prevInfo: PresencaInfo = aula?.presencaInfo[alunoId] ?? { reposicaoEstado: null, cobrarFalta: null };
+
+    const nextInfo: PresencaInfo = presenca == null || presenca === "presente"
+      ? { reposicaoEstado: null, cobrarFalta: null }
+      : {
+          reposicaoEstado: extra?.reposicaoEstado ?? null,
+          cobrarFalta: extra?.cobrarFalta ?? null,
+        };
+
     // Otimista: aplica já na UI; se o gravar falhar, reverte e propaga o erro.
-    const prevPresenca: Presenca = aulas.find(a => a.id === aulaId)?.presencas[alunoId] ?? null;
     setAulas(prev => prev.map(a => a.id === aulaId
-      ? { ...a, presencas: { ...a.presencas, [alunoId]: presenca } }
+      ? { ...a, presencas: { ...a.presencas, [alunoId]: presenca }, presencaInfo: { ...a.presencaInfo, [alunoId]: nextInfo } }
       : a));
-    const { error } = await supabase.from("aula_alunos").update({ presenca }).eq("aula_id", aulaId).eq("aluno_id", alunoId);
+    const { error } = await supabase
+      .from("aula_alunos")
+      .update({ presenca, reposicao_estado: nextInfo.reposicaoEstado, cobrar_falta: nextInfo.cobrarFalta })
+      .eq("aula_id", aulaId)
+      .eq("aluno_id", alunoId);
     if (error) {
       setAulas(prev => prev.map(a => a.id === aulaId
-        ? { ...a, presencas: { ...a.presencas, [alunoId]: prevPresenca } }
+        ? { ...a, presencas: { ...a.presencas, [alunoId]: prevPresenca }, presencaInfo: { ...a.presencaInfo, [alunoId]: prevInfo } }
+        : a));
+      throw error;
+    }
+  };
+
+  // Marca a falta justificada original como reposição agendada (sai das pendências
+  // do Dashboard). Chamado ao criar com sucesso a aula de reposição.
+  const marcarReposicaoAgendada = async (aulaId: string, alunoId: string) => {
+    const prevInfo: PresencaInfo = aulas.find(a => a.id === aulaId)?.presencaInfo[alunoId]
+      ?? { reposicaoEstado: null, cobrarFalta: null };
+    setAulas(prev => prev.map(a => a.id === aulaId
+      ? { ...a, presencaInfo: { ...a.presencaInfo, [alunoId]: { ...prevInfo, reposicaoEstado: "agendada" } } }
+      : a));
+    const { error } = await supabase
+      .from("aula_alunos")
+      .update({ reposicao_estado: "agendada" })
+      .eq("aula_id", aulaId)
+      .eq("aluno_id", alunoId);
+    if (error) {
+      setAulas(prev => prev.map(a => a.id === aulaId
+        ? { ...a, presencaInfo: { ...a.presencaInfo, [alunoId]: prevInfo } }
         : a));
       throw error;
     }
@@ -751,7 +833,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       createExplicador, updateExplicador, deleteExplicador, inviteExplicador,
       inviteAssistente, removeAssistente,
       createSala, updateSala, deleteSala,
-      createAulas, updateAula, cancelAula, setPresenca,
+      createAulas, updateAula, cancelAula, setPresenca, marcarReposicaoAgendada,
     }}>
       {children}
     </DataContext.Provider>

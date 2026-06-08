@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useData } from "@/contexts/DataContext";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -81,11 +82,16 @@ function layoutAulas(aulas: Aula[]) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function CalendarioPage() {
-  const { aulas, createAulas, updateAula, cancelAula, alunos, explicadores, salas, disciplinas } = useData();
+  const { aulas, createAulas, updateAula, cancelAula, alunos, explicadores, salas, disciplinas, marcarReposicaoAgendada } = useData();
   const discNames = disciplinas.map(d => d.nome);
   const { toast } = useToast();
   const { user } = useAuth();
+  const location = useLocation();
+  const routerNavigate = useNavigate();
   const isExplicador = user?.role === "explicador";
+  // Reposição em curso (veio do Dashboard/pop-up): aluno a pré-selecionar e a
+  // falta original a marcar como agendada ao guardar.
+  const [reposicaoCtx, setReposicaoCtx] = useState<{ alunoId: string; aulaOriginalId: string } | null>(null);
   const [view, setView] = useState<"semana" | "dia" | "mes">("semana");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [expFilter, setExpFilter] = useState("todos");
@@ -101,6 +107,19 @@ export default function CalendarioPage() {
     const id = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(id);
   }, []);
+
+  // Reposição vinda do Dashboard: abre o modal de Nova Aula com o aluno
+  // pré-selecionado e a checkbox de reposição ligada. Consome o state e limpa-o
+  // (replace) para não reabrir em re-renders/navegação para trás.
+  useEffect(() => {
+    const rep = (location.state as { reposicao?: { alunoId: string; aulaOriginalId: string } } | null)?.reposicao;
+    if (!rep) return;
+    setReposicaoCtx({ alunoId: rep.alunoId, aulaOriginalId: rep.aulaOriginalId });
+    setEditingAula(null);
+    setPrefill(null);
+    setModalOpen(true);
+    routerNavigate(location.pathname, { replace: true, state: null });
+  }, [location, routerNavigate]);
 
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
   // Semana completa: Seg→Dom (inclui fim de semana).
@@ -486,9 +505,10 @@ export default function CalendarioPage() {
       {/* ── New/Edit Aula modal ────────────────────────────────────── */}
       <AulaModal
         open={modalOpen}
-        onClose={() => { setModalOpen(false); setEditingAula(null); setPrefill(null); }}
+        onClose={() => { setModalOpen(false); setEditingAula(null); setPrefill(null); setReposicaoCtx(null); }}
         aula={editingAula}
         prefill={prefill ?? undefined}
+        reposicaoAlunoId={reposicaoCtx?.alunoId ?? null}
         onSave={async (aulasToCreate) => {
           try {
             if (editingAula) {
@@ -499,8 +519,18 @@ export default function CalendarioPage() {
               toast({
                 title: aulasToCreate.length > 1 ? `${aulasToCreate.length} aulas agendadas` : "Aula agendada com sucesso",
               });
+              // Se foi criada a partir de uma reposição pendente, marca a falta
+              // original como agendada (sai do Dashboard). A aula já foi criada
+              // com sucesso — se isto falhar, avisa mas não bloqueia.
+              if (reposicaoCtx) {
+                try {
+                  await marcarReposicaoAgendada(reposicaoCtx.aulaOriginalId, reposicaoCtx.alunoId);
+                } catch {
+                  toast({ title: "Aula criada, mas a pendência não foi atualizada", description: "Atualiza a página e tenta marcar de novo.", variant: "destructive" });
+                }
+              }
             }
-            setModalOpen(false); setEditingAula(null); setPrefill(null);
+            setModalOpen(false); setEditingAula(null); setPrefill(null); setReposicaoCtx(null);
           } catch {
             toast({ title: "Erro ao guardar aula", description: "Tenta novamente.", variant: "destructive" });
           }
@@ -622,15 +652,17 @@ function MonthView({ currentDate, filteredAulas, explicadores, onCellClick, onAu
 }
 
 // ─── AulaModal (unchanged logic) ─────────────────────────────────────────────
-const horaOptions = Array.from({ length: 26 }, (_, i) => {
-  const h = Math.floor(i / 2) + 8;
-  const m = i % 2 === 0 ? "00" : "30";
+const horaOptions = Array.from({ length: 53 }, (_, i) => {
+  const h = Math.floor(i / 4) + 8;
+  const mins = (i % 4) * 15;
+  const m = mins === 0 ? "00" : mins.toString();
   return `${String(h).padStart(2, "0")}:${m}`;
 });
 
-function AulaModal({ open, onClose, aula, prefill, onSave, onCancel }: {
+function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onCancel }: {
   open: boolean; onClose: () => void; aula: Aula | null;
   prefill?: { data: string; horaInicio: string };
+  reposicaoAlunoId?: string | null;
   onSave: (aulas: any[]) => void; onCancel?: () => void;
 }) {
   const { alunos, explicadores, salas, aulas, disciplinas } = useData();
@@ -647,6 +679,7 @@ function AulaModal({ open, onClose, aula, prefill, onSave, onCancel }: {
   const [duracao, setDuracao] = useState("60");
   const [recorrencia, setRecorrencia] = useState<string>(aula?.recorrencia || "unica");
   const [notas, setNotas] = useState(aula?.notas || "");
+  const [isReposicao, setIsReposicao] = useState(false);
   const [alunoPopoverOpen, setAlunoPopoverOpen] = useState(false);
   const [alunoSearch, setAlunoSearch] = useState("");
 
@@ -654,14 +687,16 @@ function AulaModal({ open, onClose, aula, prefill, onSave, onCancel }: {
     if (open) {
       setTipo(aula?.tipo || "individual");
       setDisciplina(aula?.disciplina || "");
-      setAlunoIds(aula?.alunoIds || []);
+      // Reposição (vinda do Dashboard): pré-seleciona o aluno da falta original.
+      setAlunoIds(aula?.alunoIds || (reposicaoAlunoId ? [reposicaoAlunoId] : []));
       setExplicadorId(aula?.explicadorId || (isExplicador ? user?.id ?? "" : ""));
       setSalaId(aula?.salaId || "auto");
       setData(aula?.data || prefill?.data || format(new Date(), "yyyy-MM-dd"));
       setHoraInicio(aula?.horaInicio || prefill?.horaInicio || "09:00");
       setNotas(aula?.notas || "");
+      setIsReposicao(!!reposicaoAlunoId);
     }
-  }, [open, aula, prefill, isExplicador, user?.id]);
+  }, [open, aula, prefill, reposicaoAlunoId, isExplicador, user?.id]);
 
   // Ao criar uma aula, se o aluno tiver um professor atribuído a esta disciplina
   // na ficha dele, sugere-o automaticamente (o admin pode na mesma alterar).
@@ -781,7 +816,7 @@ function AulaModal({ open, onClose, aula, prefill, onSave, onCancel }: {
     if (!disciplina || alunoIds.length === 0 || !explicadorId || !resolvedSalaId) return;
     const base = {
       tipo, disciplina, alunoIds, explicadorId,
-      salaId: resolvedSalaId, horaInicio, horaFim: endHour(), recorrencia, notas,
+      salaId: resolvedSalaId, horaInicio, horaFim: endHour(), recorrencia, notas, isReposicao,
     };
     // Em edição ou aula única → só uma instância. Quinzenal / Ano letivo → várias.
     if (aula || recorrencia === "unica") {
@@ -958,7 +993,7 @@ function AulaModal({ open, onClose, aula, prefill, onSave, onCancel }: {
                       <SelectItem key={e.id} value={e.id}>
                         <span className="flex items-center gap-2">
                           <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: getProfPalette(e.id, explicadores).border }} />
-                          {e.nome} ({e.valorHora}€/h)
+                          {e.nome}
                         </span>
                       </SelectItem>
                     ))}
@@ -1006,9 +1041,11 @@ function AulaModal({ open, onClose, aula, prefill, onSave, onCancel }: {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="30">30 min</SelectItem>
-                    <SelectItem value="60">1 hora</SelectItem>
+                    <SelectItem value="60">1h</SelectItem>
                     <SelectItem value="90">1h30</SelectItem>
-                    <SelectItem value="120">2 horas</SelectItem>
+                    <SelectItem value="120">2h</SelectItem>
+                    <SelectItem value="150">2h30</SelectItem>
+                    <SelectItem value="180">3h</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1058,6 +1095,12 @@ function AulaModal({ open, onClose, aula, prefill, onSave, onCancel }: {
                   {notas.length}/500
                 </span>
               </div>
+            </div>
+
+            {/* Reposição */}
+            <div className="flex items-center gap-2">
+              <Checkbox id="is-reposicao" checked={isReposicao} onCheckedChange={v => setIsReposicao(!!v)} />
+              <Label htmlFor="is-reposicao" className="text-sm font-normal cursor-pointer">Esta aula é uma Reposição</Label>
             </div>
           </section>
 

@@ -76,7 +76,14 @@ export default function FaturacaoPage() {
   const di = format(dataInicio, "yyyy-MM-dd");
   const df = format(dataFim, "yyyy-MM-dd");
 
-  const resumoAlunos = useMemo(() => calcularCobrancaAlunos(aulas, alunos, disciplinas, di, df), [aulas, alunos, disciplinas, di, df]);
+  const hoje = format(new Date(), "yyyy-MM-dd");
+  const resumoAlunos = useMemo(
+    () => calcularCobrancaAlunos(aulas, alunos, disciplinas, di, df, centroConfig.momentoPagamento, hoje),
+    [aulas, alunos, disciplinas, di, df, centroConfig.momentoPagamento, hoje]
+  );
+  // No modelo "início do mês", um período que inclua datas futuras gera uma
+  // projeção (mensalidade avança), não um valor final.
+  const ehProjecao = centroConfig.momentoPagamento === "inicio" && df > hoje;
   const resumoExplicadores = useMemo(
     () => calcularPagamentoExplicadores(aulas, explicadores, di, df, disciplinas, centroConfig.modoPagamentoProfessor),
     [aulas, explicadores, di, df, disciplinas, centroConfig.modoPagamentoProfessor]
@@ -189,7 +196,10 @@ export default function FaturacaoPage() {
           <CardContent className="p-5 flex items-center gap-4">
             <div className="h-12 w-12 rounded-xl bg-green-500/10 flex items-center justify-center"><Receipt className="h-6 w-6 text-green-500" /></div>
             <div>
-              <p className="text-sm text-muted-foreground">Total a Cobrar</p>
+              <p className="text-sm text-muted-foreground">
+                Total a Cobrar
+                {ehProjecao && <span className="ml-1 text-xs font-normal text-muted-foreground">(projeção)</span>}
+              </p>
               <p className="text-2xl font-bold text-green-500">{formatCurrency(totalCobrar)}</p>
             </div>
           </CardContent>
