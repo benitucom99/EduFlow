@@ -992,7 +992,7 @@ function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onC
                       <SelectItem key={e.id} value={e.id}>
                         <span className="flex items-center gap-2">
                           <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: getProfPalette(e.id, explicadores).border }} />
-                          {e.nome} ({e.valorHora}€/h)
+                          {e.nome}
                         </span>
                       </SelectItem>
                     ))}
@@ -1043,6 +1043,8 @@ function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onC
                     <SelectItem value="60">1 hora</SelectItem>
                     <SelectItem value="90">1h30</SelectItem>
                     <SelectItem value="120">2 horas</SelectItem>
+                    <SelectItem value="150">2h30 (Pack Exame)</SelectItem>
+                    <SelectItem value="180">3 horas</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
