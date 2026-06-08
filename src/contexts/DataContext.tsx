@@ -19,12 +19,22 @@ export interface PresencaInfo {
   cobrarFalta: boolean | null;
 }
 
+// Escalão de preço por duração (descontos por volume) — só aulas individuais.
+// A partir de `duracaoMin` horas, o preço/hora individual passa a `precoHora`.
+export interface EscalaoPreco {
+  duracaoMin: number;
+  precoHora: number;
+}
+
 export interface Disciplina {
   id: string;
   nome: string;
   corHsl: string | null;
   precoHoraIndividual: number;
   precoHoraGrupo: number;
+  // Escalões opcionais de preço/hora individual por duração (ordenados por
+  // duracaoMin asc). Vazio = usa sempre o precoHoraIndividual base.
+  escaloesPrecoIndividual: EscalaoPreco[];
   parentId: string | null;
 }
 
@@ -110,9 +120,10 @@ export interface Aula {
 }
 
 // ── Input types ───────────────────────────────────────────────────────────────
-export type DisciplinaInput = Omit<Disciplina, "id" | "precoHoraIndividual" | "precoHoraGrupo" | "parentId"> & {
+export type DisciplinaInput = Omit<Disciplina, "id" | "precoHoraIndividual" | "precoHoraGrupo" | "escaloesPrecoIndividual" | "parentId"> & {
   precoHoraIndividual?: number;
   precoHoraGrupo?: number;
+  escaloesPrecoIndividual?: EscalaoPreco[];
   parentId?: string | null;
 };
 export type AlunoInput = Omit<Aluno, "id" | "estado" | "dataInscricao"> & { estado?: Aluno["estado"]; dataInscricao?: string };
@@ -163,11 +174,21 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | null>(null);
 
+// Sanitiza escalões vindos da BD ou da UI: descarta entradas inválidas e
+// ordena por duracaoMin asc (a lógica/UI não dependem da ordem guardada).
+function normalizeEscaloes(raw: unknown): EscalaoPreco[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((e: any) => ({ duracaoMin: Number(e?.duracaoMin), precoHora: Number(e?.precoHora) }))
+    .filter(e => Number.isFinite(e.duracaoMin) && e.duracaoMin > 0 && Number.isFinite(e.precoHora) && e.precoHora >= 0)
+    .sort((a, b) => a.duracaoMin - b.duracaoMin);
+}
+
 // ── Loaders ───────────────────────────────────────────────────────────────────
 async function loadDisciplinas(centroId: string) {
   const { data, error } = await supabase
     .from("disciplinas")
-    .select("id, nome, cor_hsl, preco_hora_individual, preco_hora_grupo, parent_id")
+    .select("id, nome, cor_hsl, preco_hora_individual, preco_hora_grupo, escaloes_preco_individual, parent_id")
     .eq("centro_id", centroId)
     .order("nome");
   if (error) throw error;
@@ -179,6 +200,7 @@ async function loadDisciplinas(centroId: string) {
       corHsl: d.cor_hsl ?? null,
       precoHoraIndividual: individual,
       precoHoraGrupo: Number(d.preco_hora_grupo ?? 0),
+      escaloesPrecoIndividual: normalizeEscaloes(d.escaloes_preco_individual),
       parentId: d.parent_id ?? null,
     };
   });
@@ -474,6 +496,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       cor_hsl: data.corHsl || null,
       preco_hora_individual: individual,
       preco_hora_grupo: grupo,
+      escaloes_preco_individual: normalizeEscaloes(data.escaloesPrecoIndividual),
       parent_id: data.parentId ?? null,
     }).select().single();
     if (error) throw error;
@@ -483,6 +506,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       id: row.id, nome: row.nome, corHsl: row.cor_hsl ?? null,
       precoHoraIndividual: ind,
       precoHoraGrupo: Number(row.preco_hora_grupo ?? 0),
+      escaloesPrecoIndividual: normalizeEscaloes(row.escaloes_preco_individual),
       parentId: row.parent_id ?? null,
     };
   };
@@ -493,6 +517,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (patch.corHsl !== undefined) upd.cor_hsl = patch.corHsl || null;
     if (patch.precoHoraIndividual !== undefined) upd.preco_hora_individual = patch.precoHoraIndividual;
     if (patch.precoHoraGrupo !== undefined) upd.preco_hora_grupo = patch.precoHoraGrupo;
+    if (patch.escaloesPrecoIndividual !== undefined) upd.escaloes_preco_individual = normalizeEscaloes(patch.escaloesPrecoIndividual);
     if (patch.parentId !== undefined) upd.parent_id = patch.parentId ?? null;
     if (Object.keys(upd).length) await run(supabase.from("disciplinas").update(upd).eq("id", id));
     const { idToName, leafIds } = await refreshDisciplinas();

@@ -1,4 +1,21 @@
-import { Aula, Aluno, Explicador, Disciplina, ModoPagamentoProfessor, MomentoPagamento, Presenca } from "@/contexts/DataContext";
+import { Aula, Aluno, Explicador, Disciplina, ModoPagamentoProfessor, MomentoPagamento, Presenca, EscalaoPreco } from "@/contexts/DataContext";
+
+/**
+ * Preço/hora individual efetivo para uma duração (descontos por volume).
+ * Escolhe o escalão de maior `duracaoMin` cujo limiar é atingido pela duração e
+ * aplica esse preço a TODA a aula. Sem escalão atingido → o preço base.
+ * Defensivo quanto a ordem/validade dos escalões.
+ */
+export function precoHoraIndividualParaDuracao(
+  precoBase: number,
+  escaloes: EscalaoPreco[] | undefined,
+  duracao: number
+): number {
+  const aplicaveis = (escaloes ?? [])
+    .filter(e => e.duracaoMin > 0 && e.precoHora >= 0 && duracao >= e.duracaoMin)
+    .sort((a, b) => a.duracaoMin - b.duracaoMin);
+  return aplicaveis.length ? aplicaveis[aplicaveis.length - 1].precoHora : precoBase;
+}
 
 function hojeISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -107,11 +124,12 @@ export function calcularCobrancaAlunos(
       const presenca = aula.presencas[alunoId] ?? null;
       const duracao = parseDurationHours(aula.horaInicio, aula.horaFim);
       // Preço/hora efetivo conforme o tipo de aula. Em grupo, cada aluno paga o
-      // preço de grupo por hora (fixo por aluno, independente do nº de alunos).
+      // preço de grupo por hora (fixo por aluno, rígido — sem escalões). Em
+      // individual, aplica-se o escalão de preço por duração se existir.
       const disc = discByNome.get(aula.disciplina);
       const precoPorHora = aula.tipo === "grupo"
         ? (disc?.precoHoraGrupo ?? 0)
-        : (disc?.precoHoraIndividual ?? 0);
+        : precoHoraIndividualParaDuracao(disc?.precoHoraIndividual ?? 0, disc?.escaloesPrecoIndividual, duracao);
       const aluno = alunoMap.get(alunoId);
       const descontoRatio = (aluno?.desconto || 0) / 100;
       const precoBase = (precoPorHora * duracao) * (1 - descontoRatio);
