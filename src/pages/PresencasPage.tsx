@@ -219,9 +219,9 @@ export default function PresencasPage() {
             <DialogDescription>Deseja agendar aula de reposição?</DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => confirmReposicao("nao", false)}>Não</Button>
-            <Button variant="secondary" onClick={() => confirmReposicao("pendente", false)}>Pendente</Button>
-            <Button onClick={() => confirmReposicao("pendente", true)}>Sim</Button>
+            <Button variant="outline" className="border-success/30 bg-success/15 text-success hover:bg-success/25" onClick={() => confirmReposicao("pendente", true)}>Sim</Button>
+            <Button variant="outline" className="border-warning/30 bg-warning/15 text-warning hover:bg-warning/25" onClick={() => confirmReposicao("pendente", false)}>Pendente</Button>
+            <Button variant="outline" className="border-destructive/30 bg-destructive/15 text-destructive hover:bg-destructive/25" onClick={() => confirmReposicao("nao", false)}>Não</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -231,11 +231,11 @@ export default function PresencasPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Falta Injustificada</DialogTitle>
-            <DialogDescription>Cobrar ao Aluno? (O professor também será remunerado)</DialogDescription>
+            <DialogDescription>Cobrar ao Aluno?</DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => confirmInjustificada(false)}>Não</Button>
-            <Button autoFocus onClick={() => confirmInjustificada(true)}>Sim</Button>
+            <Button autoFocus variant="outline" className="border-success/30 bg-success/15 text-success hover:bg-success/25" onClick={() => confirmInjustificada(true)}>Sim</Button>
+            <Button variant="outline" className="border-destructive/30 bg-destructive/15 text-destructive hover:bg-destructive/25" onClick={() => confirmInjustificada(false)}>Não</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
