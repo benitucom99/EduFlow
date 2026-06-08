@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, User, Building2, Paintbrush } from "lucide-react";
+import { ChevronRight, User, Building2, Paintbrush, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const items = [
@@ -17,6 +17,14 @@ const items = [
     icon: Building2,
     title: "Detalhes do Centro",
     description: "Atualize as informações públicas e de contacto do centro",
+    roles: ["admin", "rececionista"],
+  },
+  {
+    key: "definicoes",
+    path: "/configuracoes/definicoes",
+    icon: SlidersHorizontal,
+    title: "Definições Básicas",
+    description: "Configure as regras de faturação de faltas injustificadas",
     roles: ["admin", "rececionista"],
   },
   {

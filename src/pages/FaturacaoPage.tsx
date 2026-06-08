@@ -72,10 +72,13 @@ export default function FaturacaoPage() {
   const di = format(dataInicio, "yyyy-MM-dd");
   const df = format(dataFim, "yyyy-MM-dd");
 
-  const resumoAlunos = useMemo(() => calcularCobrancaAlunos(aulas, alunos, disciplinas, di, df), [aulas, alunos, disciplinas, di, df]);
+  const resumoAlunos = useMemo(
+    () => calcularCobrancaAlunos(aulas, alunos, disciplinas, di, df, centroConfig.cobrarFaltaInjustificada),
+    [aulas, alunos, disciplinas, di, df, centroConfig.cobrarFaltaInjustificada]
+  );
   const resumoExplicadores = useMemo(
-    () => calcularPagamentoExplicadores(aulas, explicadores, di, df, disciplinas, centroConfig.modoPagamentoProfessor),
-    [aulas, explicadores, di, df, disciplinas, centroConfig.modoPagamentoProfessor]
+    () => calcularPagamentoExplicadores(aulas, explicadores, di, df, disciplinas, centroConfig.modoPagamentoProfessor, centroConfig.pagarFaltaInjustificada),
+    [aulas, explicadores, di, df, disciplinas, centroConfig.modoPagamentoProfessor, centroConfig.pagarFaltaInjustificada]
   );
 
   const totalCobrar = useMemo(() => resumoAlunos.reduce((s, r) => s + r.valorTotal, 0), [resumoAlunos]);
