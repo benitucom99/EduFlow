@@ -676,9 +676,63 @@ function AulaModal({ open, onClose, aula, prefill, onSave, onCancel }: {
     if (tutor) setExplicadorId(tutor);
   }, [open, aula, isExplicador, disciplina, primeiroAluno, disciplinas, alunos]);
 
-  const expsFiltrados = disciplina
-    ? explicadores.filter(e => e.disciplinas.includes(disciplina) && e.estado === "ativo")
-    : explicadores.filter(e => e.estado === "ativo");
+  // Se a disciplina escolhida deixar de pertencer ao(s) aluno(s) selecionado(s)
+  // (ex: trocou de aluno depois de escolher), limpa-a para não submeter algo inválido.
+  useEffect(() => {
+    if (!open || aula) return;
+    if (!disciplina || alunoIds.length === 0) return;
+    const permitidas = new Set(
+      alunoIds.flatMap(id => alunos.find(a => a.id === id)?.disciplinas ?? [])
+    );
+    if (!permitidas.has(disciplina)) setDisciplina("");
+  }, [open, aula, disciplina, alunoIds, alunos]);
+
+  // Alunos selecionados (objetos completos), para filtrar disciplinas/explicadores.
+  const alunosSelecionados = alunoIds.map(id => alunos.find(a => a.id === id)).filter(Boolean) as typeof alunos;
+
+  // Disciplinas (nomes) que pelo menos um dos alunos selecionados frequenta.
+  // União entre alunos: numa aula de grupo, mostra qualquer disciplina comum a
+  // algum deles. Sem alunos selecionados → null = sem filtro (mostra todas).
+  const disciplinasPermitidas = alunosSelecionados.length > 0
+    ? new Set(alunosSelecionados.flatMap(a => a.disciplinas))
+    : null;
+
+  // Grupos de disciplina filtrados às permitidas pelo(s) aluno(s). Grupos que
+  // ficam sem folhas são descartados.
+  const discGruposFiltrados = disciplinasPermitidas
+    ? discGrupos
+        .map(g => ({ ...g, folhas: g.folhas.filter(f => disciplinasPermitidas.has(f.nome)) }))
+        .filter(g => g.folhas.length > 0)
+    : discGrupos;
+
+  // Explicadores sugeridos para os alunos selecionados: quem é o tutor atribuído
+  // a alguma disciplina do aluno (disciplinaExplicadores) OU quem dá ativamente
+  // a disciplina já escolhida. Sem alunos → null = sem filtro por aluno.
+  const explicadoresPorAluno = alunosSelecionados.length > 0
+    ? new Set(
+        alunosSelecionados.flatMap(a =>
+          Object.values(a.disciplinaExplicadores ?? {}).filter((id): id is string => !!id)
+        )
+      )
+    : null;
+
+  const expsFiltrados = explicadores.filter(e => {
+    if (e.estado !== "ativo") return false;
+    // Filtro por disciplina escolhida (quem a leciona ativamente).
+    if (disciplina && !e.disciplinas.includes(disciplina)) {
+      // Permite ainda assim o tutor atribuído ao aluno para essa disciplina.
+      if (!explicadoresPorAluno?.has(e.id)) return false;
+    }
+    // Filtro por aluno: se há alunos selecionados mas nenhuma disciplina ainda,
+    // mostra os tutores atribuídos + quem dá alguma disciplina do aluno.
+    if (!disciplina && explicadoresPorAluno) {
+      const dáAlgumaDoAluno = disciplinasPermitidas
+        ? e.disciplinas.some(d => disciplinasPermitidas.has(d))
+        : false;
+      if (!explicadoresPorAluno.has(e.id) && !dáAlgumaDoAluno) return false;
+    }
+    return true;
+  });
   const salasFiltradas = salas;
 
   const autoSalaId = (() => {
@@ -872,7 +926,11 @@ function AulaModal({ open, onClose, aula, prefill, onSave, onCancel }: {
               <Select value={disciplina} onValueChange={setDisciplina}>
                 <SelectTrigger><SelectValue placeholder="Selecionar disciplina" /></SelectTrigger>
                 <SelectContent>
-                  {discGrupos.map((g, gi) => (
+                  {discGruposFiltrados.length === 0 ? (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                      {disciplinasPermitidas ? "Aluno(s) sem disciplinas associadas" : "Sem disciplinas"}
+                    </div>
+                  ) : discGruposFiltrados.map((g, gi) => (
                     <SelectGroup key={g.categoriaNome ?? `__sem__${gi}`}>
                       {g.categoriaNome && <SelectLabel>{g.categoriaNome}</SelectLabel>}
                       {g.folhas.map(f => <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>)}
