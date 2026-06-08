@@ -538,7 +538,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     });
     if (fnErr || !fnData?.user_id) throw fnErr ?? new Error("create-explicador: " + JSON.stringify(fnData));
     const newUserId = fnData.user_id as string;
-    await run(supabase.from("professor_perfis").insert({
+    await run(supabase.from("professor_perfis").upsert({
       user_id: newUserId, centro_id: cid,
       telefone: data.telefone || null,
       valor_hora: data.valorHora,
@@ -546,7 +546,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       iban: data.iban || null,
       nif: data.nif || null,
       estado: data.estado ?? "ativo",
-    }));
+    }, { onConflict: "user_id" }));
     const ids = (data.disciplinas ?? []).map(discIdFor).filter(Boolean) as string[];
     if (ids.length) await run(supabase.from("professor_disciplinas").insert(
       ids.map(d => ({ professor_user_id: newUserId, disciplina_id: d, valor_hora: data.disciplinaValores?.[d] ?? null }))

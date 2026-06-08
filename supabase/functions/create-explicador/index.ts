@@ -82,13 +82,24 @@ Deno.serve(async (req) => {
 
     const { error: usersErr } = await supabaseAdmin
       .from('users')
-      .update({ centro_id, role: 'explicador' })
+      .update({ centro_id, role: 'explicador', nome })
       .eq('id', userId);
 
     if (usersErr) {
-      // Clean up auth user if profile update fails
       await supabaseAdmin.auth.admin.deleteUser(userId);
       return new Response(JSON.stringify({ error: usersErr.message }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { error: perfisErr } = await supabaseAdmin
+      .from('professor_perfis')
+      .insert({ user_id: userId, centro_id, estado: 'ativo' });
+
+    if (perfisErr) {
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      return new Response(JSON.stringify({ error: perfisErr.message }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
