@@ -652,9 +652,10 @@ function MonthView({ currentDate, filteredAulas, explicadores, onCellClick, onAu
 }
 
 // ─── AulaModal (unchanged logic) ─────────────────────────────────────────────
-const horaOptions = Array.from({ length: 26 }, (_, i) => {
-  const h = Math.floor(i / 2) + 8;
-  const m = i % 2 === 0 ? "00" : "30";
+const horaOptions = Array.from({ length: 53 }, (_, i) => {
+  const h = Math.floor(i / 4) + 8;
+  const mins = (i % 4) * 15;
+  const m = mins === 0 ? "00" : mins.toString();
   return `${String(h).padStart(2, "0")}:${m}`;
 });
 
@@ -1040,11 +1041,11 @@ function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onC
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="30">30 min</SelectItem>
-                    <SelectItem value="60">1 hora</SelectItem>
+                    <SelectItem value="60">1h</SelectItem>
                     <SelectItem value="90">1h30</SelectItem>
-                    <SelectItem value="120">2 horas</SelectItem>
-                    <SelectItem value="150">2h30 (Pack Exame)</SelectItem>
-                    <SelectItem value="180">3 horas</SelectItem>
+                    <SelectItem value="120">2h</SelectItem>
+                    <SelectItem value="150">2h30</SelectItem>
+                    <SelectItem value="180">3h</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
