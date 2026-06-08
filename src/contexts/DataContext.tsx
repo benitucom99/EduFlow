@@ -9,7 +9,6 @@ export type Presenca = "presente" | "falta_justificada" | "falta_injustificada" 
 export interface Disciplina {
   id: string;
   nome: string;
-  corHsl: string | null;
   precoHoraIndividual: number;
   precoHoraGrupo: number;
   parentId: string | null;
@@ -50,6 +49,7 @@ export interface Explicador {
   estado: "ativo" | "inativo";
   iban?: string;
   nif?: string;
+  cor?: string | null;
   conviteEnviadoEm?: string | null;
   acessoAtivadoEm?: string | null;
 }
@@ -144,7 +144,7 @@ const DataContext = createContext<DataContextType | null>(null);
 async function loadDisciplinas(centroId: string) {
   const { data, error } = await supabase
     .from("disciplinas")
-    .select("id, nome, cor_hsl, preco_hora_individual, preco_hora_grupo, parent_id")
+    .select("id, nome, preco_hora_individual, preco_hora_grupo, parent_id")
     .eq("centro_id", centroId)
     .order("nome");
   if (error) throw error;
@@ -153,7 +153,6 @@ async function loadDisciplinas(centroId: string) {
     return {
       id: d.id,
       nome: d.nome,
-      corHsl: d.cor_hsl ?? null,
       precoHoraIndividual: individual,
       precoHoraGrupo: Number(d.preco_hora_grupo ?? 0),
       parentId: d.parent_id ?? null,
@@ -205,7 +204,7 @@ async function loadAlunos(centroId: string, discIdToName: Map<string, string>, l
 async function loadExplicadores(centroId: string, discIdToName: Map<string, string>, leafIds: Set<string>): Promise<Explicador[]> {
   const { data, error } = await supabase
     .from("professor_perfis")
-    .select("user_id, telefone, valor_hora, habilitacoes, iban, nif, estado, convite_enviado_em, acesso_ativado_em, users!inner(nome, email), professor_disciplinas(disciplina_id, valor_hora)")
+    .select("user_id, telefone, valor_hora, habilitacoes, iban, nif, cor, estado, convite_enviado_em, acesso_ativado_em, users!inner(nome, email), professor_disciplinas(disciplina_id, valor_hora)")
     .eq("centro_id", centroId);
   if (error) throw error;
   return (data ?? []).map((r: any) => {
@@ -225,6 +224,7 @@ async function loadExplicadores(centroId: string, discIdToName: Map<string, stri
       estado: r.estado,
       iban: r.iban ?? undefined,
       nif: r.nif ?? undefined,
+      cor: r.cor ?? null,
       conviteEnviadoEm: r.convite_enviado_em ?? null,
       acessoAtivadoEm: r.acesso_ativado_em ?? null,
     };
@@ -433,7 +433,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const { data: row, error } = await supabase.from("disciplinas").insert({
       centro_id: cid,
       nome: data.nome,
-      cor_hsl: data.corHsl || null,
       preco_hora_individual: individual,
       preco_hora_grupo: grupo,
       parent_id: data.parentId ?? null,
@@ -442,7 +441,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     await refreshDisciplinas();
     const ind = Number(row.preco_hora_individual ?? 0);
     return {
-      id: row.id, nome: row.nome, corHsl: row.cor_hsl ?? null,
+      id: row.id, nome: row.nome,
       precoHoraIndividual: ind,
       precoHoraGrupo: Number(row.preco_hora_grupo ?? 0),
       parentId: row.parent_id ?? null,
@@ -452,7 +451,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const updateDisciplina = async (id: string, patch: Partial<DisciplinaInput>) => {
     const upd: Record<string, unknown> = {};
     if (patch.nome !== undefined) upd.nome = patch.nome;
-    if (patch.corHsl !== undefined) upd.cor_hsl = patch.corHsl || null;
     if (patch.precoHoraIndividual !== undefined) upd.preco_hora_individual = patch.precoHoraIndividual;
     if (patch.precoHoraGrupo !== undefined) upd.preco_hora_grupo = patch.precoHoraGrupo;
     if (patch.parentId !== undefined) upd.parent_id = patch.parentId ?? null;
@@ -571,6 +569,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       habilitacoes: data.habilitacoes || null,
       iban: data.iban || null,
       nif: data.nif || null,
+      cor: data.cor || null,
       estado: data.estado ?? "ativo",
     }, { onConflict: "user_id" }));
     const ids = (data.disciplinas ?? []).map(discIdFor).filter(Boolean) as string[];
@@ -592,6 +591,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (patch.habilitacoes !== undefined) perfUpd.habilitacoes = patch.habilitacoes || null;
     if (patch.iban !== undefined) perfUpd.iban = patch.iban || null;
     if (patch.nif !== undefined) perfUpd.nif = patch.nif || null;
+    if (patch.cor !== undefined) perfUpd.cor = patch.cor || null;
     if (patch.estado !== undefined) perfUpd.estado = patch.estado;
     if (Object.keys(perfUpd).length) await run(supabase.from("professor_perfis").update(perfUpd).eq("user_id", id));
     if (patch.disciplinas) {

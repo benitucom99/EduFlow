@@ -6,8 +6,6 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FolderTree } from "lucide-react";
 
-const FALLBACK_COLOR = "#6366f1";
-
 export function DisciplinaModal({ open, onClose, disciplina, parent, onSave }: {
   open: boolean;
   onClose: () => void;
@@ -15,12 +13,11 @@ export function DisciplinaModal({ open, onClose, disciplina, parent, onSave }: {
   disciplina: Disciplina | null;
   /** Categoria-pai ao criar uma sub-disciplina; null ao criar uma categoria de topo. */
   parent: Disciplina | null;
-  onSave: (data: { nome: string; corHsl: string | null; precoHoraIndividual?: number; precoHoraGrupo?: number; parentId?: string | null }) => void;
+  onSave: (data: { nome: string; precoHoraIndividual?: number; precoHoraGrupo?: number; parentId?: string | null }) => void;
 }) {
   const [nome, setNome] = useState("");
   const [precoIndividual, setPrecoIndividual] = useState("20");
   const [precoGrupo, setPrecoGrupo] = useState("15");
-  const [corHsl, setCorHsl] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Categoria = topo (sem pai). Folha = sub-disciplina (com pai). Só as folhas têm preço.
@@ -32,7 +29,6 @@ export function DisciplinaModal({ open, onClose, disciplina, parent, onSave }: {
       setNome(disciplina?.nome || "");
       setPrecoIndividual(String(disciplina?.precoHoraIndividual ?? 20));
       setPrecoGrupo(String(disciplina?.precoHoraGrupo ?? 15));
-      setCorHsl(disciplina?.corHsl || (parent?.corHsl ?? ""));
       setErrors({});
     }
   }, [open, disciplina, parent]);
@@ -52,9 +48,8 @@ export function DisciplinaModal({ open, onClose, disciplina, parent, onSave }: {
     }
     setErrors(e);
     if (Object.keys(e).length > 0) return;
-    const data: { nome: string; corHsl: string | null; precoHoraIndividual?: number; precoHoraGrupo?: number; parentId?: string | null } = {
+    const data: { nome: string; precoHoraIndividual?: number; precoHoraGrupo?: number; parentId?: string | null } = {
       nome: nome.trim(),
-      corHsl: corHsl || null,
     };
     if (showPrices) { data.precoHoraIndividual = ind; data.precoHoraGrupo = grp; }
     if (!disciplina) data.parentId = parent?.id ?? null;
@@ -96,14 +91,6 @@ export function DisciplinaModal({ open, onClose, disciplina, parent, onSave }: {
               As categorias servem apenas para organizar. As taxas horárias são definidas em cada sub-disciplina.
             </p>
           )}
-          <div>
-            <Label>Cor (opcional)</Label>
-            <div className="flex items-center gap-2 mt-1">
-              <input type="color" value={corHsl || FALLBACK_COLOR} onChange={e => setCorHsl(e.target.value)} className="h-9 w-16 rounded border cursor-pointer" />
-              <span className="text-sm text-muted-foreground">{corHsl || "Nenhuma cor definida"}</span>
-              {corHsl && <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => setCorHsl("")}>Remover</Button>}
-            </div>
-          </div>
         </div>
         <div className="flex justify-end gap-3 mt-4">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>

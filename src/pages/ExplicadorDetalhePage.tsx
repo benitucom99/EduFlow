@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { folhasAgrupadas } from "@/lib/disciplinas";
 import { parseDurationHours } from "@/lib/faturacao";
+import { CorProfessorPicker } from "@/components/CorProfessorPicker";
 
 export default function ExplicadorDetalhePage() {
   const { id } = useParams();
@@ -226,6 +227,7 @@ function EditExplicadorModal({ open, onClose, explicador, onSave }: {
   const [disciplinaValores, setDisciplinaValores] = useState<Record<string, number>>({});
   const [iban, setIban] = useState("");
   const [nif, setNif] = useState("");
+  const [cor, setCor] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -239,6 +241,7 @@ function EditExplicadorModal({ open, onClose, explicador, onSave }: {
       setDisciplinaValores(explicador.disciplinaValores ?? {});
       setIban(explicador.iban || "");
       setNif(explicador.nif || "");
+      setCor(explicador.cor || "");
       setErrors({});
     }
   }, [open, explicador]);
@@ -257,6 +260,7 @@ function EditExplicadorModal({ open, onClose, explicador, onSave }: {
       disciplinaValores,
       iban: iban || undefined,
       nif: nif || undefined,
+      cor: cor || null,
     });
   };
 
@@ -342,6 +346,7 @@ function EditExplicadorModal({ open, onClose, explicador, onSave }: {
               />
               {errors.nif && <p className="text-xs text-destructive mt-1">{errors.nif}</p>}
             </div>
+            <CorProfessorPicker value={cor} onChange={setCor} />
           </TabsContent>
         </Tabs>
         <div className="flex justify-end gap-3 mt-4">
