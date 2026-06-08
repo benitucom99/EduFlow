@@ -23,6 +23,7 @@ import PresencasPage from "@/pages/PresencasPage";
 import ConfiguracoesPage from "@/pages/ConfiguracoesPage";
 import ConfiguracoesPerfilPage from "@/pages/ConfiguracoesPerfilPage";
 import ConfiguracoesCentroPage from "@/pages/ConfiguracoesCentroPage";
+import ConfiguracoesDefinicoesPage from "@/pages/ConfiguracoesDefinicoesPage";
 import ConfiguracoesPersonalizacaoPage from "@/pages/ConfiguracoesPersonalizacaoPage";
 import FaturacaoPage from "@/pages/FaturacaoPage";
 import NotFound from "@/pages/NotFound";
@@ -65,6 +66,7 @@ const App = () => (
                   {/* admin + rececionista */}
                   <Route element={<ProtectedRoute allowedRoles={["admin", "rececionista"]}><Outlet /></ProtectedRoute>}>
                     <Route path="/dashboard" element={<DashboardPage />} />
+                    <Route path="/configuracoes/definicoes" element={<ConfiguracoesDefinicoesPage />} />
                     <Route path="/alunos" element={<AlunosPage />} />
                     <Route path="/alunos/:id" element={<AlunoDetalhePage />} />
                     <Route path="/explicadores" element={<ExplicadoresPage />} />

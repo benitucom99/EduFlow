@@ -69,8 +69,13 @@ export interface Explicador {
 
 export type ModoPagamentoProfessor = "base" | "por_disciplina";
 
+// Momento de pagamento do centro: 'fim' = à hora conforme presença (atual);
+// 'inicio' = mensalidade antecipada (cobra agendadas/justificadas, reposição 0€).
+export type MomentoPagamento = "inicio" | "fim";
+
 export interface CentroConfig {
   modoPagamentoProfessor: ModoPagamentoProfessor;
+  momentoPagamento: MomentoPagamento;
 }
 
 export interface Sala {
@@ -249,15 +254,22 @@ async function loadExplicadores(centroId: string, discIdToName: Map<string, stri
   });
 }
 
+// Default de arranque (antes de carregar o centro). 'fim' mantém o
+// comportamento histórico de faturação.
+const DEFAULT_CENTRO_CONFIG: CentroConfig = { modoPagamentoProfessor: "base", momentoPagamento: "fim" };
+
 async function loadCentroConfig(centroId: string): Promise<CentroConfig> {
   const { data, error } = await supabase
     .from("centros")
-    .select("modo_pagamento_professor")
+    .select("modo_pagamento_professor, momento_pagamento")
     .eq("id", centroId)
     .single();
   if (error) throw error;
-  const modo = (data as any)?.modo_pagamento_professor;
-  return { modoPagamentoProfessor: modo === "por_disciplina" ? "por_disciplina" : "base" };
+  const row = data as any;
+  return {
+    modoPagamentoProfessor: row?.modo_pagamento_professor === "por_disciplina" ? "por_disciplina" : "base",
+    momentoPagamento: row?.momento_pagamento === "inicio" ? "inicio" : "fim",
+  };
 }
 
 async function loadSalas(centroId: string): Promise<Sala[]> {
@@ -358,14 +370,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [salas, setSalas] = useState<Sala[]>([]);
   const [aulas, setAulas] = useState<Aula[]>([]);
   const [assistentes, setAssistentes] = useState<Assistente[]>([]);
-  const [centroConfig, setCentroConfig] = useState<CentroConfig>({ modoPagamentoProfessor: "base" });
+  const [centroConfig, setCentroConfig] = useState<CentroConfig>(DEFAULT_CENTRO_CONFIG);
   const [loading, setLoading] = useState(false);
   const [discMaps, setDiscMaps] = useState<{ idToName: Map<string, string>; nameToId: Map<string, string>; leafIds: Set<string> }>({ idToName: new Map(), nameToId: new Map(), leafIds: new Set() });
 
   const refresh = useCallback(async () => {
     if (!centroId) {
       setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]); setAssistentes([]);
-      setCentroConfig({ modoPagamentoProfessor: "base" });
+      setCentroConfig(DEFAULT_CENTRO_CONFIG);
       return;
     }
     setLoading(true);
@@ -396,7 +408,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isAuthenticated && centroId) refresh();
-    else { setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]); setAssistentes([]); setCentroConfig({ modoPagamentoProfessor: "base" }); }
+    else { setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]); setAssistentes([]); setCentroConfig(DEFAULT_CENTRO_CONFIG); }
   }, [isAuthenticated, centroId, refresh]);
 
   // ── Refreshes granulares ──────────────────────────────────────────────────────
@@ -446,6 +458,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const cid = ensureCentro();
     const upd: Record<string, unknown> = {};
     if (patch.modoPagamentoProfessor !== undefined) upd.modo_pagamento_professor = patch.modoPagamentoProfessor;
+    if (patch.momentoPagamento !== undefined) upd.momento_pagamento = patch.momentoPagamento;
     if (Object.keys(upd).length) await run(supabase.from("centros").update(upd).eq("id", cid));
     await refreshCentroConfig();
   };
