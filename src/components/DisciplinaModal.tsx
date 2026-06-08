@@ -142,13 +142,13 @@ export function DisciplinaModal({ open, onClose, disciplina, parent, onSave }: {
                       <Input
                         type="text" inputMode="decimal" value={esc.duracaoMin}
                         onChange={e => updateEscalao(i, "duracaoMin", e.target.value)}
-                        placeholder="2" className="w-16 h-8"
+                        className={`w-16 h-8 ${errors[`esc_${i}_dur`] ? "border-destructive" : ""}`}
                       />
                       <span className="text-xs text-muted-foreground whitespace-nowrap">h =</span>
                       <Input
                         type="text" inputMode="decimal" value={esc.precoHora}
                         onChange={e => updateEscalao(i, "precoHora", e.target.value)}
-                        placeholder="17,75" className="w-20 h-8"
+                        className={`w-20 h-8 ${errors[`esc_${i}_preco`] ? "border-destructive" : ""}`}
                       />
                       <span className="text-xs text-muted-foreground">€/h</span>
                       <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeEscalao(i)}>
@@ -157,7 +157,7 @@ export function DisciplinaModal({ open, onClose, disciplina, parent, onSave }: {
                     </div>
                   ))}
                   {escaloes.some((_, i) => errors[`esc_${i}_dur`] || errors[`esc_${i}_preco`]) && (
-                    <p className="text-xs text-destructive">Verifica os valores das regras (duração &gt; 0, preço ≥ 0).</p>
+                    <p className="text-xs text-destructive">Preenche a duração (&gt; 0) e o preço (≥ 0) em cada regra, ou remove a linha.</p>
                   )}
                   <Button type="button" variant="ghost" size="sm" className="text-xs h-7" onClick={addEscalao}>
                     <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar regra
