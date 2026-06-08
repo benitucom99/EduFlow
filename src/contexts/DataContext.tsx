@@ -98,6 +98,8 @@ export interface Aula {
   presencas: Record<string, Presenca>;
   // Metadata por aluno (reposição / decisão de cobrança), a par de `presencas`.
   presencaInfo: Record<string, PresencaInfo>;
+  // Aula criada para repor uma falta justificada anterior.
+  isReposicao: boolean;
   notas?: string;
   recorrencia: string;
 }
@@ -151,6 +153,7 @@ interface DataContextType {
   updateAula: (id: string, patch: Partial<Aula>) => Promise<void>;
   cancelAula: (id: string) => Promise<void>;
   setPresenca: (aulaId: string, alunoId: string, presenca: Presenca, extra?: { reposicaoEstado?: ReposicaoEstado; cobrarFalta?: boolean | null }) => Promise<void>;
+  marcarReposicaoAgendada: (aulaId: string, alunoId: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -270,7 +273,7 @@ async function loadSalas(centroId: string): Promise<Sala[]> {
 async function loadAulas(centroId: string, discIdToName: Map<string, string>): Promise<Aula[]> {
   const { data, error } = await supabase
     .from("aulas")
-    .select("id, sala_id, disciplina_id, data, hora_inicio, hora_fim, tipo, estado, recorrencia, notas, aula_alunos(aluno_id, presenca, reposicao_estado, cobrar_falta), aula_professores(professor_user_id)")
+    .select("id, sala_id, disciplina_id, data, hora_inicio, hora_fim, tipo, estado, recorrencia, notas, is_reposicao, aula_alunos(aluno_id, presenca, reposicao_estado, cobrar_falta), aula_professores(professor_user_id)")
     .eq("centro_id", centroId)
     .order("data");
   if (error) throw error;
@@ -299,6 +302,7 @@ async function loadAulas(centroId: string, discIdToName: Map<string, string>): P
       estado: r.estado,
       presencas,
       presencaInfo,
+      isReposicao: r.is_reposicao ?? false,
       notas: r.notas ?? undefined,
       recorrencia: r.recorrencia,
     };
@@ -705,6 +709,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       estado: e.estado ?? "agendada",
       recorrencia: e.recorrencia ?? "unica",
       notas: e.notas ?? null,
+      is_reposicao: e.isReposicao ?? false,
     }));
     const { data: created, error } = await supabase.from("aulas").insert(rows).select("id");
     if (error || !created) throw error ?? new Error("aulas: insert retornou sem dados");
@@ -785,6 +790,27 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Marca a falta justificada original como reposição agendada (sai das pendências
+  // do Dashboard). Chamado ao criar com sucesso a aula de reposição.
+  const marcarReposicaoAgendada = async (aulaId: string, alunoId: string) => {
+    const prevInfo: PresencaInfo = aulas.find(a => a.id === aulaId)?.presencaInfo[alunoId]
+      ?? { reposicaoEstado: null, cobrarFalta: null };
+    setAulas(prev => prev.map(a => a.id === aulaId
+      ? { ...a, presencaInfo: { ...a.presencaInfo, [alunoId]: { ...prevInfo, reposicaoEstado: "agendada" } } }
+      : a));
+    const { error } = await supabase
+      .from("aula_alunos")
+      .update({ reposicao_estado: "agendada" })
+      .eq("aula_id", aulaId)
+      .eq("aluno_id", alunoId);
+    if (error) {
+      setAulas(prev => prev.map(a => a.id === aulaId
+        ? { ...a, presencaInfo: { ...a.presencaInfo, [alunoId]: prevInfo } }
+        : a));
+      throw error;
+    }
+  };
+
   return (
     <DataContext.Provider value={{
       disciplinas, alunos, explicadores, salas, aulas, assistentes, centroConfig, loading, refresh,
@@ -794,7 +820,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       createExplicador, updateExplicador, deleteExplicador, inviteExplicador,
       inviteAssistente, removeAssistente,
       createSala, updateSala, deleteSala,
-      createAulas, updateAula, cancelAula, setPresenca,
+      createAulas, updateAula, cancelAula, setPresenca, marcarReposicaoAgendada,
     }}>
       {children}
     </DataContext.Provider>

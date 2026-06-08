@@ -1,10 +1,10 @@
 import { useMemo, useState, useEffect } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useData } from "@/contexts/DataContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, BookOpen, Wallet, CheckCircle2, CalendarDays, UserRound, MapPin } from "lucide-react";
+import { Users, BookOpen, Wallet, CheckCircle2, CalendarDays, UserRound, MapPin, RotateCcw } from "lucide-react";
 
 import { isToday, isTomorrow, parseISO, startOfWeek, endOfWeek, isWithinInterval } from "date-fns";
 import { calcularCobrancaAlunos } from "@/lib/faturacao";
@@ -22,6 +22,7 @@ function relativeDay(dateStr: string): string {
 export default function DashboardPage() {
   const { user } = useAuth();
   const { alunos, aulas, explicadores, salas, disciplinas } = useData();
+  const navigate = useNavigate();
 
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -94,6 +95,27 @@ export default function DashboardPage() {
       .slice(0, 5);
   }, [aulas, now]);
 
+  // Faltas justificadas com reposição por agendar (reposicaoEstado === "pendente").
+  const reposicoesPendentes = useMemo(() => {
+    const alunoMap = new Map(alunos.map(a => [a.id, a.nome]));
+    const lista: { aulaId: string; alunoId: string; data: string; alunoNome: string; disciplina: string }[] = [];
+    for (const aula of aulas) {
+      if (aula.estado === "cancelada") continue;
+      for (const alunoId of aula.alunoIds) {
+        if (aula.presencaInfo[alunoId]?.reposicaoEstado === "pendente") {
+          lista.push({
+            aulaId: aula.id,
+            alunoId,
+            data: aula.data,
+            alunoNome: alunoMap.get(alunoId) ?? "—",
+            disciplina: aula.disciplina,
+          });
+        }
+      }
+    }
+    return lista.sort((a, b) => b.data.localeCompare(a.data));
+  }, [aulas, alunos]);
+
   const formatReceita = (v: number) =>
     v >= 1000 ? `${(v / 1000).toFixed(1)}k €` : `${Math.round(v)} €`;
 
@@ -127,6 +149,53 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      {/* Reposições pendentes (1/2 largura) — célula direita reservada para a
+          futura tabela de presenças em falta. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+        <Card className="rounded-2xl shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base font-bold">Aulas de Reposição Pendentes</CardTitle>
+            <RotateCcw className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent className="pt-0">
+            {reposicoesPendentes.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">Sem reposições pendentes</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-muted-foreground">
+                      <th className="py-2 pr-3 font-medium">Data original</th>
+                      <th className="py-2 pr-3 font-medium">Aluno</th>
+                      <th className="py-2 pr-3 font-medium">Disciplina</th>
+                      <th className="py-2 font-medium text-right">Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {reposicoesPendentes.map(r => (
+                      <tr key={`${r.aulaId}-${r.alunoId}`}>
+                        <td className="py-2 pr-3 tabular-nums">{r.data.split("-").reverse().join("/")}</td>
+                        <td className="py-2 pr-3 truncate max-w-[120px]">{r.alunoNome}</td>
+                        <td className="py-2 pr-3 truncate max-w-[120px]">{r.disciplina}</td>
+                        <td className="py-2 text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => navigate("/calendario", { state: { reposicao: { alunoId: r.alunoId, aulaOriginalId: r.aulaId } } })}
+                          >
+                            Marcar
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       <Card className="rounded-2xl shadow-sm">

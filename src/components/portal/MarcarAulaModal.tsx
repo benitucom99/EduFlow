@@ -152,6 +152,7 @@ export default function MarcarAulaModal({ open, onOpenChange, preSelectedAlunoId
       estado: "agendada" as const,
       presencas: {},
       presencaInfo: {},
+      isReposicao: false,
       recorrencia: recorrencia === "ano_letivo" ? "semanal" : recorrencia,
     }));
 
