@@ -103,7 +103,8 @@ export default function CalendarioPage() {
   }, []);
 
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
-  const weekDays = Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
+  // Semana completa: Seg→Dom (inclui fim de semana).
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   const navigate = (dir: number) => {
     if (view === "semana") setCurrentDate(d => dir > 0 ? addWeeks(d, 1) : subWeeks(d, 1));
@@ -131,7 +132,7 @@ export default function CalendarioPage() {
   const viewDays = view === "semana" ? weekDays : [currentDate];
 
   const dateLabel = view === "semana"
-    ? `${format(weekDays[0], "d MMM", { locale: pt })} – ${format(weekDays[4], "d MMM yyyy", { locale: pt })}`
+    ? `${format(weekDays[0], "d MMM", { locale: pt })} – ${format(weekDays[6], "d MMM yyyy", { locale: pt })}`
     : view === "mes"
     ? format(currentDate, "MMMM yyyy", { locale: pt })
     : format(currentDate, "EEEE, d MMMM yyyy", { locale: pt });
@@ -530,6 +531,18 @@ function MonthView({ currentDate, filteredAulas, explicadores, onCellClick, onAu
   const gridStart = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 });
   const cells = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
 
+  // Dias cujas pílulas estão expandidas (mostram todas as aulas em vez de só 3).
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+  const toggleExpanded = (dateStr: string) => {
+    setExpandedDays(prev => {
+      const next = new Set(prev);
+      next.has(dateStr) ? next.delete(dateStr) : next.add(dateStr);
+      return next;
+    });
+  };
+
+  const MAX_VISIBLE = 3;
+
   return (
     <div className="flex flex-col border rounded-xl overflow-hidden bg-card shadow-sm flex-1 min-h-0">
       {/* Week day headers */}
@@ -546,9 +559,13 @@ function MonthView({ currentDate, filteredAulas, explicadores, onCellClick, onAu
         {cells.map((day, i) => {
           const dateStr = format(day, "yyyy-MM-dd");
           const inMonth = isSameMonth(day, currentDate);
-          const dayAulas = filteredAulas.filter(a => a.data === dateStr);
-          const visible = dayAulas.slice(0, 3);
-          const overflow = dayAulas.length - 3;
+          // Pílulas ordenadas por horaInicio crescente (de cima para baixo).
+          const dayAulas = filteredAulas
+            .filter(a => a.data === dateStr)
+            .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
+          const isExpanded = expandedDays.has(dateStr);
+          const visible = isExpanded ? dayAulas : dayAulas.slice(0, MAX_VISIBLE);
+          const overflow = dayAulas.length - MAX_VISIBLE;
           const today = isToday(day);
           const isLastRow = i >= 35;
 
@@ -588,7 +605,12 @@ function MonthView({ currentDate, filteredAulas, explicadores, onCellClick, onAu
                   );
                 })}
                 {overflow > 0 && (
-                  <p className="text-[10px] text-muted-foreground pl-1">+{overflow} mais</p>
+                  <button
+                    className="w-full text-left text-[10px] font-medium text-primary hover:underline pl-1 py-px"
+                    onClick={e => { e.stopPropagation(); toggleExpanded(dateStr); }}
+                  >
+                    {isExpanded ? "Mostrar menos" : `+${overflow} aula${overflow > 1 ? "s" : ""}`}
+                  </button>
                 )}
               </div>
             </div>
@@ -654,9 +676,63 @@ function AulaModal({ open, onClose, aula, prefill, onSave, onCancel }: {
     if (tutor) setExplicadorId(tutor);
   }, [open, aula, isExplicador, disciplina, primeiroAluno, disciplinas, alunos]);
 
-  const expsFiltrados = disciplina
-    ? explicadores.filter(e => e.disciplinas.includes(disciplina) && e.estado === "ativo")
-    : explicadores.filter(e => e.estado === "ativo");
+  // Se a disciplina escolhida deixar de pertencer ao(s) aluno(s) selecionado(s)
+  // (ex: trocou de aluno depois de escolher), limpa-a para não submeter algo inválido.
+  useEffect(() => {
+    if (!open || aula) return;
+    if (!disciplina || alunoIds.length === 0) return;
+    const permitidas = new Set(
+      alunoIds.flatMap(id => alunos.find(a => a.id === id)?.disciplinas ?? [])
+    );
+    if (!permitidas.has(disciplina)) setDisciplina("");
+  }, [open, aula, disciplina, alunoIds, alunos]);
+
+  // Alunos selecionados (objetos completos), para filtrar disciplinas/explicadores.
+  const alunosSelecionados = alunoIds.map(id => alunos.find(a => a.id === id)).filter(Boolean) as typeof alunos;
+
+  // Disciplinas (nomes) que pelo menos um dos alunos selecionados frequenta.
+  // União entre alunos: numa aula de grupo, mostra qualquer disciplina comum a
+  // algum deles. Sem alunos selecionados → null = sem filtro (mostra todas).
+  const disciplinasPermitidas = alunosSelecionados.length > 0
+    ? new Set(alunosSelecionados.flatMap(a => a.disciplinas))
+    : null;
+
+  // Grupos de disciplina filtrados às permitidas pelo(s) aluno(s). Grupos que
+  // ficam sem folhas são descartados.
+  const discGruposFiltrados = disciplinasPermitidas
+    ? discGrupos
+        .map(g => ({ ...g, folhas: g.folhas.filter(f => disciplinasPermitidas.has(f.nome)) }))
+        .filter(g => g.folhas.length > 0)
+    : discGrupos;
+
+  // Explicadores sugeridos para os alunos selecionados: quem é o tutor atribuído
+  // a alguma disciplina do aluno (disciplinaExplicadores) OU quem dá ativamente
+  // a disciplina já escolhida. Sem alunos → null = sem filtro por aluno.
+  const explicadoresPorAluno = alunosSelecionados.length > 0
+    ? new Set(
+        alunosSelecionados.flatMap(a =>
+          Object.values(a.disciplinaExplicadores ?? {}).filter((id): id is string => !!id)
+        )
+      )
+    : null;
+
+  const expsFiltrados = explicadores.filter(e => {
+    if (e.estado !== "ativo") return false;
+    // Filtro por disciplina escolhida (quem a leciona ativamente).
+    if (disciplina && !e.disciplinas.includes(disciplina)) {
+      // Permite ainda assim o tutor atribuído ao aluno para essa disciplina.
+      if (!explicadoresPorAluno?.has(e.id)) return false;
+    }
+    // Filtro por aluno: se há alunos selecionados mas nenhuma disciplina ainda,
+    // mostra os tutores atribuídos + quem dá alguma disciplina do aluno.
+    if (!disciplina && explicadoresPorAluno) {
+      const dáAlgumaDoAluno = disciplinasPermitidas
+        ? e.disciplinas.some(d => disciplinasPermitidas.has(d))
+        : false;
+      if (!explicadoresPorAluno.has(e.id) && !dáAlgumaDoAluno) return false;
+    }
+    return true;
+  });
   const salasFiltradas = salas;
 
   const autoSalaId = (() => {
@@ -850,7 +926,11 @@ function AulaModal({ open, onClose, aula, prefill, onSave, onCancel }: {
               <Select value={disciplina} onValueChange={setDisciplina}>
                 <SelectTrigger><SelectValue placeholder="Selecionar disciplina" /></SelectTrigger>
                 <SelectContent>
-                  {discGrupos.map((g, gi) => (
+                  {discGruposFiltrados.length === 0 ? (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                      {disciplinasPermitidas ? "Aluno(s) sem disciplinas associadas" : "Sem disciplinas"}
+                    </div>
+                  ) : discGruposFiltrados.map((g, gi) => (
                     <SelectGroup key={g.categoriaNome ?? `__sem__${gi}`}>
                       {g.categoriaNome && <SelectLabel>{g.categoriaNome}</SelectLabel>}
                       {g.folhas.map(f => <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>)}
