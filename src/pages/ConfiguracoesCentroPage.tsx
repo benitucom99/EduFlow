@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
-import { Loader2, ArrowLeft, UserPlus, Copy, Check } from "lucide-react";
+import { Loader2, ArrowLeft, UserPlus, Copy, Check, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useData, ModoPagamentoProfessor } from "@/contexts/DataContext";
 import { supabase } from "@/lib/supabase";
@@ -11,11 +11,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 export default function ConfiguracoesCentroPage() {
   const navigate = useNavigate();
   const { profile, refreshProfile } = useAuth();
-  const { centroConfig, updateCentroConfig, assistentes, inviteAssistente } = useData();
+  const { centroConfig, updateCentroConfig, assistentes, inviteAssistente, removeAssistente } = useData();
   const { toast } = useToast();
   const isAdmin = profile?.role === "admin";
   const allowed = isAdmin || profile?.role === "rececionista";
@@ -38,6 +39,8 @@ export default function ConfiguracoesCentroPage() {
   const [generatedLink, setGeneratedLink] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   useEffect(() => {
     if (!allowed || !profile?.centro_id) return;
@@ -108,6 +111,20 @@ export default function ConfiguracoesCentroPage() {
       toast({ title: "Erro ao criar assistente", description: e.message, variant: "destructive" });
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    if (!removingId) return;
+    setRemoving(true);
+    try {
+      await removeAssistente(removingId);
+      toast({ title: "Assistente removido" });
+    } catch (e: any) {
+      toast({ title: "Erro ao remover assistente", description: e.message, variant: "destructive" });
+    } finally {
+      setRemoving(false);
+      setRemovingId(null);
     }
   };
 
@@ -215,10 +232,18 @@ export default function ConfiguracoesCentroPage() {
                     <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center text-xs font-bold shrink-0 text-accent-foreground">
                       {a.nome?.split(" ").map(n => n[0]).join("").slice(0, 2) || "U"}
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{a.nome}</p>
                       <p className="text-xs text-muted-foreground truncate">{a.email}</p>
                     </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => setRemovingId(a.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -226,6 +251,32 @@ export default function ConfiguracoesCentroPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* AlertDialog de confirmação de remoção */}
+      <AlertDialog open={!!removingId} onOpenChange={open => { if (!open) setRemovingId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover assistente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {(() => {
+                const a = assistentes.find(x => x.id === removingId);
+                return `${a?.nome ?? "Este assistente"} perderá o acesso à plataforma imediatamente. Esta ação não pode ser desfeita.`;
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removing}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRemove}
+              disabled={removing}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {removing && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialog de convite */}
       <Dialog open={dialogOpen} onOpenChange={open => { if (!open) setDialogOpen(false); }}>

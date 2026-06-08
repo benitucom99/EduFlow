@@ -126,6 +126,7 @@ interface DataContextType {
   inviteExplicador: (explicadorId: string, redirectTo: string) => Promise<string>;
 
   inviteAssistente: (nome: string, email: string) => Promise<string>;
+  removeAssistente: (id: string) => Promise<void>;
 
   createSala: (data: SalaInput) => Promise<Sala | null>;
   updateSala: (id: string, patch: Partial<Sala>) => Promise<void>;
@@ -613,6 +614,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     return data.link as string;
   };
 
+  const removeAssistente = async (id: string): Promise<void> => {
+    const { data, error } = await supabase.functions.invoke("remove-assistente", {
+      body: { user_id: id },
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    await refreshAssistentes();
+  };
+
   // ── Salas ────────────────────────────────────────────────────────────────────
   const createSala = async (data: SalaInput): Promise<Sala | null> => {
     const cid = ensureCentro();
@@ -713,7 +723,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       createDisciplina, updateDisciplina, deleteDisciplina,
       createAluno, updateAluno, deleteAluno, updateAlunoEstado,
       createExplicador, updateExplicador, deleteExplicador, inviteExplicador,
-      inviteAssistente,
+      inviteAssistente, removeAssistente,
       createSala, updateSala, deleteSala,
       createAulas, updateAula, cancelAula, setPresenca,
     }}>
