@@ -13,10 +13,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
-import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, X, UserPlus } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, X, UserPlus, CalendarClock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Aluno } from "@/contexts/DataContext";
 import { folhas, folhasAgrupadas } from "@/lib/disciplinas";
+import { HorarioGeradorModal } from "@/components/HorarioGeradorModal";
 
 const ESTADO_CONFIG = {
   ativo: { label: "Ativo", dot: "bg-green-500", badge: "bg-success text-success-foreground" },
@@ -286,6 +287,7 @@ function AlunoModal({ open, onClose, aluno, onSave }: {
   const [desconto, setDesconto] = useState("0");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [addKey, setAddKey] = useState(0);
+  const [horarioOpen, setHorarioOpen] = useState(false);
 
   const grupos = folhasAgrupadas(disciplinas);
   const availableGrupos = grupos
@@ -461,6 +463,26 @@ function AlunoModal({ open, onClose, aluno, onSave }: {
               )}
             </div>
 
+            {/* Horário Recorrente — gera/atualiza aulas base no calendário */}
+            <div>
+              <Label>Horário Recorrente</Label>
+              {aluno ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full mt-2 justify-start"
+                  onClick={() => setHorarioOpen(true)}
+                >
+                  <CalendarClock className="h-4 w-4 mr-2 text-primary" />
+                  Configurar Horário Recorrente
+                </Button>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Guarda o aluno primeiro para poder configurar horários recorrentes.
+                </p>
+              )}
+            </div>
+
             <div>
               <Label>Desconto (%)</Label>
               <div className="relative">
@@ -511,6 +533,14 @@ function AlunoModal({ open, onClose, aluno, onSave }: {
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button onClick={handleSave}>Guardar</Button>
         </div>
+
+        {aluno && (
+          <HorarioGeradorModal
+            open={horarioOpen}
+            onClose={() => setHorarioOpen(false)}
+            aluno={aluno}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

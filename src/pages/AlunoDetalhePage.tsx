@@ -6,8 +6,11 @@ import { DiscBadge } from "@/components/DiscBadge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Mail, Phone, School, Calendar, MapPin } from "lucide-react";
-import { useMemo } from "react";
+import { ArrowLeft, Mail, Phone, School, Calendar, MapPin, CalendarClock, Plus, Pencil } from "lucide-react";
+import { useMemo, useState } from "react";
+import { AlunoHorario } from "@/contexts/DataContext";
+import { HorarioGeradorModal } from "@/components/HorarioGeradorModal";
+import { diaSemanaCurto } from "@/lib/horarios";
 
 const presencaBadge = (p: string | null) => {
   if (p === "presente") return <span className="text-xs px-2 py-0.5 rounded-full bg-success/10 text-success font-medium">Presente</span>;
@@ -19,8 +22,14 @@ const presencaBadge = (p: string | null) => {
 export default function AlunoDetalhePage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { alunos, aulas, explicadores, disciplinas } = useData();
+  const { alunos, aulas, explicadores, disciplinas, alunoHorarios } = useData();
   const aluno = alunos.find(a => a.id === id);
+
+  const horariosDoAluno = useMemo(
+    () => alunoHorarios.filter(h => h.alunoId === id),
+    [alunoHorarios, id]
+  );
+  const [horarioModal, setHorarioModal] = useState<{ open: boolean; horario: AlunoHorario | null }>({ open: false, horario: null });
 
   const aulasDoAluno = useMemo(() => {
     return aulas
@@ -109,7 +118,56 @@ export default function AlunoDetalhePage() {
               <TabsTrigger value="presencas">Presenças</TabsTrigger>
               <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
             </TabsList>
-            <TabsContent value="aulas">
+            <TabsContent value="aulas" className="space-y-4">
+              {/* Horários Base configurados — o calendário é submisso a estes */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <CalendarClock className="h-4 w-4 text-primary" /> Horários Base
+                  </CardTitle>
+                  <Button size="sm" variant="outline" onClick={() => setHorarioModal({ open: true, horario: null })}>
+                    <Plus className="h-4 w-4 mr-1" /> Novo horário
+                  </Button>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {horariosDoAluno.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-2">
+                      Sem horários recorrentes configurados. Cria um para gerar as aulas automaticamente no calendário.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {horariosDoAluno.map(h => {
+                        const exp = h.explicadorId ? explicadores.find(e => e.id === h.explicadorId)?.nome : null;
+                        return (
+                          <div key={h.id} className="flex items-start justify-between gap-3 rounded-lg border border-border p-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge variant="outline" className="text-xs">{h.disciplina}</Badge>
+                                <span className="text-xs text-muted-foreground">{exp ?? "Sem professor"} · {h.duracaoMin} min</span>
+                              </div>
+                              <p className="text-sm mt-1.5 font-medium">
+                                {h.slots.length === 0
+                                  ? "Sem dias definidos"
+                                  : h.slots.map(s => `${diaSemanaCurto(s.diaSemana)} ${s.horaInicio}`).join(" · ")}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {h.anoLetivoInteiro ? "Ano letivo inteiro" : "Período personalizado"} · até {h.dataFim}
+                              </p>
+                            </div>
+                            <Button
+                              size="icon" variant="ghost" className="h-8 w-8 shrink-0"
+                              onClick={() => setHorarioModal({ open: true, horario: h })}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardContent className="p-0">
                   <Table>
@@ -161,6 +219,13 @@ export default function AlunoDetalhePage() {
           </Tabs>
         </div>
       </div>
+
+      <HorarioGeradorModal
+        open={horarioModal.open}
+        onClose={() => setHorarioModal({ open: false, horario: null })}
+        aluno={aluno}
+        horario={horarioModal.horario}
+      />
     </div>
   );
 }
