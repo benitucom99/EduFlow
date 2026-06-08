@@ -60,8 +60,13 @@ export function calcularCobrancaAlunos(
       const precoPorHora = aula.tipo === "grupo"
         ? (disc?.precoHoraGrupo ?? 0)
         : (disc?.precoHoraIndividual ?? 0);
-      // Cobra "presente" e "falta_injustificada" (penalização); "falta_justificada" e null não cobram.
-      const cobrar = presenca === "presente" || presenca === "falta_injustificada";
+      // "presente" cobra sempre. "falta_injustificada" cobra conforme a decisão
+      // tomada no registo da presença (por aula×aluno); sem decisão explícita
+      // (faltas antigas) assume-se cobrar (retrocompat). "falta_justificada" e
+      // null nunca cobram.
+      const cobrarFaltaDecisao = aula.presencaInfo[alunoId]?.cobrarFalta ?? true;
+      const cobrar = presenca === "presente"
+        || (presenca === "falta_injustificada" && cobrarFaltaDecisao);
       const aluno = alunoMap.get(alunoId);
       const descontoRatio = (aluno?.desconto || 0) / 100;
       const valorSessao = (precoPorHora * duracao) * (1 - descontoRatio);
@@ -126,7 +131,17 @@ export function calcularPagamentoExplicadores(
     if (!explicador) continue;
     const alunosPresentes = aula.alunoIds.some(id => aula.presencas[id] === "presente");
     const duracao = parseDurationHours(aula.horaInicio, aula.horaFim);
-    const contabilizado = alunosPresentes;
+    // O professor é remunerado pela sessão se houver pelo menos um aluno
+    // "cobrável": presente, OU com falta injustificada cuja decisão foi cobrar
+    // (cobrar ao aluno e pagar ao professor estão interligados). Sem decisão
+    // explícita (faltas antigas) assume-se cobrar. Falta justificada não conta.
+    const algumCobravel = aula.alunoIds.some(id => {
+      const p = aula.presencas[id];
+      if (p === "presente") return true;
+      if (p === "falta_injustificada") return aula.presencaInfo[id]?.cobrarFalta ?? true;
+      return false;
+    });
+    const contabilizado = algumCobravel;
 
     let valorHora = explicador.valorHora;
     if (modoPagamento === "por_disciplina" && explicador.disciplinaValores) {

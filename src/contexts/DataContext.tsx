@@ -6,6 +6,19 @@ import { useToast } from "@/hooks/use-toast";
 // ── Types ─────────────────────────────────────────────────────────────────────
 export type Presenca = "presente" | "falta_justificada" | "falta_injustificada" | null;
 
+// Estado de reposição de uma falta justificada (decidido no pop-up de presenças).
+export type ReposicaoEstado = "pendente" | "agendada" | "nao" | null;
+
+// Metadata por aluno×aula que acompanha a presença, decidida no momento do
+// registo. Mapa paralelo a `presencas` para não tocar nos consumidores que só
+// leem o estado de presença.
+export interface PresencaInfo {
+  reposicaoEstado: ReposicaoEstado;
+  // Falta injustificada: cobrar ao aluno (e pagar ao professor) esta sessão.
+  // null = sem decisão explícita (faltas antigas) → faturação assume cobrar+pagar.
+  cobrarFalta: boolean | null;
+}
+
 export interface Disciplina {
   id: string;
   nome: string;
@@ -83,6 +96,8 @@ export interface Aula {
   tipo: "individual" | "grupo";
   estado: "agendada" | "realizada" | "cancelada";
   presencas: Record<string, Presenca>;
+  // Metadata por aluno (reposição / decisão de cobrança), a par de `presencas`.
+  presencaInfo: Record<string, PresencaInfo>;
   notas?: string;
   recorrencia: string;
 }
@@ -135,7 +150,7 @@ interface DataContextType {
   createAulas: (entries: AulaInput[]) => Promise<void>;
   updateAula: (id: string, patch: Partial<Aula>) => Promise<void>;
   cancelAula: (id: string) => Promise<void>;
-  setPresenca: (aulaId: string, alunoId: string, presenca: Presenca) => Promise<void>;
+  setPresenca: (aulaId: string, alunoId: string, presenca: Presenca, extra?: { reposicaoEstado?: ReposicaoEstado; cobrarFalta?: boolean | null }) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -255,16 +270,21 @@ async function loadSalas(centroId: string): Promise<Sala[]> {
 async function loadAulas(centroId: string, discIdToName: Map<string, string>): Promise<Aula[]> {
   const { data, error } = await supabase
     .from("aulas")
-    .select("id, sala_id, disciplina_id, data, hora_inicio, hora_fim, tipo, estado, recorrencia, notas, aula_alunos(aluno_id, presenca), aula_professores(professor_user_id)")
+    .select("id, sala_id, disciplina_id, data, hora_inicio, hora_fim, tipo, estado, recorrencia, notas, aula_alunos(aluno_id, presenca, reposicao_estado, cobrar_falta), aula_professores(professor_user_id)")
     .eq("centro_id", centroId)
     .order("data");
   if (error) throw error;
   return (data ?? []).map((r: any) => {
     const presencas: Record<string, Presenca> = {};
+    const presencaInfo: Record<string, PresencaInfo> = {};
     const alunoIds: string[] = [];
     (r.aula_alunos ?? []).forEach((aa: any) => {
       alunoIds.push(aa.aluno_id);
       presencas[aa.aluno_id] = aa.presenca ?? null;
+      presencaInfo[aa.aluno_id] = {
+        reposicaoEstado: aa.reposicao_estado ?? null,
+        cobrarFalta: aa.cobrar_falta ?? null,
+      };
     });
     return {
       id: r.id,
@@ -278,6 +298,7 @@ async function loadAulas(centroId: string, discIdToName: Map<string, string>): P
       tipo: r.tipo,
       estado: r.estado,
       presencas,
+      presencaInfo,
       notas: r.notas ?? undefined,
       recorrencia: r.recorrencia,
     };
@@ -727,16 +748,38 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     await refreshAulas();
   };
 
-  const setPresenca = async (aulaId: string, alunoId: string, presenca: Presenca) => {
+  const setPresenca = async (
+    aulaId: string,
+    alunoId: string,
+    presenca: Presenca,
+    extra?: { reposicaoEstado?: ReposicaoEstado; cobrarFalta?: boolean | null }
+  ) => {
+    // A metadata (reposição / decisão de cobrança) só faz sentido com uma falta.
+    // Ao limpar a presença (null) ou marcar presente, repõe ambos a null para
+    // não deixar decisões órfãs de uma falta anterior.
+    const aula = aulas.find(a => a.id === aulaId);
+    const prevPresenca: Presenca = aula?.presencas[alunoId] ?? null;
+    const prevInfo: PresencaInfo = aula?.presencaInfo[alunoId] ?? { reposicaoEstado: null, cobrarFalta: null };
+
+    const nextInfo: PresencaInfo = presenca == null || presenca === "presente"
+      ? { reposicaoEstado: null, cobrarFalta: null }
+      : {
+          reposicaoEstado: extra?.reposicaoEstado ?? null,
+          cobrarFalta: extra?.cobrarFalta ?? null,
+        };
+
     // Otimista: aplica já na UI; se o gravar falhar, reverte e propaga o erro.
-    const prevPresenca: Presenca = aulas.find(a => a.id === aulaId)?.presencas[alunoId] ?? null;
     setAulas(prev => prev.map(a => a.id === aulaId
-      ? { ...a, presencas: { ...a.presencas, [alunoId]: presenca } }
+      ? { ...a, presencas: { ...a.presencas, [alunoId]: presenca }, presencaInfo: { ...a.presencaInfo, [alunoId]: nextInfo } }
       : a));
-    const { error } = await supabase.from("aula_alunos").update({ presenca }).eq("aula_id", aulaId).eq("aluno_id", alunoId);
+    const { error } = await supabase
+      .from("aula_alunos")
+      .update({ presenca, reposicao_estado: nextInfo.reposicaoEstado, cobrar_falta: nextInfo.cobrarFalta })
+      .eq("aula_id", aulaId)
+      .eq("aluno_id", alunoId);
     if (error) {
       setAulas(prev => prev.map(a => a.id === aulaId
-        ? { ...a, presencas: { ...a.presencas, [alunoId]: prevPresenca } }
+        ? { ...a, presencas: { ...a.presencas, [alunoId]: prevPresenca }, presencaInfo: { ...a.presencaInfo, [alunoId]: prevInfo } }
         : a));
       throw error;
     }
