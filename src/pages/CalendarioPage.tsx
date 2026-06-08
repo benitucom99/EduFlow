@@ -103,7 +103,8 @@ export default function CalendarioPage() {
   }, []);
 
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
-  const weekDays = Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
+  // Semana completa: Seg→Dom (inclui fim de semana).
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   const navigate = (dir: number) => {
     if (view === "semana") setCurrentDate(d => dir > 0 ? addWeeks(d, 1) : subWeeks(d, 1));
@@ -131,7 +132,7 @@ export default function CalendarioPage() {
   const viewDays = view === "semana" ? weekDays : [currentDate];
 
   const dateLabel = view === "semana"
-    ? `${format(weekDays[0], "d MMM", { locale: pt })} – ${format(weekDays[4], "d MMM yyyy", { locale: pt })}`
+    ? `${format(weekDays[0], "d MMM", { locale: pt })} – ${format(weekDays[6], "d MMM yyyy", { locale: pt })}`
     : view === "mes"
     ? format(currentDate, "MMMM yyyy", { locale: pt })
     : format(currentDate, "EEEE, d MMMM yyyy", { locale: pt });
@@ -530,6 +531,18 @@ function MonthView({ currentDate, filteredAulas, explicadores, onCellClick, onAu
   const gridStart = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 });
   const cells = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
 
+  // Dias cujas pílulas estão expandidas (mostram todas as aulas em vez de só 3).
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+  const toggleExpanded = (dateStr: string) => {
+    setExpandedDays(prev => {
+      const next = new Set(prev);
+      next.has(dateStr) ? next.delete(dateStr) : next.add(dateStr);
+      return next;
+    });
+  };
+
+  const MAX_VISIBLE = 3;
+
   return (
     <div className="flex flex-col border rounded-xl overflow-hidden bg-card shadow-sm flex-1 min-h-0">
       {/* Week day headers */}
@@ -546,9 +559,13 @@ function MonthView({ currentDate, filteredAulas, explicadores, onCellClick, onAu
         {cells.map((day, i) => {
           const dateStr = format(day, "yyyy-MM-dd");
           const inMonth = isSameMonth(day, currentDate);
-          const dayAulas = filteredAulas.filter(a => a.data === dateStr);
-          const visible = dayAulas.slice(0, 3);
-          const overflow = dayAulas.length - 3;
+          // Pílulas ordenadas por horaInicio crescente (de cima para baixo).
+          const dayAulas = filteredAulas
+            .filter(a => a.data === dateStr)
+            .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
+          const isExpanded = expandedDays.has(dateStr);
+          const visible = isExpanded ? dayAulas : dayAulas.slice(0, MAX_VISIBLE);
+          const overflow = dayAulas.length - MAX_VISIBLE;
           const today = isToday(day);
           const isLastRow = i >= 35;
 
@@ -588,7 +605,12 @@ function MonthView({ currentDate, filteredAulas, explicadores, onCellClick, onAu
                   );
                 })}
                 {overflow > 0 && (
-                  <p className="text-[10px] text-muted-foreground pl-1">+{overflow} mais</p>
+                  <button
+                    className="w-full text-left text-[10px] font-medium text-primary hover:underline pl-1 py-px"
+                    onClick={e => { e.stopPropagation(); toggleExpanded(dateStr); }}
+                  >
+                    {isExpanded ? "Mostrar menos" : `+${overflow} aula${overflow > 1 ? "s" : ""}`}
+                  </button>
                 )}
               </div>
             </div>
