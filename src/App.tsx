@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate, Outlet } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -54,21 +54,28 @@ const App = () => (
                 <Route path="/onboarding" element={<OnboardingPage />} />
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-                  <Route path="/dashboard" element={<DashboardPage />} />
-                  <Route path="/alunos" element={<AlunosPage />} />
-                  <Route path="/alunos/:id" element={<AlunoDetalhePage />} />
-                  <Route path="/explicadores" element={<ExplicadoresPage />} />
-                  <Route path="/explicadores/:id" element={<ExplicadorDetalhePage />} />
-                  <Route path="/disciplinas" element={<DisciplinasPage />} />
-                  <Route path="/disciplinas/:id" element={<DisciplinaDetalhePage />} />
-                  <Route path="/salas" element={<SalasPage />} />
+                  {/* admin only */}
+                  <Route element={<ProtectedRoute allowedRoles={["admin"]}><Outlet /></ProtectedRoute>}>
+                    <Route path="/disciplinas" element={<DisciplinasPage />} />
+                    <Route path="/disciplinas/:id" element={<DisciplinaDetalhePage />} />
+                    <Route path="/faturacao" element={<FaturacaoPage />} />
+                    <Route path="/configuracoes/centro" element={<ConfiguracoesCentroPage />} />
+                    <Route path="/configuracoes/personalizacao" element={<ConfiguracoesPersonalizacaoPage />} />
+                  </Route>
+                  {/* admin + rececionista */}
+                  <Route element={<ProtectedRoute allowedRoles={["admin", "rececionista"]}><Outlet /></ProtectedRoute>}>
+                    <Route path="/dashboard" element={<DashboardPage />} />
+                    <Route path="/alunos" element={<AlunosPage />} />
+                    <Route path="/alunos/:id" element={<AlunoDetalhePage />} />
+                    <Route path="/explicadores" element={<ExplicadoresPage />} />
+                    <Route path="/explicadores/:id" element={<ExplicadorDetalhePage />} />
+                    <Route path="/salas" element={<SalasPage />} />
+                  </Route>
+                  {/* all roles */}
                   <Route path="/calendario" element={<CalendarioPage />} />
                   <Route path="/presencas" element={<PresencasPage />} />
                   <Route path="/configuracoes" element={<ConfiguracoesPage />} />
                   <Route path="/configuracoes/perfil" element={<ConfiguracoesPerfilPage />} />
-                  <Route path="/configuracoes/centro" element={<ConfiguracoesCentroPage />} />
-                  <Route path="/configuracoes/personalizacao" element={<ConfiguracoesPersonalizacaoPage />} />
-                  <Route path="/faturacao" element={<FaturacaoPage />} />
                   {/* Disabled routes — redirect to dashboard */}
                   <Route path="/gestao-aluno" element={<Navigate to="/dashboard" replace />} />
                   <Route path="/inscricoes" element={<Navigate to="/dashboard" replace />} />

@@ -65,6 +65,12 @@ export interface Sala {
   nome: string;
 }
 
+export interface Assistente {
+  id: string;
+  nome: string;
+  email: string;
+}
+
 export interface Aula {
   id: string;
   alunoIds: string[];
@@ -98,6 +104,7 @@ interface DataContextType {
   explicadores: Explicador[];
   salas: Sala[];
   aulas: Aula[];
+  assistentes: Assistente[];
   centroConfig: CentroConfig;
   loading: boolean;
   refresh: () => Promise<void>;
@@ -117,6 +124,8 @@ interface DataContextType {
   updateExplicador: (id: string, patch: Partial<Explicador>) => Promise<void>;
   deleteExplicador: (id: string) => Promise<void>;
   inviteExplicador: (explicadorId: string, redirectTo: string) => Promise<string>;
+
+  inviteAssistente: (nome: string, email: string) => Promise<string>;
 
   createSala: (data: SalaInput) => Promise<Sala | null>;
   updateSala: (id: string, patch: Partial<Sala>) => Promise<void>;
@@ -274,6 +283,17 @@ async function loadAulas(centroId: string, discIdToName: Map<string, string>): P
   });
 }
 
+async function loadAssistentes(centroId: string): Promise<Assistente[]> {
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, nome, email")
+    .eq("centro_id", centroId)
+    .eq("role", "rececionista")
+    .order("nome");
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({ id: r.id, nome: r.nome ?? "", email: r.email ?? "" }));
+}
+
 // Lança o erro do Supabase se a operação falhar. As mutações UPDATE/DELETE/INSERT
 // que não usam .select() ignoravam o erro silenciosamente — daí este wrapper.
 async function run(query: PromiseLike<{ error: unknown }>): Promise<void> {
@@ -292,13 +312,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [explicadores, setExplicadores] = useState<Explicador[]>([]);
   const [salas, setSalas] = useState<Sala[]>([]);
   const [aulas, setAulas] = useState<Aula[]>([]);
+  const [assistentes, setAssistentes] = useState<Assistente[]>([]);
   const [centroConfig, setCentroConfig] = useState<CentroConfig>({ modoPagamentoProfessor: "base" });
   const [loading, setLoading] = useState(false);
   const [discMaps, setDiscMaps] = useState<{ idToName: Map<string, string>; nameToId: Map<string, string>; leafIds: Set<string> }>({ idToName: new Map(), nameToId: new Map(), leafIds: new Set() });
 
   const refresh = useCallback(async () => {
     if (!centroId) {
-      setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]);
+      setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]); setAssistentes([]);
       setCentroConfig({ modoPagamentoProfessor: "base" });
       return;
     }
@@ -307,14 +328,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       const { discs, idToName, nameToId, leafIds } = await loadDisciplinas(centroId);
       setDisciplinas(discs);
       setDiscMaps({ idToName, nameToId, leafIds });
-      const [al, ex, sa, au, cfg] = await Promise.all([
+      const [al, ex, sa, au, cfg, ast] = await Promise.all([
         loadAlunos(centroId, idToName, leafIds),
         loadExplicadores(centroId, idToName, leafIds),
         loadSalas(centroId),
         loadAulas(centroId, idToName),
         loadCentroConfig(centroId),
+        loadAssistentes(centroId),
       ]);
-      setAlunos(al); setExplicadores(ex); setSalas(sa); setAulas(au); setCentroConfig(cfg);
+      setAlunos(al); setExplicadores(ex); setSalas(sa); setAulas(au); setCentroConfig(cfg); setAssistentes(ast);
     } catch (e) {
       console.error("Data refresh failed", e);
       toast({
@@ -329,7 +351,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isAuthenticated && centroId) refresh();
-    else { setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]); setCentroConfig({ modoPagamentoProfessor: "base" }); }
+    else { setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]); setAssistentes([]); setCentroConfig({ modoPagamentoProfessor: "base" }); }
   }, [isAuthenticated, centroId, refresh]);
 
   // ── Refreshes granulares ──────────────────────────────────────────────────────
@@ -362,6 +384,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const refreshCentroConfig = async () => {
     if (!centroId) return;
     setCentroConfig(await loadCentroConfig(centroId));
+  };
+  const refreshAssistentes = async () => {
+    if (!centroId) return;
+    setAssistentes(await loadAssistentes(centroId));
   };
 
   const ensureCentro = () => {
@@ -576,6 +602,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     return data.link as string;
   };
 
+  const inviteAssistente = async (nome: string, email: string): Promise<string> => {
+    const redirectTo = `${window.location.origin}/set-password`;
+    const { data, error } = await supabase.functions.invoke("create-assistente", {
+      body: { nome, email, redirect_to: redirectTo },
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    await refreshAssistentes();
+    return data.link as string;
+  };
+
   // ── Salas ────────────────────────────────────────────────────────────────────
   const createSala = async (data: SalaInput): Promise<Sala | null> => {
     const cid = ensureCentro();
@@ -671,11 +708,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <DataContext.Provider value={{
-      disciplinas, alunos, explicadores, salas, aulas, centroConfig, loading, refresh,
+      disciplinas, alunos, explicadores, salas, aulas, assistentes, centroConfig, loading, refresh,
       updateCentroConfig,
       createDisciplina, updateDisciplina, deleteDisciplina,
       createAluno, updateAluno, deleteAluno, updateAlunoEstado,
       createExplicador, updateExplicador, deleteExplicador, inviteExplicador,
+      inviteAssistente,
       createSala, updateSala, deleteSala,
       createAulas, updateAula, cancelAula, setPresenca,
     }}>

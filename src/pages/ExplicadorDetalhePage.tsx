@@ -70,7 +70,7 @@ export default function ExplicadorDetalhePage() {
         <Card>
           <CardContent className="p-6 space-y-4">
             <div className="text-center">
-              <div className="h-20 w-20 mx-auto rounded-full bg-accent flex items-center justify-center text-2xl font-bold text-accent-foreground mb-3">{exp.nome.split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
+              <div className="h-20 w-20 mx-auto rounded-full bg-accent flex items-center justify-center text-2xl font-bold text-accent-foreground mb-3">{exp.nome?.split(" ").map(n => n[0]).join("").slice(0, 2) || "U"}</div>
               <h2 className="text-xl font-bold">{exp.nome}</h2>
               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${exp.estado === "ativo" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>{exp.estado}</span>
               <p className="text-3xl font-bold text-primary mt-3">

@@ -111,7 +111,7 @@ export default function PortalExerciciosPage() {
                       <div className="flex items-center justify-between">
                         <div className="flex gap-1">
                           {matAlunos.map(a => (
-                            <Badge key={a.id} variant="outline" className="text-xs">{a.nome.split(" ")[0]}</Badge>
+                            <Badge key={a.id} variant="outline" className="text-xs">{a.nome?.split(" ")[0] || "?"}</Badge>
                           ))}
                         </div>
                         <Button variant="outline" size="sm">

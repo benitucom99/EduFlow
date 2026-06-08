@@ -324,7 +324,7 @@ export default function MarcarAulaModal({ open, onOpenChange, preSelectedAlunoId
                       >
                         <span className="font-medium">{s.hora}–{s.horaFim}</span>
                         <span className="text-xs opacity-70">
-                          {exp?.nome.split(" ")[0]}
+                          {exp?.nome?.split(" ")[0] || "?"}
                           {showOtherTeachers && isAssigned && " ★"}
                         </span>
                       </Button>

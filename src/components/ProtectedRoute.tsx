@@ -22,7 +22,8 @@ export default function ProtectedRoute({ children, allowedRoles }: { children: R
   if (profile && !profile.centro_id) return <Navigate to="/onboarding" replace />;
 
   if (allowedRoles && profile?.role && !allowedRoles.includes(profile.role)) {
-    return <Navigate to="/dashboard" replace />;
+    const fallback = profile.role === "explicador" ? "/calendario" : "/dashboard";
+    return <Navigate to={fallback} replace />;
   }
   return <>{children}</>;
 }

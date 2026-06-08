@@ -85,7 +85,7 @@ export function SidebarBody({ collapsed, onToggle, onNavigate, showCollapseToggl
         {user && (
           <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
             <div className="h-8 w-8 rounded-full bg-sidebar-accent flex items-center justify-center text-xs font-bold shrink-0">
-              {user.nome.split(" ").map(n => n[0]).join("")}
+              {user.nome?.split(" ").map(n => n[0]).join("") || "U"}
             </div>
             {!collapsed && (
               <div className="flex-1 min-w-0">

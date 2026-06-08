@@ -88,7 +88,7 @@ export default function ExplicadoresPage() {
                 <TableRow key={exp.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/explicadores/${exp.id}`)}>
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center text-xs font-bold text-accent-foreground">{exp.nome.split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
+                      <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center text-xs font-bold text-accent-foreground">{exp.nome?.split(" ").map(n => n[0]).join("").slice(0, 2) || "U"}</div>
                       <div><p className="font-medium text-sm">{exp.nome}</p><p className="text-xs text-muted-foreground">{exp.email}</p></div>
                     </div>
                   </TableCell>
@@ -120,7 +120,7 @@ export default function ExplicadoresPage() {
             <Card key={exp.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate(`/explicadores/${exp.id}`)}>
               <CardContent className="p-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="h-12 w-12 rounded-full bg-accent flex items-center justify-center text-lg font-bold text-accent-foreground">{exp.nome.split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
+                  <div className="h-12 w-12 rounded-full bg-accent flex items-center justify-center text-lg font-bold text-accent-foreground">{exp.nome?.split(" ").map(n => n[0]).join("").slice(0, 2) || "U"}</div>
                   <div>
                     <p className="font-semibold">{exp.nome}</p>
                   </div>

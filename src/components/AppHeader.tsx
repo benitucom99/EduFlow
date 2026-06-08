@@ -35,7 +35,7 @@ export default function AppHeader({ breadcrumb, onMenuClick }: { breadcrumb?: st
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="flex items-center gap-2 px-2">
               <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold">
-                {user?.nome.split(" ").map(n => n[0]).join("")}
+                {user?.nome?.split(" ").map(n => n[0]).join("") || "U"}
               </div>
               <div className="text-left hidden sm:block">
                 <p className="text-sm font-medium">{user?.nome}</p>

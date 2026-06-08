@@ -52,7 +52,7 @@ export default function AlunoDetalhePage() {
           <CardContent className="p-6 space-y-4">
             <div className="text-center">
               <div className="h-20 w-20 mx-auto rounded-full bg-accent flex items-center justify-center text-2xl font-bold text-accent-foreground mb-3">
-                {aluno.nome.split(" ").map(n => n[0]).join("").slice(0, 2)}
+                {aluno.nome?.split(" ").map(n => n[0]).join("").slice(0, 2) || "U"}
               </div>
               <h2 className="text-xl font-bold">{aluno.nome}</h2>
               <div className="flex justify-center gap-2 mt-2">
