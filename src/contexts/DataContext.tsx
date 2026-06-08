@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { gerarAulasDoHorario } from "@/lib/horarios";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export type Presenca = "presente" | "falta_justificada" | "falta_injustificada" | null;
@@ -117,7 +118,45 @@ export interface Aula {
   isReposicao: boolean;
   notas?: string;
   recorrencia: string;
+  // Horário base que gerou esta aula (One-Way Sync). null/undefined = aula avulsa
+  // criada à mão no calendário, imune a recálculos de horário.
+  horarioId?: string | null;
 }
+
+// ── Horários Base (Gerador de Horários Recorrentes) ───────────────────────────
+// Slot do construtor semanal: dia ISO (1=seg..7=dom) + hora de início.
+export interface AlunoHorarioSlot {
+  diaSemana: number;
+  horaInicio: string; // "HH:mm"
+}
+
+export interface AlunoHorario {
+  id: string;
+  alunoId: string;
+  disciplina: string;       // nome (consistente com Aula.disciplina)
+  disciplinaId: string;
+  explicadorId: string | null;
+  salaId: string | null;
+  tipo: "individual" | "grupo";
+  duracaoMin: number;
+  anoLetivoInteiro: boolean;
+  dataInicio: string;       // yyyy-MM-dd
+  dataFim: string;          // yyyy-MM-dd
+  slots: AlunoHorarioSlot[];
+}
+
+export type AlunoHorarioInput = {
+  alunoId: string;
+  disciplina: string;
+  explicadorId: string | null;
+  salaId: string | null;
+  tipo: "individual" | "grupo";
+  duracaoMin: number;
+  anoLetivoInteiro: boolean;
+  dataInicio: string;
+  dataFim: string;
+  slots: AlunoHorarioSlot[];
+};
 
 // ── Input types ───────────────────────────────────────────────────────────────
 export type DisciplinaInput = Omit<Disciplina, "id" | "precoHoraIndividual" | "precoHoraGrupo" | "escaloesPrecoIndividual" | "parentId"> & {
@@ -164,6 +203,10 @@ interface DataContextType {
   createSala: (data: SalaInput) => Promise<Sala | null>;
   updateSala: (id: string, patch: Partial<Sala>) => Promise<void>;
   deleteSala: (id: string) => Promise<void>;
+
+  alunoHorarios: AlunoHorario[];
+  saveAlunoHorario: (input: AlunoHorarioInput, existingId?: string) => Promise<void>;
+  deleteAlunoHorario: (id: string) => Promise<void>;
 
   createAulas: (entries: AulaInput[]) => Promise<void>;
   updateAula: (id: string, patch: Partial<Aula>) => Promise<void>;
@@ -307,7 +350,7 @@ async function loadSalas(centroId: string): Promise<Sala[]> {
 async function loadAulas(centroId: string, discIdToName: Map<string, string>): Promise<Aula[]> {
   const { data, error } = await supabase
     .from("aulas")
-    .select("id, sala_id, disciplina_id, data, hora_inicio, hora_fim, tipo, estado, recorrencia, notas, is_reposicao, aula_alunos(aluno_id, presenca, reposicao_estado, cobrar_falta), aula_professores(professor_user_id)")
+    .select("id, sala_id, disciplina_id, data, hora_inicio, hora_fim, tipo, estado, recorrencia, notas, is_reposicao, horario_id, aula_alunos(aluno_id, presenca, reposicao_estado, cobrar_falta), aula_professores(professor_user_id)")
     .eq("centro_id", centroId)
     .order("data");
   if (error) throw error;
@@ -339,8 +382,34 @@ async function loadAulas(centroId: string, discIdToName: Map<string, string>): P
       isReposicao: r.is_reposicao ?? false,
       notas: r.notas ?? undefined,
       recorrencia: r.recorrencia,
+      horarioId: r.horario_id ?? null,
     };
   });
+}
+
+// Horários base do centro, com os respetivos slots semanais.
+async function loadAlunoHorarios(centroId: string, discIdToName: Map<string, string>): Promise<AlunoHorario[]> {
+  const { data, error } = await supabase
+    .from("aluno_horarios")
+    .select("id, aluno_id, disciplina_id, professor_user_id, sala_id, tipo, duracao_min, ano_letivo_inteiro, data_inicio, data_fim, aluno_horario_slots(dia_semana, hora_inicio)")
+    .eq("centro_id", centroId);
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    alunoId: r.aluno_id,
+    disciplina: discIdToName.get(r.disciplina_id) ?? "",
+    disciplinaId: r.disciplina_id,
+    explicadorId: r.professor_user_id ?? null,
+    salaId: r.sala_id ?? null,
+    tipo: r.tipo,
+    duracaoMin: Number(r.duracao_min ?? 60),
+    anoLetivoInteiro: r.ano_letivo_inteiro ?? true,
+    dataInicio: r.data_inicio,
+    dataFim: r.data_fim,
+    slots: (r.aluno_horario_slots ?? [])
+      .map((s: any) => ({ diaSemana: s.dia_semana, horaInicio: String(s.hora_inicio).slice(0, 5) }))
+      .sort((a: AlunoHorarioSlot, b: AlunoHorarioSlot) => a.diaSemana - b.diaSemana || a.horaInicio.localeCompare(b.horaInicio)),
+  }));
 }
 
 async function loadAssistentes(centroId: string): Promise<Assistente[]> {
@@ -391,6 +460,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [explicadores, setExplicadores] = useState<Explicador[]>([]);
   const [salas, setSalas] = useState<Sala[]>([]);
   const [aulas, setAulas] = useState<Aula[]>([]);
+  const [alunoHorarios, setAlunoHorarios] = useState<AlunoHorario[]>([]);
   const [assistentes, setAssistentes] = useState<Assistente[]>([]);
   const [centroConfig, setCentroConfig] = useState<CentroConfig>(DEFAULT_CENTRO_CONFIG);
   const [loading, setLoading] = useState(false);
@@ -398,7 +468,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(async () => {
     if (!centroId) {
-      setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]); setAssistentes([]);
+      setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]); setAlunoHorarios([]); setAssistentes([]);
       setCentroConfig(DEFAULT_CENTRO_CONFIG);
       return;
     }
@@ -407,15 +477,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       const { discs, idToName, nameToId, leafIds } = await loadDisciplinas(centroId);
       setDisciplinas(discs);
       setDiscMaps({ idToName, nameToId, leafIds });
-      const [al, ex, sa, au, cfg, ast] = await Promise.all([
+      const [al, ex, sa, au, cfg, ast, hor] = await Promise.all([
         loadAlunos(centroId, idToName, leafIds),
         loadExplicadores(centroId, idToName, leafIds),
         loadSalas(centroId),
         loadAulas(centroId, idToName),
         loadCentroConfig(centroId),
         loadAssistentes(centroId),
+        loadAlunoHorarios(centroId, idToName),
       ]);
-      setAlunos(al); setExplicadores(ex); setSalas(sa); setAulas(au); setCentroConfig(cfg); setAssistentes(ast);
+      setAlunos(al); setExplicadores(ex); setSalas(sa); setAulas(au); setCentroConfig(cfg); setAssistentes(ast); setAlunoHorarios(hor);
     } catch (e) {
       console.error("Data refresh failed", e);
       toast({
@@ -430,7 +501,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isAuthenticated && centroId) refresh();
-    else { setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]); setAssistentes([]); setCentroConfig(DEFAULT_CENTRO_CONFIG); }
+    else { setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]); setAlunoHorarios([]); setAssistentes([]); setCentroConfig(DEFAULT_CENTRO_CONFIG); }
   }, [isAuthenticated, centroId, refresh]);
 
   // ── Refreshes granulares ──────────────────────────────────────────────────────
@@ -467,6 +538,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const refreshAssistentes = async () => {
     if (!centroId) return;
     setAssistentes(await loadAssistentes(centroId));
+  };
+  const refreshAlunoHorarios = async (idToName: Map<string, string> = discMaps.idToName) => {
+    if (!centroId) return;
+    setAlunoHorarios(await loadAlunoHorarios(centroId, idToName));
   };
 
   const ensureCentro = () => {
@@ -748,6 +823,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       recorrencia: e.recorrencia ?? "unica",
       notas: e.notas ?? null,
       is_reposicao: e.isReposicao ?? false,
+      horario_id: e.horarioId ?? null,
     }));
     const { data: created, error } = await supabase.from("aulas").insert(rows).select("id");
     if (error || !created) throw error ?? new Error("aulas: insert retornou sem dados");
@@ -849,9 +925,99 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // ── Horários Base (Gerador de Horários Recorrentes) ──────────────────────────
+  // One-Way Sync: o calendário é submisso ao perfil. Gravar/alterar um horário
+  // base recalcula as aulas FUTURAS (apaga as agendadas geradas por este horário
+  // a partir de hoje e cria as novas). As aulas passadas/realizadas e as aulas
+  // avulsas (horario_id null) ficam intactas. Apagar uma aula isolada no
+  // calendário não afeta o horário base (não há sync inverso).
+  const localTodayStr = () => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+  };
+
+  // Apaga as aulas futuras (>= hoje) ainda agendadas geradas por este horário.
+  // estado='agendada' protege presenças já registadas (realizadas) e não
+  // ressuscita canceladas.
+  const apagarAulasFuturasDoHorario = async (horarioId: string) => {
+    await run(supabase.from("aulas").delete()
+      .eq("horario_id", horarioId)
+      .eq("estado", "agendada")
+      .gte("data", localTodayStr()));
+  };
+
+  // Cria as aulas futuras a partir dos slots do horário, ligadas via horario_id.
+  const materializarAulasDoHorario = async (horario: { id: string; input: AlunoHorarioInput }) => {
+    const { id, input } = horario;
+    const genStart = input.dataInicio > localTodayStr() ? input.dataInicio : localTodayStr();
+    const geradas = gerarAulasDoHorario(input.slots, genStart, input.dataFim, input.duracaoMin);
+    if (!geradas.length) return;
+    await createAulas(geradas.map(g => ({
+      tipo: input.tipo,
+      disciplina: input.disciplina,
+      alunoIds: [input.alunoId],
+      explicadorId: input.explicadorId ?? "",
+      salaId: input.salaId ?? "",
+      data: g.data,
+      horaInicio: g.horaInicio,
+      horaFim: g.horaFim,
+      recorrencia: "semanal",
+      isReposicao: false,
+      presencaInfo: {},
+      horarioId: id,
+    })));
+  };
+
+  const saveAlunoHorario = async (input: AlunoHorarioInput, existingId?: string) => {
+    const cid = ensureCentro();
+    const disciplinaId = discIdFor(input.disciplina);
+    if (!disciplinaId) throw new Error("Disciplina inválida");
+    const header = {
+      centro_id: cid,
+      aluno_id: input.alunoId,
+      disciplina_id: disciplinaId,
+      professor_user_id: input.explicadorId || null,
+      sala_id: input.salaId || null,
+      tipo: input.tipo,
+      duracao_min: input.duracaoMin,
+      ano_letivo_inteiro: input.anoLetivoInteiro,
+      data_inicio: input.dataInicio,
+      data_fim: input.dataFim,
+    };
+
+    let horarioId = existingId ?? "";
+    if (existingId) {
+      await run(supabase.from("aluno_horarios").update(header).eq("id", existingId));
+      await run(supabase.from("aluno_horario_slots").delete().eq("horario_id", existingId));
+      // Recalcular: remove as aulas futuras antigas antes de regenerar.
+      await apagarAulasFuturasDoHorario(existingId);
+    } else {
+      const { data: row, error } = await supabase.from("aluno_horarios").insert(header).select("id").single();
+      if (error || !row) throw error ?? new Error("Falha ao criar horário base");
+      horarioId = row.id;
+    }
+
+    if (input.slots.length) {
+      await run(supabase.from("aluno_horario_slots").insert(
+        input.slots.map(s => ({ horario_id: horarioId, dia_semana: s.diaSemana, hora_inicio: s.horaInicio }))
+      ));
+    }
+
+    await materializarAulasDoHorario({ id: horarioId, input });
+    // materializar pode não correr refreshAulas (geração vazia) → garantir aqui.
+    await Promise.all([refreshAlunoHorarios(), refreshAulas()]);
+  };
+
+  const deleteAlunoHorario = async (id: string) => {
+    await apagarAulasFuturasDoHorario(id);
+    await run(supabase.from("aluno_horarios").delete().eq("id", id));
+    await Promise.all([refreshAlunoHorarios(), refreshAulas()]);
+  };
+
   return (
     <DataContext.Provider value={{
       disciplinas, alunos, explicadores, salas, aulas, assistentes, centroConfig, loading, refresh,
+      alunoHorarios, saveAlunoHorario, deleteAlunoHorario,
       updateCentroConfig,
       createDisciplina, updateDisciplina, deleteDisciplina,
       createAluno, updateAluno, deleteAluno, updateAlunoEstado,
