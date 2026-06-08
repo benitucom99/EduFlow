@@ -93,17 +93,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { error: perfisErr } = await supabaseAdmin
-      .from('professor_perfis')
-      .insert({ user_id: userId, centro_id, estado: 'ativo' });
-
-    if (perfisErr) {
-      await supabaseAdmin.auth.admin.deleteUser(userId);
-      return new Response(JSON.stringify({ error: perfisErr.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    // NB: a linha em professor_perfis é criada pelo cliente (DataContext.createExplicador),
+    // que envia valor_hora (NOT NULL) e os restantes campos do perfil. Não a inserimos aqui
+    // para não falhar a NOT NULL de valor_hora.
 
     return new Response(JSON.stringify({ user_id: userId }), {
       status: 200,
