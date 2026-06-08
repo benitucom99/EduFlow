@@ -49,9 +49,10 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
+    // email vive em public.users, não em professor_perfis — extrair via join.
     const { data: perfil, error: perfilErr } = await admin
       .from('professor_perfis')
-      .select('user_id, centro_id, nome, users!inner(email)')
+      .select('user_id, centro_id, users!inner(email)')
       .eq('user_id', explicador_id)
       .single();
 
@@ -61,7 +62,6 @@ Deno.serve(async (req) => {
     }
 
     const email = (perfil as { users?: { email?: string } }).users?.email;
-    const nome = (perfil as { nome?: string }).nome ?? 'Explicador';
     if (!email) return json({ error: 'Explicador sem email' }, 400);
 
     const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
