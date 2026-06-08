@@ -54,11 +54,15 @@ export function DisciplinaModal({ open, onClose, disciplina, parent, onSave }: {
   const updateEscalao = (i: number, campo: keyof EscalaoDraft, val: string) =>
     setEscaloes(prev => prev.map((e, idx) => idx === i ? { ...e, [campo]: val } : e));
 
+  // Aceita vírgula decimal (pt) ou ponto. parseFloat só entende ponto, por isso
+  // normaliza antes (ex.: "19,75" → 19.75).
+  const parseNum = (v: string) => parseFloat(String(v).replace(",", "."));
+
   const handleSave = () => {
     const e: Record<string, string> = {};
     if (!nome.trim()) e.nome = "Obrigatório";
-    const ind = parseFloat(precoIndividual);
-    const grp = parseFloat(precoGrupo);
+    const ind = parseNum(precoIndividual);
+    const grp = parseNum(precoGrupo);
     let escaloesParsed: EscalaoPreco[] = [];
     if (showPrices) {
       if (isNaN(ind) || ind < 0) e.precoInd = "Valor inválido";
@@ -67,8 +71,8 @@ export function DisciplinaModal({ open, onClose, disciplina, parent, onSave }: {
       escaloes.forEach((esc, i) => {
         const temAlgo = esc.duracaoMin.trim() !== "" || esc.precoHora.trim() !== "";
         if (!temAlgo) return;
-        const dm = parseFloat(esc.duracaoMin);
-        const ph = parseFloat(esc.precoHora);
+        const dm = parseNum(esc.duracaoMin);
+        const ph = parseNum(esc.precoHora);
         if (isNaN(dm) || dm <= 0) e[`esc_${i}_dur`] = "Inválido";
         if (isNaN(ph) || ph < 0) e[`esc_${i}_preco`] = "Inválido";
         if (!isNaN(dm) && dm > 0 && !isNaN(ph) && ph >= 0) escaloesParsed.push({ duracaoMin: dm, precoHora: ph });
@@ -112,12 +116,12 @@ export function DisciplinaModal({ open, onClose, disciplina, parent, onSave }: {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Individual /h (€)</Label>
-                  <Input type="number" min={0} step={0.5} value={precoIndividual} onChange={e => setPrecoIndividual(e.target.value)} placeholder="20.00" />
+                  <Input type="text" inputMode="decimal" value={precoIndividual} onChange={e => setPrecoIndividual(e.target.value)} placeholder="20,00" />
                   {errors.precoInd && <p className="text-xs text-destructive mt-1">{errors.precoInd}</p>}
                 </div>
                 <div>
                   <Label>Grupo /h (€)</Label>
-                  <Input type="number" min={0} step={0.5} value={precoGrupo} onChange={e => setPrecoGrupo(e.target.value)} placeholder="15.00" />
+                  <Input type="text" inputMode="decimal" value={precoGrupo} onChange={e => setPrecoGrupo(e.target.value)} placeholder="15,00" />
                   {errors.precoGrp && <p className="text-xs text-destructive mt-1">{errors.precoGrp}</p>}
                 </div>
               </div>
@@ -136,15 +140,15 @@ export function DisciplinaModal({ open, onClose, disciplina, parent, onSave }: {
                     <div key={i} className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground whitespace-nowrap">A partir de</span>
                       <Input
-                        type="number" min={0} step={0.5} value={esc.duracaoMin}
+                        type="text" inputMode="decimal" value={esc.duracaoMin}
                         onChange={e => updateEscalao(i, "duracaoMin", e.target.value)}
                         placeholder="2" className="w-16 h-8"
                       />
                       <span className="text-xs text-muted-foreground whitespace-nowrap">h =</span>
                       <Input
-                        type="number" min={0} step={0.25} value={esc.precoHora}
+                        type="text" inputMode="decimal" value={esc.precoHora}
                         onChange={e => updateEscalao(i, "precoHora", e.target.value)}
-                        placeholder="17.75" className="w-20 h-8"
+                        placeholder="17,75" className="w-20 h-8"
                       />
                       <span className="text-xs text-muted-foreground">€/h</span>
                       <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeEscalao(i)}>
