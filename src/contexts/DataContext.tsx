@@ -302,6 +302,25 @@ async function run(query: PromiseLike<{ error: unknown }>): Promise<void> {
   if (error) throw error;
 }
 
+// Extrai a mensagem de erro real de uma Edge Function. Em respostas non-2xx, o
+// supabase-js devolve um FunctionsHttpError cuja .message é genérica; o corpo
+// JSON ({ error: "..." }) está no Response em err.context. Faz fallback para o
+// data (em caso de 2xx sem user_id) e por fim para a .message genérica.
+async function extractFnError(err: unknown, data: unknown): Promise<string> {
+  const ctx = (err as { context?: Response })?.context;
+  if (ctx && typeof ctx.json === "function") {
+    try {
+      const body = await ctx.clone().json();
+      if (body?.error) return String(body.error);
+    } catch {
+      // corpo não-JSON; ignora e cai para os fallbacks abaixo
+    }
+  }
+  if ((data as { error?: unknown })?.error) return String((data as { error: unknown }).error);
+  if (err instanceof Error && err.message) return err.message;
+  return "Falha ao criar explicador.";
+}
+
 // ── Provider ──────────────────────────────────────────────────────────────────
 export function DataProvider({ children }: { children: React.ReactNode }) {
   const { profile, isAuthenticated } = useAuth();
@@ -536,7 +555,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const { data: fnData, error: fnErr } = await supabase.functions.invoke("create-explicador", {
       body: { email: data.email, password: tempPassword, nome: data.nome, centro_id: cid },
     });
-    if (fnErr || !fnData?.user_id) throw fnErr ?? new Error("create-explicador: " + JSON.stringify(fnData));
+    if (fnErr || !fnData?.user_id) {
+      // O supabase-js não expõe o corpo da resposta em fnErr.message (fica só
+      // "Edge Function returned a non-2xx status code"). A mensagem real do
+      // backend ({ error: "..." }) vem no Response em fnErr.context — extrai-a
+      // para que o toast mostre o motivo concreto (ex: email já existente).
+      const msg = await extractFnError(fnErr, fnData);
+      throw new Error(msg);
+    }
     const newUserId = fnData.user_id as string;
     await run(supabase.from("professor_perfis").upsert({
       user_id: newUserId, centro_id: cid,
