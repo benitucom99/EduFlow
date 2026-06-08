@@ -58,9 +58,6 @@ export type ModoPagamentoProfessor = "base" | "por_disciplina";
 
 export interface CentroConfig {
   modoPagamentoProfessor: ModoPagamentoProfessor;
-  // Definições Básicas — regras de faturação para faltas injustificadas.
-  cobrarFaltaInjustificada: boolean;
-  pagarFaltaInjustificada: boolean;
 }
 
 export interface Sala {
@@ -234,28 +231,15 @@ async function loadExplicadores(centroId: string, discIdToName: Map<string, stri
   });
 }
 
-// Default de arranque, antes de carregar o centro. Mantém o comportamento
-// histórico das faltas injustificadas (cobra ao aluno, não paga ao professor).
-const DEFAULT_CENTRO_CONFIG: CentroConfig = {
-  modoPagamentoProfessor: "base",
-  cobrarFaltaInjustificada: true,
-  pagarFaltaInjustificada: false,
-};
-
 async function loadCentroConfig(centroId: string): Promise<CentroConfig> {
   const { data, error } = await supabase
     .from("centros")
-    .select("modo_pagamento_professor, cobrar_falta_injustificada, pagar_falta_injustificada")
+    .select("modo_pagamento_professor")
     .eq("id", centroId)
     .single();
   if (error) throw error;
-  const row = data as any;
-  return {
-    modoPagamentoProfessor: row?.modo_pagamento_professor === "por_disciplina" ? "por_disciplina" : "base",
-    // Default verdadeiro/falso se a coluna vier null (centro pré-migração).
-    cobrarFaltaInjustificada: row?.cobrar_falta_injustificada ?? true,
-    pagarFaltaInjustificada: row?.pagar_falta_injustificada ?? false,
-  };
+  const modo = (data as any)?.modo_pagamento_professor;
+  return { modoPagamentoProfessor: modo === "por_disciplina" ? "por_disciplina" : "base" };
 }
 
 async function loadSalas(centroId: string): Promise<Sala[]> {
@@ -349,14 +333,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [salas, setSalas] = useState<Sala[]>([]);
   const [aulas, setAulas] = useState<Aula[]>([]);
   const [assistentes, setAssistentes] = useState<Assistente[]>([]);
-  const [centroConfig, setCentroConfig] = useState<CentroConfig>(DEFAULT_CENTRO_CONFIG);
+  const [centroConfig, setCentroConfig] = useState<CentroConfig>({ modoPagamentoProfessor: "base" });
   const [loading, setLoading] = useState(false);
   const [discMaps, setDiscMaps] = useState<{ idToName: Map<string, string>; nameToId: Map<string, string>; leafIds: Set<string> }>({ idToName: new Map(), nameToId: new Map(), leafIds: new Set() });
 
   const refresh = useCallback(async () => {
     if (!centroId) {
       setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]); setAssistentes([]);
-      setCentroConfig(DEFAULT_CENTRO_CONFIG);
+      setCentroConfig({ modoPagamentoProfessor: "base" });
       return;
     }
     setLoading(true);
@@ -387,7 +371,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isAuthenticated && centroId) refresh();
-    else { setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]); setAssistentes([]); setCentroConfig(DEFAULT_CENTRO_CONFIG); }
+    else { setDisciplinas([]); setAlunos([]); setExplicadores([]); setSalas([]); setAulas([]); setAssistentes([]); setCentroConfig({ modoPagamentoProfessor: "base" }); }
   }, [isAuthenticated, centroId, refresh]);
 
   // ── Refreshes granulares ──────────────────────────────────────────────────────
@@ -437,8 +421,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const cid = ensureCentro();
     const upd: Record<string, unknown> = {};
     if (patch.modoPagamentoProfessor !== undefined) upd.modo_pagamento_professor = patch.modoPagamentoProfessor;
-    if (patch.cobrarFaltaInjustificada !== undefined) upd.cobrar_falta_injustificada = patch.cobrarFaltaInjustificada;
-    if (patch.pagarFaltaInjustificada !== undefined) upd.pagar_falta_injustificada = patch.pagarFaltaInjustificada;
     if (Object.keys(upd).length) await run(supabase.from("centros").update(upd).eq("id", cid));
     await refreshCentroConfig();
   };

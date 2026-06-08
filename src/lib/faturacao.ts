@@ -42,10 +42,7 @@ export function calcularCobrancaAlunos(
   alunos: Aluno[],
   disciplinas: Disciplina[],
   dataInicio: string,
-  dataFim: string,
-  // Definição básica do centro: se as faltas injustificadas são cobradas ao
-  // aluno. Default true mantém o comportamento histórico (penalização).
-  cobrarFaltaInjustificada = true
+  dataFim: string
 ): ResumoAluno[] {
   // Aulas canceladas nunca são cobradas, independentemente da presença registada.
   const aulasFiltradas = aulas.filter(a => a.estado !== "cancelada" && a.data >= dataInicio && a.data <= dataFim);
@@ -63,11 +60,8 @@ export function calcularCobrancaAlunos(
       const precoPorHora = aula.tipo === "grupo"
         ? (disc?.precoHoraGrupo ?? 0)
         : (disc?.precoHoraIndividual ?? 0);
-      // "presente" cobra sempre. "falta_injustificada" cobra conforme a
-      // definição do centro (penalização configurável). "falta_justificada" e
-      // null nunca cobram.
-      const cobrar = presenca === "presente"
-        || (presenca === "falta_injustificada" && cobrarFaltaInjustificada);
+      // Cobra "presente" e "falta_injustificada" (penalização); "falta_justificada" e null não cobram.
+      const cobrar = presenca === "presente" || presenca === "falta_injustificada";
       const aluno = alunoMap.get(alunoId);
       const descontoRatio = (aluno?.desconto || 0) / 100;
       const valorSessao = (precoPorHora * duracao) * (1 - descontoRatio);
@@ -118,10 +112,7 @@ export function calcularPagamentoExplicadores(
   dataInicio: string,
   dataFim: string,
   disciplinas: Disciplina[] = [],
-  modoPagamento: ModoPagamentoProfessor = "base",
-  // Definição básica do centro: se as faltas injustificadas são pagas ao
-  // professor. Default false mantém o comportamento histórico (não paga).
-  pagarFaltaInjustificada = false
+  modoPagamento: ModoPagamentoProfessor = "base"
 ): ResumoExplicador[] {
   // Aulas canceladas não geram pagamento ao explicador.
   const aulasFiltradas = aulas.filter(a => a.estado !== "cancelada" && a.data >= dataInicio && a.data <= dataFim);
@@ -134,11 +125,8 @@ export function calcularPagamentoExplicadores(
     const explicador = expMap.get(aula.explicadorId);
     if (!explicador) continue;
     const alunosPresentes = aula.alunoIds.some(id => aula.presencas[id] === "presente");
-    // Faltas injustificadas podem pagar ao professor conforme a definição do
-    // centro, mesmo sem nenhum aluno presente.
-    const temFaltaInjustificada = aula.alunoIds.some(id => aula.presencas[id] === "falta_injustificada");
     const duracao = parseDurationHours(aula.horaInicio, aula.horaFim);
-    const contabilizado = alunosPresentes || (temFaltaInjustificada && pagarFaltaInjustificada);
+    const contabilizado = alunosPresentes;
 
     let valorHora = explicador.valorHora;
     if (modoPagamento === "por_disciplina" && explicador.disciplinaValores) {
