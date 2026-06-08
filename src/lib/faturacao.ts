@@ -7,7 +7,9 @@ export function formatCurrency(value: number): string {
 export function parseDurationHours(horaInicio: string, horaFim: string): number {
   const [h1, m1] = horaInicio.split(":").map(Number);
   const [h2, m2] = horaFim.split(":").map(Number);
-  return (h2 * 60 + m2 - h1 * 60 - m1) / 60;
+  // Math.max(0, …): se horaFim for anterior a horaInicio (dados inválidos),
+  // devolve 0 em vez de uma duração negativa que falsearia a faturação.
+  return Math.max(0, (h2 * 60 + m2 - h1 * 60 - m1) / 60);
 }
 
 export function formatDuration(hours: number): string {
@@ -42,7 +44,8 @@ export function calcularCobrancaAlunos(
   dataInicio: string,
   dataFim: string
 ): ResumoAluno[] {
-  const aulasFiltradas = aulas.filter(a => a.data >= dataInicio && a.data <= dataFim);
+  // Aulas canceladas nunca são cobradas, independentemente da presença registada.
+  const aulasFiltradas = aulas.filter(a => a.estado !== "cancelada" && a.data >= dataInicio && a.data <= dataFim);
   const alunoMap = new Map(alunos.map(a => [a.id, a]));
   const discByNome = new Map(disciplinas.map(d => [d.nome, d]));
   const resultado = new Map<string, AulaFaturacaoAluno[]>();
@@ -111,7 +114,8 @@ export function calcularPagamentoExplicadores(
   disciplinas: Disciplina[] = [],
   modoPagamento: ModoPagamentoProfessor = "base"
 ): ResumoExplicador[] {
-  const aulasFiltradas = aulas.filter(a => a.data >= dataInicio && a.data <= dataFim);
+  // Aulas canceladas não geram pagamento ao explicador.
+  const aulasFiltradas = aulas.filter(a => a.estado !== "cancelada" && a.data >= dataInicio && a.data <= dataFim);
   const expMap = new Map(explicadores.map(e => [e.id, e]));
   // Mapa nome→Disciplina para resolver disciplinaValores (indexados por UUID)
   const discByNome = new Map(disciplinas.map(d => [d.nome, d]));
