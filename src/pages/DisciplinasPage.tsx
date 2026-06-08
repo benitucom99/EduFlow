@@ -69,7 +69,7 @@ export default function DisciplinasPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {categorias.map(disc => {
-            const cor = FALLBACK_COLOR;
+            const cor = disc.corHsl || FALLBACK_COLOR;
             const nSubs = childrenOf(disciplinas, disc.id).length;
             return (
               <button

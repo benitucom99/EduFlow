@@ -38,21 +38,8 @@ const PROFESSOR_COLORS = [
   { bg: "#FCE7F3", text: "#9D174D", border: "#EC4899" }, // pink
 ];
 
-/**
- * Cor de um professor para pintar os blocos das aulas.
- *  - Se tiver cor própria definida (professor_perfis.cor) → deriva bg/text/border
- *    dessa cor com color-mix.
- *  - Caso contrário → cor estável da paleta por índice (mesmo prof → mesma cor).
- */
-function getProfPalette(expId: string, allExplicadores: { id: string; cor?: string | null }[]) {
-  const exp = allExplicadores.find(e => e.id === expId);
-  if (exp?.cor) {
-    return {
-      bg: `color-mix(in srgb, ${exp.cor} 15%, white)`,
-      text: `color-mix(in srgb, ${exp.cor} 75%, black)`,
-      border: exp.cor,
-    };
-  }
+/** Cor estável por professor: mesmo ID/nome → mesma cor (ciclo modular). */
+function getProfPalette(expId: string, allExplicadores: { id: string }[]) {
   const idx = allExplicadores.findIndex(e => e.id === expId);
   return PROFESSOR_COLORS[(idx < 0 ? 0 : idx) % PROFESSOR_COLORS.length];
 }
@@ -537,7 +524,7 @@ const MONTH_DAY_LABELS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 function MonthView({ currentDate, filteredAulas, explicadores, onCellClick, onAulaClick }: {
   currentDate: Date;
   filteredAulas: Aula[];
-  explicadores: { id: string; cor?: string | null }[];
+  explicadores: { id: string }[];
   onCellClick: (dateStr: string) => void;
   onAulaClick: (aula: Aula) => void;
 }) {
@@ -549,7 +536,7 @@ function MonthView({ currentDate, filteredAulas, explicadores, onCellClick, onAu
   const toggleExpanded = (dateStr: string) => {
     setExpandedDays(prev => {
       const next = new Set(prev);
-      if (next.has(dateStr)) next.delete(dateStr); else next.add(dateStr);
+      next.has(dateStr) ? next.delete(dateStr) : next.add(dateStr);
       return next;
     });
   };

@@ -16,7 +16,6 @@ import { Plus, Search, Eye, Pencil, LayoutGrid, LayoutList, Trash2 } from "lucid
 import { useToast } from "@/hooks/use-toast";
 import { Explicador } from "@/contexts/DataContext";
 import { folhas, folhasAgrupadas } from "@/lib/disciplinas";
-import { CorProfessorPicker } from "@/components/CorProfessorPicker";
 
 export default function ExplicadoresPage() {
   const { explicadores, disciplinas, centroConfig, createExplicador, updateExplicador, deleteExplicador } = useData();
@@ -203,7 +202,6 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
   const [disciplinaValores, setDisciplinaValores] = useState<Record<string, number>>({});
   const [iban, setIban] = useState("");
   const [nif, setNif] = useState("");
-  const [cor, setCor] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -216,7 +214,6 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
       setDisciplinaValores(explicador?.disciplinaValores ?? {});
       setIban(explicador?.iban || "");
       setNif(explicador?.nif || "");
-      setCor(explicador?.cor || "");
       setErrors({});
     }
   }, [open, explicador]);
@@ -240,7 +237,6 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
       disciplinaValores,
       iban: iban || undefined,
       nif: nif || undefined,
-      cor: cor || null,
     });
   };
 
@@ -340,7 +336,6 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
               />
               {errors.nif && <p className="text-xs text-destructive mt-1">{errors.nif}</p>}
             </div>
-            <CorProfessorPicker value={cor} onChange={setCor} />
           </TabsContent>
         </Tabs>
 

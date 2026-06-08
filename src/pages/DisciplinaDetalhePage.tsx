@@ -32,6 +32,8 @@ export default function DisciplinaDetalhePage() {
     );
   }
 
+  const cor = categoria.corHsl || "#6366f1";
+
   const handleSave = async (data: any) => {
     try {
       if (editing) {
@@ -72,6 +74,7 @@ export default function DisciplinaDetalhePage() {
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
+          <span className="h-4 w-4 rounded-full shrink-0" style={{ backgroundColor: cor }} />
           <div>
             <h1 className="text-2xl font-bold">{categoria.nome}</h1>
             <p className="text-sm text-muted-foreground">{subs.length} sub-disciplina{subs.length === 1 ? "" : "s"}</p>
@@ -104,7 +107,10 @@ export default function DisciplinaDetalhePage() {
                 {subs.map(sub => (
                   <TableRow key={sub.id}>
                     <TableCell>
-                      <span className="font-medium">{sub.nome}</span>
+                      <div className="flex items-center gap-3">
+                        {sub.corHsl && <div className="h-4 w-4 rounded-full shrink-0" style={{ backgroundColor: sub.corHsl }} />}
+                        <span className="font-medium">{sub.nome}</span>
+                      </div>
                     </TableCell>
                     <TableCell className="font-semibold text-primary">{sub.precoHoraIndividual.toFixed(2)} €</TableCell>
                     <TableCell className="font-semibold text-primary">{sub.precoHoraGrupo.toFixed(2)} €</TableCell>
