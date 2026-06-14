@@ -116,6 +116,37 @@ export default function DashboardPage() {
     return lista.sort((a, b) => b.data.localeCompare(a.data));
   }, [aulas, alunos]);
 
+  // Presenças por registar: aulas que JÁ terminaram mas têm alunos sem
+  // presença marcada (presencas[alunoId] nulo/indefinido).
+  const presencasEmFalta = useMemo(() => {
+    const alunoMap = new Map(alunos.map(a => [a.id, a.nome]));
+    const lista: { aulaId: string; alunoId: string; data: string; horaInicio: string; alunoNome: string; disciplina: string }[] = [];
+    for (const aula of aulas) {
+      if (aula.estado === "cancelada") continue;
+      let terminou = false;
+      try {
+        const [h, m] = aula.horaFim.split(":").map(Number);
+        const fim = parseISO(aula.data);
+        fim.setHours(h, m, 0, 0);
+        terminou = fim < now;
+      } catch { continue; }
+      if (!terminou) continue;
+      for (const alunoId of aula.alunoIds) {
+        if (aula.presencas[alunoId] == null) {
+          lista.push({
+            aulaId: aula.id,
+            alunoId,
+            data: aula.data,
+            horaInicio: aula.horaInicio,
+            alunoNome: alunoMap.get(alunoId) ?? "—",
+            disciplina: aula.disciplina,
+          });
+        }
+      }
+    }
+    return lista.sort((a, b) => b.data.localeCompare(a.data));
+  }, [aulas, alunos, now]);
+
   const formatReceita = (v: number) =>
     v >= 1000 ? `${(v / 1000).toFixed(1)}k €` : `${Math.round(v)} €`;
 
@@ -151,12 +182,11 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Reposições pendentes (1/2 largura) — célula direita reservada para a
-          futura tabela de presenças em falta. */}
+      {/* Reposições pendentes + presenças em falta (1/2 largura cada). */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         <Card className="rounded-2xl shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-base font-bold">Aulas de Reposição Pendentes</CardTitle>
+            <CardTitle className="text-base font-bold">Faltas justificadas - Aulas por repor</CardTitle>
             <RotateCcw className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent className="pt-0">
@@ -186,6 +216,51 @@ export default function DashboardPage() {
                             onClick={() => navigate("/calendario", { state: { reposicao: { alunoId: r.alunoId, aulaOriginalId: r.aulaId } } })}
                           >
                             Marcar
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base font-bold">Presenças em falta</CardTitle>
+            <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent className="pt-0">
+            {presencasEmFalta.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">Sem presenças por registar</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-muted-foreground">
+                      <th className="py-2 pr-3 font-medium">Data</th>
+                      <th className="py-2 pr-3 font-medium">Hora</th>
+                      <th className="py-2 pr-3 font-medium">Aluno</th>
+                      <th className="py-2 pr-3 font-medium">Disciplina</th>
+                      <th className="py-2 font-medium text-right">Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {presencasEmFalta.map(p => (
+                      <tr key={`${p.aulaId}-${p.alunoId}`}>
+                        <td className="py-2 pr-3 tabular-nums">{p.data.split("-").reverse().join("/")}</td>
+                        <td className="py-2 pr-3 tabular-nums">{p.horaInicio}</td>
+                        <td className="py-2 pr-3 truncate max-w-[120px]">{p.alunoNome}</td>
+                        <td className="py-2 pr-3 truncate max-w-[120px]">{p.disciplina}</td>
+                        <td className="py-2 text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => navigate("/presencas")}
+                          >
+                            Registar
                           </Button>
                         </td>
                       </tr>
