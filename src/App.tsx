@@ -1,8 +1,10 @@
+import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate, Outlet } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { DataProvider } from "@/contexts/DataContext";
 import { InscricoesProvider } from "@/contexts/InscricoesContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -39,6 +41,31 @@ import DisciplinaDetalhePage from "@/pages/DisciplinaDetalhePage";
 
 const queryClient = new QueryClient();
 
+// Raiz "/": normalmente salta para o dashboard. Mas no fluxo implicit (magic link,
+// recuperação) os tokens chegam no hash de "/" (#access_token=...). Se saltarmos já,
+// o Navigate apaga o hash antes de o supabase (assíncrono) o ler, e a sessão nunca é
+// criada. Por isso, havendo hash de auth, aguardamos a sessão antes de redirecionar.
+function RootRedirect() {
+  const { isAuthenticated } = useAuth();
+  const [timedOut, setTimedOut] = useState(false);
+  const hasAuthHash = typeof window !== "undefined" && window.location.hash.includes("access_token");
+
+  useEffect(() => {
+    if (!hasAuthHash) return;
+    const t = setTimeout(() => setTimedOut(true), 8000);
+    return () => clearTimeout(t);
+  }, [hasAuthHash]);
+
+  if (hasAuthHash && !isAuthenticated && !timedOut) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+  return <Navigate to="/dashboard" replace />;
+}
+
 const App = () => (
   <ErrorBoundary>
   <QueryClientProvider client={queryClient}>
@@ -53,7 +80,7 @@ const App = () => (
                 <Route path="/signup" element={<SignupPage />} />
                 <Route path="/set-password" element={<SetPasswordPage />} />
                 <Route path="/onboarding" element={<OnboardingPage />} />
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/" element={<RootRedirect />} />
                 <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
                   {/* admin only */}
                   <Route element={<ProtectedRoute allowedRoles={["admin"]}><Outlet /></ProtectedRoute>}>
