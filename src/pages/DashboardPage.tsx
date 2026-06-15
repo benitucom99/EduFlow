@@ -1,13 +1,26 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { useData } from "@/contexts/DataContext";
+import { useData, Presenca, ReposicaoEstado } from "@/contexts/DataContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
 import { Users, BookOpen, Wallet, CheckCircle2, CalendarDays, UserRound, MapPin, RotateCcw } from "lucide-react";
 
 import { isToday, isTomorrow, parseISO, startOfWeek, endOfWeek, isWithinInterval } from "date-fns";
 import { calcularCobrancaAlunos } from "@/lib/faturacao";
+
+// Linha de "Presenças em falta": aula/aluno por registar + dados para a tabela.
+type FaltaPendente = {
+  aulaId: string;
+  alunoId: string;
+  data: string;
+  horaInicio: string;
+  alunoNome: string;
+  professor: string;
+  disciplina: string;
+};
 
 function relativeDay(dateStr: string): string {
   try {
@@ -21,8 +34,14 @@ function relativeDay(dateStr: string): string {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { alunos, aulas, explicadores, salas, disciplinas } = useData();
+  const { alunos, aulas, explicadores, salas, disciplinas, setPresenca } = useData();
   const navigate = useNavigate();
+  const { toast } = useToast();
+
+  // Pop-up "Ver mais" (lista completa) e fluxo de registo de presença.
+  const [verTodasFaltas, setVerTodasFaltas] = useState(false);
+  const [registar, setRegistar] = useState<FaltaPendente | null>(null);
+  const [pendingFalta, setPendingFalta] = useState<{ tipo: "justificada" | "injustificada" } | null>(null);
 
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -118,9 +137,10 @@ export default function DashboardPage() {
 
   // Presenças por registar: aulas que JÁ terminaram mas têm alunos sem
   // presença marcada (presencas[alunoId] nulo/indefinido).
-  const presencasEmFalta = useMemo(() => {
+  const presencasEmFalta = useMemo<FaltaPendente[]>(() => {
     const alunoMap = new Map(alunos.map(a => [a.id, a.nome]));
-    const lista: { aulaId: string; alunoId: string; data: string; horaInicio: string; alunoNome: string; disciplina: string }[] = [];
+    const profMap = new Map(explicadores.map(e => [e.id, e.nome]));
+    const lista: FaltaPendente[] = [];
     for (const aula of aulas) {
       if (aula.estado === "cancelada") continue;
       let terminou = false;
@@ -139,13 +159,58 @@ export default function DashboardPage() {
             data: aula.data,
             horaInicio: aula.horaInicio,
             alunoNome: alunoMap.get(alunoId) ?? "—",
+            professor: profMap.get(aula.explicadorId) ?? "—",
             disciplina: aula.disciplina,
           });
         }
       }
     }
-    return lista.sort((a, b) => b.data.localeCompare(a.data));
-  }, [aulas, alunos, now]);
+    return lista.sort((a, b) => b.data.localeCompare(a.data) || a.horaInicio.localeCompare(b.horaInicio));
+  }, [aulas, alunos, explicadores, now]);
+
+  // ── Registo de presença a partir do Dashboard (mesma lógica da pág. Presenças) ─
+  const updatePresenca = async (
+    aulaId: string,
+    alunoId: string,
+    presenca: Presenca,
+    extra?: { reposicaoEstado?: ReposicaoEstado; cobrarFalta?: boolean | null }
+  ) => {
+    try {
+      await setPresenca(aulaId, alunoId, presenca, extra);
+      toast({ title: "Presença registada" });
+    } catch {
+      toast({ title: "Erro ao registar presença", description: "A alteração foi revertida. Tenta novamente.", variant: "destructive" });
+    }
+  };
+
+  // Presente grava direto e fecha; faltas abrem o pop-up de detalhe correspondente.
+  const requestPresenca = (presenca: Presenca) => {
+    if (!registar) return;
+    if (presenca === "falta_justificada") {
+      setPendingFalta({ tipo: "justificada" });
+    } else if (presenca === "falta_injustificada") {
+      setPendingFalta({ tipo: "injustificada" });
+    } else {
+      updatePresenca(registar.aulaId, registar.alunoId, presenca);
+      setRegistar(null);
+    }
+  };
+
+  const confirmReposicao = (estado: Exclude<ReposicaoEstado, null>, redirect: boolean) => {
+    if (!registar) return;
+    updatePresenca(registar.aulaId, registar.alunoId, "falta_justificada", { reposicaoEstado: estado });
+    const aluno = registar;
+    setPendingFalta(null);
+    setRegistar(null);
+    if (redirect) navigate("/calendario", { state: { reposicao: { alunoId: aluno.alunoId, aulaOriginalId: aluno.aulaId } } });
+  };
+
+  const confirmInjustificada = (cobrar: boolean) => {
+    if (!registar) return;
+    updatePresenca(registar.aulaId, registar.alunoId, "falta_injustificada", { cobrarFalta: cobrar });
+    setPendingFalta(null);
+    setRegistar(null);
+  };
 
   const formatReceita = (v: number) =>
     v >= 1000 ? `${(v / 1000).toFixed(1)}k €` : `${Math.round(v)} €`;
@@ -236,42 +301,83 @@ export default function DashboardPage() {
             {presencasEmFalta.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Sem presenças por registar</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left text-muted-foreground">
-                      <th className="py-2 pr-3 font-medium">Data</th>
-                      <th className="py-2 pr-3 font-medium">Hora</th>
-                      <th className="py-2 pr-3 font-medium">Aluno</th>
-                      <th className="py-2 pr-3 font-medium">Disciplina</th>
-                      <th className="py-2 font-medium text-right">Ação</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {presencasEmFalta.map(p => (
-                      <tr key={`${p.aulaId}-${p.alunoId}`}>
-                        <td className="py-2 pr-3 tabular-nums">{p.data.split("-").reverse().join("/")}</td>
-                        <td className="py-2 pr-3 tabular-nums">{p.horaInicio}</td>
-                        <td className="py-2 pr-3 truncate max-w-[120px]">{p.alunoNome}</td>
-                        <td className="py-2 pr-3 truncate max-w-[120px]">{p.disciplina}</td>
-                        <td className="py-2 text-right">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => navigate("/presencas")}
-                          >
-                            Registar
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <FaltasTable rows={presencasEmFalta.slice(0, 5)} onRegistar={setRegistar} />
+                {presencasEmFalta.length > 5 && (
+                  <div className="mt-4 pt-3 border-t border-border">
+                    <Button variant="outline" className="w-full font-medium" onClick={() => setVerTodasFaltas(true)}>
+                      Ver mais ({presencasEmFalta.length})
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Pop-up "Ver mais" — todas as presenças em falta */}
+      <Dialog open={verTodasFaltas} onOpenChange={setVerTodasFaltas}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Presenças em falta ({presencasEmFalta.length})</DialogTitle>
+            <DialogDescription>Aulas terminadas com presenças por registar.</DialogDescription>
+          </DialogHeader>
+          <FaltasTable rows={presencasEmFalta} onRegistar={setRegistar} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Pop-up Registar Presença — botões iguais à página Presenças */}
+      <Dialog open={!!registar && !pendingFalta} onOpenChange={open => { if (!open) setRegistar(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Registar presença</DialogTitle>
+            <DialogDescription>
+              {registar && (
+                <>
+                  {registar.alunoNome} · {registar.disciplina}
+                  <br />
+                  {registar.data.split("-").reverse().join("/")} às {registar.horaInicio} · {registar.professor}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 pt-2">
+            <Button variant="outline" className="border-success/30 bg-success/15 text-success hover:bg-success/25 justify-start" onClick={() => requestPresenca("presente")}>Presente</Button>
+            <Button variant="outline" className="border-warning/30 bg-warning/15 text-warning hover:bg-warning/25 justify-start" onClick={() => requestPresenca("falta_justificada")}>Falta justificada</Button>
+            <Button variant="outline" className="border-destructive/30 bg-destructive/15 text-destructive hover:bg-destructive/25 justify-start" onClick={() => requestPresenca("falta_injustificada")}>Falta injustificada</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pop-up Falta Justificada — agendar reposição? */}
+      <Dialog open={pendingFalta?.tipo === "justificada"} onOpenChange={open => { if (!open) setPendingFalta(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Falta Justificada</DialogTitle>
+            <DialogDescription>Deseja agendar aula de reposição?</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" className="border-success/30 bg-success/15 text-success hover:bg-success/25" onClick={() => confirmReposicao("pendente", true)}>Sim</Button>
+            <Button variant="outline" className="border-warning/30 bg-warning/15 text-warning hover:bg-warning/25" onClick={() => confirmReposicao("pendente", false)}>Pendente</Button>
+            <Button variant="outline" className="border-destructive/30 bg-destructive/15 text-destructive hover:bg-destructive/25" onClick={() => confirmReposicao("nao", false)}>Não</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pop-up Falta Injustificada — cobrar ao aluno? */}
+      <Dialog open={pendingFalta?.tipo === "injustificada"} onOpenChange={open => { if (!open) setPendingFalta(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Falta Injustificada</DialogTitle>
+            <DialogDescription>Cobrar ao Aluno?</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button autoFocus variant="outline" className="border-success/30 bg-success/15 text-success hover:bg-success/25" onClick={() => confirmInjustificada(true)}>Sim</Button>
+            <Button variant="outline" className="border-destructive/30 bg-destructive/15 text-destructive hover:bg-destructive/25" onClick={() => confirmInjustificada(false)}>Não</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card className="rounded-2xl shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -317,6 +423,43 @@ export default function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// Tabela de presenças em falta: data – hora – aluno – professor – disciplina + ação.
+// Reutilizada no card (limitada a 5) e no pop-up "Ver mais" (lista completa).
+function FaltasTable({ rows, onRegistar }: { rows: FaltaPendente[]; onRegistar: (r: FaltaPendente) => void }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border text-left text-muted-foreground">
+            <th className="py-2 pr-3 font-medium">Data</th>
+            <th className="py-2 pr-3 font-medium">Hora</th>
+            <th className="py-2 pr-3 font-medium">Aluno</th>
+            <th className="py-2 pr-3 font-medium">Professor</th>
+            <th className="py-2 pr-3 font-medium">Disciplina</th>
+            <th className="py-2 font-medium text-right">Ação</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {rows.map(p => (
+            <tr key={`${p.aulaId}-${p.alunoId}`}>
+              <td className="py-2 pr-3 tabular-nums">{p.data.split("-").reverse().join("/")}</td>
+              <td className="py-2 pr-3 tabular-nums">{p.horaInicio}</td>
+              <td className="py-2 pr-3 truncate max-w-[120px]">{p.alunoNome}</td>
+              <td className="py-2 pr-3 truncate max-w-[120px]">{p.professor}</td>
+              <td className="py-2 pr-3 truncate max-w-[120px]">{p.disciplina}</td>
+              <td className="py-2 text-right">
+                <Button size="sm" variant="outline" onClick={() => onRegistar(p)}>
+                  Registar
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
