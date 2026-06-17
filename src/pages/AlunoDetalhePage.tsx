@@ -3,6 +3,7 @@ import { useData } from "@/contexts/DataContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DiscBadge } from "@/components/DiscBadge";
+import { DiscAgrupadas } from "@/components/DiscAgrupadas";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,6 +12,7 @@ import { useMemo, useState } from "react";
 import { AlunoHorario } from "@/contexts/DataContext";
 import { HorarioGeradorModal } from "@/components/HorarioGeradorModal";
 import { diaSemanaCurto } from "@/lib/horarios";
+import { topLevel, childrenOf } from "@/lib/disciplinas";
 
 const presencaBadge = (p: string | null) => {
   if (p === "presente") return <span className="text-xs px-2 py-0.5 rounded-full bg-success/10 text-success font-medium">Presente</span>;
@@ -79,23 +81,38 @@ export default function AlunoDetalhePage() {
             <div className="pt-4 border-t">
               <p className="text-xs text-muted-foreground mb-2">Disciplinas</p>
               {(() => {
-                const entries = Object.entries(aluno.disciplinaExplicadores ?? {});
-                if (entries.length === 0) {
-                  return <div className="flex flex-wrap gap-1">{aluno.disciplinas.map(d => <DiscBadge key={d} nome={d} />)}</div>;
+                const dm = aluno.disciplinaExplicadores ?? {};
+                if (Object.keys(dm).length === 0) {
+                  // Sem tutor por-disciplina: agrupa só os nomes pela categoria-pai.
+                  return aluno.disciplinas.length > 0
+                    ? <DiscAgrupadas folhaNomes={aluno.disciplinas} />
+                    : <p className="text-sm text-muted-foreground">Sem disciplinas.</p>;
                 }
+                // Agrupa as sub-disciplinas frequentadas pela categoria-pai, mantendo
+                // o tutor atribuído a cada uma (categoria como título + linhas).
+                const grupos = topLevel(disciplinas)
+                  .map(top => ({
+                    categoria: top.nome,
+                    filhas: childrenOf(disciplinas, top.id)
+                      .filter(f => f.id in dm)
+                      .map(f => ({ id: f.id, nome: f.nome, tutor: dm[f.id] ? explicadores.find(e => e.id === dm[f.id])?.nome ?? null : null })),
+                  }))
+                  .filter(g => g.filhas.length > 0);
                 return (
-                  <div className="space-y-2">
-                    {entries.map(([discId, expId]) => {
-                      const nome = disciplinas.find(d => d.id === discId)?.nome;
-                      if (!nome) return null;
-                      const tutor = expId ? explicadores.find(e => e.id === expId)?.nome : null;
-                      return (
-                        <div key={discId} className="flex items-center justify-between gap-2">
-                          <DiscBadge nome={nome} />
-                          <span className="text-xs text-muted-foreground truncate">{tutor ?? "Sem professor"}</span>
+                  <div className="space-y-2.5">
+                    {grupos.map(g => (
+                      <div key={g.categoria}>
+                        <p className="text-xs font-medium text-muted-foreground mb-1">{g.categoria}</p>
+                        <div className="space-y-1">
+                          {g.filhas.map(f => (
+                            <div key={f.id} className="flex items-center justify-between gap-2">
+                              <DiscBadge nome={f.nome} />
+                              <span className="text-xs text-muted-foreground truncate">{f.tutor ?? "Sem professor"}</span>
+                            </div>
+                          ))}
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                 );
               })()}
