@@ -31,7 +31,9 @@ export function isoDiaSemana(date: Date): number {
 
 // Fim do ano letivo a partir de uma data (default do gerador): final de Julho.
 // Antes de Agosto → 31 Jul do mesmo ano; Ago-Dez → 31 Jul do ano seguinte.
-export function fimAnoLetivo(from: Date): Date {
+// Se configFim (yyyy-MM-dd) estiver definido, usa-o em vez do cálculo default.
+export function fimAnoLetivo(from: Date, configFim?: string): Date {
+  if (configFim) return parseISO(configFim);
   const month = from.getMonth(); // 0=Jan..11=Dez; Julho=6
   const year = from.getFullYear();
   return month <= 6 ? new Date(year, 6, 31) : new Date(year + 1, 6, 31);

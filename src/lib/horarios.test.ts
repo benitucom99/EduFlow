@@ -19,6 +19,13 @@ describe("fimAnoLetivo", () => {
     expect(fimAnoLetivo(parseISO("2026-09-01"))).toEqual(new Date(2027, 6, 31));
     expect(fimAnoLetivo(parseISO("2026-12-31"))).toEqual(new Date(2027, 6, 31));
   });
+  it("usa configFim quando fornecido, ignorando o cálculo default", () => {
+    expect(fimAnoLetivo(parseISO("2026-06-08"), "2026-07-15")).toEqual(parseISO("2026-07-15"));
+    expect(fimAnoLetivo(parseISO("2026-09-01"), "2027-06-30")).toEqual(parseISO("2027-06-30"));
+  });
+  it("ignora configFim undefined e usa o fallback", () => {
+    expect(fimAnoLetivo(parseISO("2026-06-08"), undefined)).toEqual(new Date(2026, 6, 31));
+  });
 });
 
 describe("horaFimDe", () => {

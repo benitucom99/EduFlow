@@ -37,7 +37,7 @@ export function HorarioGeradorModal({ open, onClose, aluno, horario }: {
   aluno: Aluno;
   horario?: AlunoHorario | null;
 }) {
-  const { disciplinas, explicadores, salas, saveAlunoHorario, deleteAlunoHorario } = useData();
+  const { disciplinas, explicadores, salas, saveAlunoHorario, deleteAlunoHorario, centroConfig } = useData();
   const { toast } = useToast();
 
   // Disciplinas que o aluno frequenta (id → nome), com o tutor por-disciplina.
@@ -87,9 +87,9 @@ export function HorarioGeradorModal({ open, onClose, aluno, horario }: {
     }
   }, [open, horario, disciplinasDoAluno]);
 
-  // Com "ano letivo inteiro" ligado, a data fim é o fim do ano letivo (fim de Julho).
+  // Com "ano letivo inteiro" ligado, usa a data configurada no centro ou calcula o default (31 Jul).
   const dataFimEfetiva = anoLetivoInteiro && dataInicio
-    ? format(fimAnoLetivo(parseISO(dataInicio)), "yyyy-MM-dd")
+    ? format(fimAnoLetivo(parseISO(dataInicio), centroConfig.anoLetivoFim), "yyyy-MM-dd")
     : dataFim;
 
   // Ao escolher disciplina, sugere o tutor por-disciplina do aluno.

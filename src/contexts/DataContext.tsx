@@ -87,6 +87,8 @@ export type MomentoPagamento = "inicio" | "fim";
 export interface CentroConfig {
   modoPagamentoProfessor: ModoPagamentoProfessor;
   momentoPagamento: MomentoPagamento;
+  anoLetivoInicio?: string; // yyyy-MM-dd; null/undefined → sem configuração
+  anoLetivoFim?: string;    // yyyy-MM-dd; null/undefined → usa default (31 Jul)
 }
 
 export interface Sala {
@@ -321,12 +323,12 @@ async function loadExplicadores(centroId: string, discIdToName: Map<string, stri
 
 // Default de arranque (antes de carregar o centro). 'fim' mantém o
 // comportamento histórico de faturação.
-const DEFAULT_CENTRO_CONFIG: CentroConfig = { modoPagamentoProfessor: "base", momentoPagamento: "fim" };
+const DEFAULT_CENTRO_CONFIG: CentroConfig = { modoPagamentoProfessor: "base", momentoPagamento: "fim", anoLetivoInicio: undefined, anoLetivoFim: undefined };
 
 async function loadCentroConfig(centroId: string): Promise<CentroConfig> {
   const { data, error } = await supabase
     .from("centros")
-    .select("modo_pagamento_professor, momento_pagamento")
+    .select("modo_pagamento_professor, momento_pagamento, ano_letivo_inicio, ano_letivo_fim")
     .eq("id", centroId)
     .single();
   if (error) throw error;
@@ -334,6 +336,8 @@ async function loadCentroConfig(centroId: string): Promise<CentroConfig> {
   return {
     modoPagamentoProfessor: row?.modo_pagamento_professor === "por_disciplina" ? "por_disciplina" : "base",
     momentoPagamento: row?.momento_pagamento === "inicio" ? "inicio" : "fim",
+    anoLetivoInicio: row?.ano_letivo_inicio ?? undefined,
+    anoLetivoFim: row?.ano_letivo_fim ?? undefined,
   };
 }
 
@@ -556,6 +560,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const upd: Record<string, unknown> = {};
     if (patch.modoPagamentoProfessor !== undefined) upd.modo_pagamento_professor = patch.modoPagamentoProfessor;
     if (patch.momentoPagamento !== undefined) upd.momento_pagamento = patch.momentoPagamento;
+    if (patch.anoLetivoInicio !== undefined) upd.ano_letivo_inicio = patch.anoLetivoInicio || null;
+    if (patch.anoLetivoFim !== undefined) upd.ano_letivo_fim = patch.anoLetivoFim || null;
     if (Object.keys(upd).length) await run(supabase.from("centros").update(upd).eq("id", cid));
     await refreshCentroConfig();
   };
