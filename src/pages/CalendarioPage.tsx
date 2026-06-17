@@ -818,18 +818,9 @@ function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onC
       tipo, disciplina, alunoIds, explicadorId,
       salaId: resolvedSalaId, horaInicio, horaFim: endHour(), recorrencia, notas, isReposicao,
     };
-    // Estado conforme a data: uma aula cujo dia já passou nasce "realizada"; as de
-    // hoje/futuro ficam "agendada" (default). Comparação lexicográfica de yyyy-MM-dd.
-    const hoje = format(new Date(), "yyyy-MM-dd");
-    const estadoParaData = (d: string): Aula["estado"] => (d < hoje ? "realizada" : "agendada");
     // Em edição ou aula única → só uma instância. Quinzenal / Ano letivo → várias.
-    // Edição preserva o estado da aula existente (não o recalcula pela data).
-    if (aula) {
+    if (aula || recorrencia === "unica") {
       onSave([{ ...base, data }]);
-      return;
-    }
-    if (recorrencia === "unica") {
-      onSave([{ ...base, data, estado: estadoParaData(data) }]);
       return;
     }
     const startDate = parseISO(data);
@@ -838,8 +829,7 @@ function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onC
     const aulasToCreate: any[] = [];
     let current = startDate;
     while (current <= endDate) {
-      const dataAula = format(current, "yyyy-MM-dd");
-      aulasToCreate.push({ ...base, data: dataAula, estado: estadoParaData(dataAula) });
+      aulasToCreate.push({ ...base, data: format(current, "yyyy-MM-dd") });
       current = addDays(current, interval);
     }
     onSave(aulasToCreate);
