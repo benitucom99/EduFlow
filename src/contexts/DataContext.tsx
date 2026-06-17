@@ -955,9 +955,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Cria as aulas futuras a partir dos slots do horário, ligadas via horario_id.
   const materializarAulasDoHorario = async (horario: { id: string; input: AlunoHorarioInput }) => {
     const { id, input } = horario;
-    const genStart = input.dataInicio > localTodayStr() ? input.dataInicio : localTodayStr();
+    const genStart = input.dataInicio;
     const geradas = gerarAulasDoHorario(input.slots, genStart, input.dataFim, input.duracaoMin);
     if (!geradas.length) return;
+    // Aulas cuja data já passou nascem "realizada"; as de hoje/futuro mantêm o
+    // default ("agendada" via createAulas).
+    const hoje = localTodayStr();
     await createAulas(geradas.map(g => ({
       tipo: input.tipo,
       disciplina: input.disciplina,
@@ -971,6 +974,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       isReposicao: false,
       presencaInfo: {},
       horarioId: id,
+      estado: g.data < hoje ? "realizada" : undefined,
     })));
   };
 

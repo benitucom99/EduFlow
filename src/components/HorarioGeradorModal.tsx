@@ -107,7 +107,7 @@ export function HorarioGeradorModal({ open, onClose, aluno, horario }: {
   // Pré-visualização do nº de aulas que serão criadas (a partir de hoje).
   const previewCount = useMemo(() => {
     if (!slots.length || !dataInicio || !dataFimEfetiva) return 0;
-    const genStart = dataInicio > hojeStr() ? dataInicio : hojeStr();
+    const genStart = dataInicio;
     if (genStart > dataFimEfetiva) return 0;
     return gerarAulasDoHorario(slots, genStart, dataFimEfetiva, duracaoMin).length;
   }, [slots, dataInicio, dataFimEfetiva, duracaoMin]);
