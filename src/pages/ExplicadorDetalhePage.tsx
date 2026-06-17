@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useData, Explicador } from "@/contexts/DataContext";
 import { Card, CardContent } from "@/components/ui/card";
-import { DiscBadge } from "@/components/DiscBadge";
+import { DiscAgrupadas } from "@/components/DiscAgrupadas";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Mail, Phone, GraduationCap, Pencil, Landmark, CreditCard, Send, Copy, Check } from "lucide-react";
@@ -98,7 +98,7 @@ export default function ExplicadorDetalhePage() {
             </div>
             <div className="pt-4 border-t">
               <p className="text-xs text-muted-foreground mb-2">Disciplinas leccionadas</p>
-              <div className="flex flex-wrap gap-1">{exp.disciplinas.map(d => <DiscBadge key={d} nome={d} />)}</div>
+              <DiscAgrupadas folhaNomes={exp.disciplinas} />
             </div>
             <div className="pt-4 border-t">
               <p className="text-xs text-muted-foreground mb-2">Dados Financeiros</p>

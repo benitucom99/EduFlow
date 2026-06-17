@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, Eye, Pencil, LayoutGrid, LayoutList, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Explicador } from "@/contexts/DataContext";
-import { folhas, folhasAgrupadas } from "@/lib/disciplinas";
+import { folhas, folhasAgrupadas, categoriasDasFolhas } from "@/lib/disciplinas";
 
 export default function ExplicadoresPage() {
   const { explicadores, disciplinas, centroConfig, createExplicador, updateExplicador, deleteExplicador } = useData();
@@ -92,7 +92,7 @@ export default function ExplicadoresPage() {
                       <div><p className="font-medium text-sm">{exp.nome}</p><p className="text-xs text-muted-foreground">{exp.email}</p></div>
                     </div>
                   </TableCell>
-                  <TableCell><div className="flex gap-1 flex-wrap">{exp.disciplinas.map(d => <DiscBadge key={d} nome={d} className="text-[10px]" />)}</div></TableCell>
+                  <TableCell><div className="flex gap-1 flex-wrap">{categoriasDasFolhas(disciplinas, exp.disciplinas).map(d => <DiscBadge key={d} nome={d} className="text-[10px]" />)}</div></TableCell>
                   <TableCell className="font-medium">
                     {centroConfig.modoPagamentoProfessor === "por_disciplina"
                       ? <span className="text-xs text-muted-foreground">por disciplina</span>
@@ -125,7 +125,7 @@ export default function ExplicadoresPage() {
                     <p className="font-semibold">{exp.nome}</p>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-1 mb-3">{exp.disciplinas.map(d => <DiscBadge key={d} nome={d} />)}</div>
+                <div className="flex flex-wrap gap-1 mb-3">{categoriasDasFolhas(disciplinas, exp.disciplinas).map(d => <DiscBadge key={d} nome={d} />)}</div>
                 <p className="text-2xl font-bold text-primary mb-4">
                   {centroConfig.modoPagamentoProfessor === "por_disciplina"
                     ? <span className="text-base font-normal text-muted-foreground">valor por disciplina</span>
