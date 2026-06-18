@@ -687,6 +687,7 @@ function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onC
   const [recorrencia, setRecorrencia] = useState<string>(aula?.recorrencia || "unica");
   const [notas, setNotas] = useState(aula?.notas || "");
   const [isReposicao, setIsReposicao] = useState(false);
+  const [confirmConflictsOpen, setConfirmConflictsOpen] = useState(false);
   const [alunoPopoverOpen, setAlunoPopoverOpen] = useState(false);
   const [alunoSearch, setAlunoSearch] = useState("");
 
@@ -840,6 +841,16 @@ function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onC
       current = addDays(current, interval);
     }
     onSave(aulasToCreate);
+  };
+
+  // Clique no botão: se houver sobreposições, pede confirmação antes de gravar.
+  const requestSave = () => {
+    if (!disciplina || alunoIds.length === 0 || !explicadorId || !resolvedSalaId) return;
+    if (conflicts.length > 0) {
+      setConfirmConflictsOpen(true);
+      return;
+    }
+    handleSave();
   };
 
   const alunosAtivos = alunos.filter(a => a.estado === "ativo");
@@ -1135,7 +1146,7 @@ function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onC
         {/* ─── Footer ─────────────────────────────────────────── */}
         <div className="flex justify-end gap-3 px-6 py-4 border-t bg-muted/30 shrink-0">
           <Button
-            onClick={handleSave}
+            onClick={requestSave}
             disabled={!disciplina || alunoIds.length === 0 || !explicadorId || !resolvedSalaId}
           >
             {aula ? "Guardar" : "Criar Aula"}
@@ -1143,6 +1154,33 @@ function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onC
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
         </div>
       </SheetContent>
+
+      {/* Confirmação perante sobreposições (soft warning → confirmar) */}
+      <AlertDialog open={confirmConflictsOpen} onOpenChange={setConfirmConflictsOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Sobreposições detetadas
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>Foram encontradas as seguintes sobreposições neste horário:</p>
+                <ul className="space-y-1.5">
+                  {conflicts.map((c, i) => (
+                    <li key={i} className="text-sm text-destructive">{c}</li>
+                  ))}
+                </ul>
+                <p>Tem a certeza que deseja {aula ? "guardar" : "criar"} esta aula mesmo com sobreposições?</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSave}>Sim, avançar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sheet>
   );
 }

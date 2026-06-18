@@ -37,7 +37,7 @@ export function HorarioGeradorModal({ open, onClose, aluno, horario }: {
   aluno: Aluno;
   horario?: AlunoHorario | null;
 }) {
-  const { disciplinas, explicadores, salas, saveAlunoHorario, deleteAlunoHorario, centroConfig } = useData();
+  const { disciplinas, explicadores, salas, aulas, saveAlunoHorario, deleteAlunoHorario, centroConfig } = useData();
   const { toast } = useToast();
 
   // Disciplinas que o aluno frequenta (id → nome), com o tutor por-disciplina.
@@ -60,6 +60,7 @@ export function HorarioGeradorModal({ open, onClose, aluno, horario }: {
   const [dataFim, setDataFim] = useState("");
   const [erro, setErro] = useState("");
   const [saving, setSaving] = useState(false);
+  const [confirmConflitosOpen, setConfirmConflitosOpen] = useState(false);
 
   // Inicializa os campos ao abrir (criar vs editar).
   useEffect(() => {
@@ -112,13 +113,38 @@ export function HorarioGeradorModal({ open, onClose, aluno, horario }: {
     return gerarAulasDoHorario(slots, genStart, dataFimEfetiva, duracaoMin).length;
   }, [slots, dataInicio, dataFimEfetiva, duracaoMin]);
 
-  const handleSubmit = async () => {
+  // Sobreposições que as aulas geradas por este horário criariam com aulas já
+  // existentes (explicador / sala ocupados, ou o próprio aluno já com aula).
+  // As aulas materializadas por este mesmo horário são ignoradas (vão ser recriadas).
+  const conflitos = useMemo(() => {
+    if (!slots.length || !dataInicio || !dataFimEfetiva || dataInicio > dataFimEfetiva) return [];
+    const geradas = gerarAulasDoHorario(slots, dataInicio, dataFimEfetiva, duracaoMin);
+    const toMin = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+    const expId = explicadorId === "none" ? null : explicadorId;
+    const sId = salaId === "none" ? null : salaId;
+    const msgs: string[] = [];
+    const seen = new Set<string>();
+    const push = (key: string, msg: string) => { if (!seen.has(key)) { seen.add(key); msgs.push(msg); } };
+    for (const g of geradas) {
+      const gIni = toMin(g.horaInicio), gFim = toMin(g.horaFim);
+      for (const a of aulas) {
+        if (a.estado === "cancelada") continue;
+        if (horario && a.horarioId === horario.id) continue;
+        if (a.data !== g.data) continue;
+        if (!(gIni < toMin(a.horaFim) && toMin(a.horaInicio) < gFim)) continue;
+        const quando = `${format(parseISO(g.data), "d MMM", { locale: pt })} às ${g.horaInicio}`;
+        if (expId && a.explicadorId === expId) push(`exp-${g.data}-${g.horaInicio}`, `⚠️ Explicador ocupado em ${quando}`);
+        if (sId && a.salaId === sId) push(`sala-${g.data}-${g.horaInicio}`, `⚠️ Sala ocupada em ${quando}`);
+        if (a.alunoIds.includes(aluno.id)) push(`aluno-${g.data}-${g.horaInicio}`, `⚠️ ${aluno.nome} já tem aula em ${quando}`);
+      }
+    }
+    return msgs;
+  }, [slots, dataInicio, dataFimEfetiva, duracaoMin, explicadorId, salaId, aulas, horario, aluno]);
+
+  // Grava de facto o horário (chamado diretamente ou após confirmar sobreposições).
+  const doSave = async () => {
     const disc = disciplinas.find(d => d.id === disciplinaId);
-    if (!disc) { setErro("Escolhe uma disciplina."); return; }
-    if (!slots.length) { setErro("Adiciona pelo menos um dia/hora ao horário."); return; }
-    if (!dataInicio) { setErro("Define a data de início."); return; }
-    if (!dataFimEfetiva || dataFimEfetiva < dataInicio) { setErro("A data de fim tem de ser posterior ao início."); return; }
-    setErro("");
+    if (!disc) return;
     setSaving(true);
     try {
       await saveAlunoHorario({
@@ -140,6 +166,18 @@ export function HorarioGeradorModal({ open, onClose, aluno, horario }: {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Valida os campos obrigatórios; se houver sobreposições pede confirmação antes de gravar.
+  const handleSubmit = () => {
+    const disc = disciplinas.find(d => d.id === disciplinaId);
+    if (!disc) { setErro("Escolhe uma disciplina."); return; }
+    if (!slots.length) { setErro("Adiciona pelo menos um dia/hora ao horário."); return; }
+    if (!dataInicio) { setErro("Define a data de início."); return; }
+    if (!dataFimEfetiva || dataFimEfetiva < dataInicio) { setErro("A data de fim tem de ser posterior ao início."); return; }
+    setErro("");
+    if (conflitos.length > 0) { setConfirmConflitosOpen(true); return; }
+    doSave();
   };
 
   const handleDelete = async () => {
@@ -331,6 +369,38 @@ export function HorarioGeradorModal({ open, onClose, aluno, horario }: {
             </Button>
           </div>
         </div>
+
+        {/* Confirmação perante sobreposições geradas pelo horário recorrente */}
+        <AlertDialog open={confirmConflitosOpen} onOpenChange={setConfirmConflitosOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+                Sobreposições detetadas
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3">
+                  <p>
+                    Este horário recorrente irá gerar aulas que se sobrepõem a {conflitos.length} ocorrência(s) já existentes:
+                  </p>
+                  <ul className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {conflitos.slice(0, 12).map((c, i) => (
+                      <li key={i} className="text-sm text-destructive">{c}</li>
+                    ))}
+                    {conflitos.length > 12 && (
+                      <li className="text-sm text-muted-foreground">+ {conflitos.length - 12} mais…</li>
+                    )}
+                  </ul>
+                  <p>Tem a certeza que deseja materializar estas aulas mesmo com sobreposições?</p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={doSave}>Sim, avançar</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );
