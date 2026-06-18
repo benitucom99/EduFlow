@@ -1136,7 +1136,7 @@ function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onC
         <div className="flex justify-end gap-3 px-6 py-4 border-t bg-muted/30 shrink-0">
           <Button
             onClick={handleSave}
-            disabled={conflicts.length > 0 || !disciplina || alunoIds.length === 0 || !explicadorId}
+            disabled={!disciplina || alunoIds.length === 0 || !explicadorId || !resolvedSalaId}
           >
             {aula ? "Guardar" : "Criar Aula"}
           </Button>
