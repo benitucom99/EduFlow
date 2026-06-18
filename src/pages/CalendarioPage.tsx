@@ -252,6 +252,7 @@ export default function CalendarioPage() {
           currentDate={currentDate}
           filteredAulas={filteredAulas}
           explicadores={explicadores}
+          alunos={alunos}
           onCellClick={(dateStr) => {
             setPrefill({ data: dateStr, horaInicio: "09:00" });
             setEditingAula(null);
@@ -551,10 +552,11 @@ export default function CalendarioPage() {
 // ─── MonthView ────────────────────────────────────────────────────────────────
 const MONTH_DAY_LABELS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
-function MonthView({ currentDate, filteredAulas, explicadores, onCellClick, onAulaClick }: {
+function MonthView({ currentDate, filteredAulas, explicadores, alunos, onCellClick, onAulaClick }: {
   currentDate: Date;
   filteredAulas: Aula[];
   explicadores: { id: string }[];
+  alunos: { id: string; nome: string }[];
   onCellClick: (dateStr: string) => void;
   onAulaClick: (aula: Aula) => void;
 }) {
@@ -623,6 +625,11 @@ function MonthView({ currentDate, filteredAulas, explicadores, onCellClick, onAu
               <div className="space-y-px">
                 {visible.map(aula => {
                   const palette = getProfPalette(aula.explicadorId, explicadores);
+                  // Primeiro nome do 1.º aluno (poupa espaço nas células compactas);
+                  // em grupo, acrescenta +N com os restantes alunos.
+                  const primeiroNome = alunos.find(a => a.id === aula.alunoIds[0])?.nome?.split(" ")[0] ?? "";
+                  const extra = aula.alunoIds.length > 1 ? ` +${aula.alunoIds.length - 1}` : "";
+                  const prefixoAluno = primeiroNome ? `${primeiroNome}${extra} · ` : "";
                   return (
                     <button
                       key={aula.id}
@@ -630,7 +637,7 @@ function MonthView({ currentDate, filteredAulas, explicadores, onCellClick, onAu
                       style={{ backgroundColor: palette.bg, color: palette.text, borderLeft: `2px solid ${palette.border}` }}
                       onClick={e => { e.stopPropagation(); onAulaClick(aula); }}
                     >
-                      {aula.horaInicio} {aula.disciplina}
+                      {aula.horaInicio} {prefixoAluno}{aula.disciplina}
                     </button>
                   );
                 })}
