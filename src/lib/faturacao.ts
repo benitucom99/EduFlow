@@ -176,6 +176,44 @@ export interface AulaFaturacaoExplicador {
   valorHora: number;
   valorSessao: number;
   contabilizado: boolean;
+  // Preenchidos só no modo "percentagem": a percentagem aplicada e a base de
+  // receita (total cobrado aos alunos nesta aula) sobre a qual incidiu.
+  percentagem?: number;
+  baseReceita?: number;
+}
+
+/**
+ * Valor total cobrado aos alunos numa aula (soma das sessões cobráveis), usando
+ * a mesma tabela da verdade de `calcularCobrancaAula`. É a base do cálculo do
+ * custo do professor em modo "percentagem".
+ *
+ * Em grupo soma todos os alunos cobráveis (ex: 3×20€ = 60€). Alunos cuja sessão
+ * não é cobrável (ex: falta com decisão de não cobrar) não entram — logo não
+ * contam para a percentagem do professor, conforme a regra de negócio.
+ */
+export function valorCobradoAlunosAula(
+  aula: Aula,
+  alunoMap: Map<string, Aluno>,
+  disc: Disciplina | undefined,
+  momento: MomentoPagamento,
+  hoje?: string
+): number {
+  const duracao = parseDurationHours(aula.horaInicio, aula.horaFim);
+  let total = 0;
+  for (const alunoId of aula.alunoIds) {
+    const presenca = aula.presencas[alunoId] ?? null;
+    const precoPorHora = aula.tipo === "grupo"
+      ? (disc?.precoHoraGrupo ?? 0)
+      : precoHoraIndividualParaDuracao(disc?.precoHoraIndividual ?? 0, disc?.escaloesPrecoIndividual, duracao);
+    const descontoRatio = (alunoMap.get(alunoId)?.desconto || 0) / 100;
+    const precoBase = (precoPorHora * duracao) * (1 - descontoRatio);
+    const cobrarFaltaDecisao = aula.presencaInfo[alunoId]?.cobrarFalta ?? true;
+    const { cobrar, valor } = calcularCobrancaAula({
+      presenca, cobrarFaltaDecisao, isReposicao: aula.isReposicao, data: aula.data, momento, precoBase, hoje,
+    });
+    if (cobrar) total += valor;
+  }
+  return total;
 }
 
 export interface ResumoExplicador {
@@ -193,13 +231,19 @@ export function calcularPagamentoExplicadores(
   dataInicio: string,
   dataFim: string,
   disciplinas: Disciplina[] = [],
-  modoPagamento: ModoPagamentoProfessor = "base"
+  modoPagamento: ModoPagamentoProfessor = "base",
+  // Necessários só no modo "percentagem" (custo = % do que os alunos pagaram).
+  // `momento`/`hoje` alinham a base de receita com a cobrança ao aluno.
+  alunos: Aluno[] = [],
+  momento: MomentoPagamento = "fim",
+  hoje?: string
 ): ResumoExplicador[] {
   // Aulas canceladas não geram pagamento ao explicador.
   const aulasFiltradas = aulas.filter(a => a.estado !== "cancelada" && a.data >= dataInicio && a.data <= dataFim);
   const expMap = new Map(explicadores.map(e => [e.id, e]));
   // Mapa nome→Disciplina para resolver disciplinaValores (indexados por UUID)
   const discByNome = new Map(disciplinas.map(d => [d.nome, d]));
+  const alunoMap = new Map(alunos.map(a => [a.id, a]));
   const resultado = new Map<string, AulaFaturacaoExplicador[]>();
 
   for (const aula of aulasFiltradas) {
@@ -219,6 +263,26 @@ export function calcularPagamentoExplicadores(
     });
     const contabilizado = algumCobravel;
 
+    if (!resultado.has(aula.explicadorId)) resultado.set(aula.explicadorId, []);
+
+    // Modo "percentagem": custo = (total cobrado aos alunos na aula) × %.
+    // Difere dos outros modos: não usa valor/hora, e a base já exclui alunos não
+    // cobráveis (faltas não cobradas), pelo que `contabilizado` segue a receita.
+    if (modoPagamento === "percentagem") {
+      const disc = discByNome.get(aula.disciplina);
+      const baseReceita = valorCobradoAlunosAula(aula, alunoMap, disc, momento, hoje);
+      const percentagem = explicador.percentagemReceita ?? 0;
+      resultado.get(aula.explicadorId)!.push({
+        aula, alunosPresentes, duracao,
+        valorHora: 0,
+        valorSessao: baseReceita * (percentagem / 100),
+        contabilizado: baseReceita > 0,
+        percentagem,
+        baseReceita,
+      });
+      continue;
+    }
+
     let valorHora = explicador.valorHora;
     if (modoPagamento === "por_disciplina" && explicador.disciplinaValores) {
       const disc = discByNome.get(aula.disciplina);
@@ -228,7 +292,6 @@ export function calcularPagamentoExplicadores(
       }
     }
 
-    if (!resultado.has(aula.explicadorId)) resultado.set(aula.explicadorId, []);
     resultado.get(aula.explicadorId)!.push({
       aula, alunosPresentes, duracao,
       valorHora,
@@ -315,7 +378,10 @@ export function exportPagamentoDetalhado(resumos: ResumoExplicador[], alunos: Al
         r.explicador.nome, r.explicador.email, a.aula.data.split("-").reverse().join("/"),
         a.aula.horaInicio, a.aula.horaFim, a.aula.disciplina, alunoNomes,
         a.aula.tipo === "individual" ? "Individual" : "Grupo",
-        String(Math.round(a.duracao * 60)), a.valorHora.toFixed(2), a.valorSessao.toFixed(2),
+        String(Math.round(a.duracao * 60)),
+        // Em percentagem mostra "40% de 60,00 €"; nos restantes o valor/hora.
+        a.percentagem != null ? `${a.percentagem}% de ${(a.baseReceita ?? 0).toFixed(2)}` : a.valorHora.toFixed(2),
+        a.valorSessao.toFixed(2),
         a.alunosPresentes ? "Presente" : "Falta", a.contabilizado ? "Sim" : "Não",
       ]);
     }
@@ -332,10 +398,13 @@ export function exportPagamentoResumo(resumos: ResumoExplicador[], periodo: stri
   let csv = csvLine(["Explicador", "Email", "Telefone", "Nº Aulas", "Horas Totais", "Valor/Hora (€)", "Total a Pagar (€)"]);
   let total = 0;
   for (const r of resumos) {
-    // Em por_disciplina, a taxa varia por aula: mostrar média efectiva para referência.
-    const valorHoraLabel = modoPagamento === "por_disciplina"
-      ? (r.horasTotais > 0 ? (r.totalPagar / r.horasTotais).toFixed(2) + " (méd.)" : "—")
-      : r.explicador.valorHora.toFixed(2);
+    // Em percentagem, a coluna mostra a % do professor; em por_disciplina a taxa
+    // varia por aula → mostra a média efectiva; em base, o valor/hora fixo.
+    const valorHoraLabel = modoPagamento === "percentagem"
+      ? (r.explicador.percentagemReceita ?? 0) + "%"
+      : modoPagamento === "por_disciplina"
+        ? (r.horasTotais > 0 ? (r.totalPagar / r.horasTotais).toFixed(2) + " (méd.)" : "—")
+        : r.explicador.valorHora.toFixed(2);
     csv += csvLine([r.explicador.nome, r.explicador.email, r.explicador.telefone, String(r.aulasRealizadas), formatDuration(r.horasTotais), valorHoraLabel, r.totalPagar.toFixed(2)]);
     total += r.totalPagar;
   }

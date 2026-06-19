@@ -70,6 +70,9 @@ export interface Explicador {
   // Valor/hora por-disciplina. Chaveado por disciplinaId, à parte de `disciplinas`
   // (nomes). Usado quando o centro está em modo "por_disciplina".
   disciplinaValores?: Record<string, number>;
+  // Percentagem da receita do aluno atribuída ao professor (0-100). Usada quando
+  // o centro está em modo "percentagem". null/undefined → 0 (não recebe).
+  percentagemReceita?: number;
   habilitacoes: string;
   estado: "ativo" | "inativo";
   iban?: string;
@@ -78,7 +81,7 @@ export interface Explicador {
   acessoAtivadoEm?: string | null;
 }
 
-export type ModoPagamentoProfessor = "base" | "por_disciplina";
+export type ModoPagamentoProfessor = "base" | "por_disciplina" | "percentagem";
 
 // Momento de pagamento do centro: 'fim' = à hora conforme presença (atual);
 // 'inicio' = mensalidade antecipada (cobra agendadas/justificadas, reposição 0€).
@@ -295,7 +298,7 @@ async function loadAlunos(centroId: string, discIdToName: Map<string, string>, l
 async function loadExplicadores(centroId: string, discIdToName: Map<string, string>, leafIds: Set<string>): Promise<Explicador[]> {
   const { data, error } = await supabase
     .from("professor_perfis")
-    .select("user_id, telefone, valor_hora, habilitacoes, iban, nif, estado, convite_enviado_em, acesso_ativado_em, users!inner(nome, email), professor_disciplinas(disciplina_id, valor_hora)")
+    .select("user_id, telefone, valor_hora, percentagem_receita, habilitacoes, iban, nif, estado, convite_enviado_em, acesso_ativado_em, users!inner(nome, email), professor_disciplinas(disciplina_id, valor_hora)")
     .eq("centro_id", centroId);
   if (error) throw error;
   return (data ?? []).map((r: any) => {
@@ -311,6 +314,7 @@ async function loadExplicadores(centroId: string, discIdToName: Map<string, stri
       disciplinas: pdRows.map((pd: any) => discIdToName.get(pd.disciplina_id) ?? "").filter(Boolean),
       valorHora: Number(r.valor_hora ?? 0),
       disciplinaValores,
+      percentagemReceita: r.percentagem_receita != null ? Number(r.percentagem_receita) : undefined,
       habilitacoes: r.habilitacoes ?? "",
       estado: r.estado,
       iban: r.iban ?? undefined,
@@ -334,7 +338,9 @@ async function loadCentroConfig(centroId: string): Promise<CentroConfig> {
   if (error) throw error;
   const row = data as any;
   return {
-    modoPagamentoProfessor: row?.modo_pagamento_professor === "por_disciplina" ? "por_disciplina" : "base",
+    modoPagamentoProfessor: (["por_disciplina", "percentagem"].includes(row?.modo_pagamento_professor)
+      ? row.modo_pagamento_professor
+      : "base") as ModoPagamentoProfessor,
     momentoPagamento: row?.momento_pagamento === "inicio" ? "inicio" : "fim",
     anoLetivoInicio: row?.ano_letivo_inicio ?? undefined,
     anoLetivoFim: row?.ano_letivo_fim ?? undefined,
@@ -712,6 +718,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       user_id: newUserId, centro_id: cid,
       telefone: data.telefone || null,
       valor_hora: data.valorHora,
+      percentagem_receita: data.percentagemReceita ?? null,
       habilitacoes: data.habilitacoes || null,
       iban: data.iban || null,
       nif: data.nif || null,
@@ -733,6 +740,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const perfUpd: Record<string, unknown> = {};
     if (patch.telefone !== undefined) perfUpd.telefone = patch.telefone || null;
     if (patch.valorHora !== undefined) perfUpd.valor_hora = patch.valorHora;
+    if (patch.percentagemReceita !== undefined) perfUpd.percentagem_receita = patch.percentagemReceita ?? null;
     if (patch.habilitacoes !== undefined) perfUpd.habilitacoes = patch.habilitacoes || null;
     if (patch.iban !== undefined) perfUpd.iban = patch.iban || null;
     if (patch.nif !== undefined) perfUpd.nif = patch.nif || null;

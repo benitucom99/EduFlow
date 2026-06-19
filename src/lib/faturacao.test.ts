@@ -119,6 +119,56 @@ describe("calcularCobrancaAlunos — agregação por momento", () => {
 });
 
 // ── Preços por duração (descontos por volume) ───────────────────────────────
+// ── Pagamento ao professor por PERCENTAGEM da receita do aluno ──────────────
+describe("calcularPagamentoExplicadores — modo 'percentagem'", () => {
+  const mkExp = (pct?: number): Explicador => ({
+    id: "e1", nome: "Prof", email: "", telefone: "", disciplinas: [], valorHora: 30,
+    habilitacoes: "", estado: "ativo", percentagemReceita: pct,
+  });
+  const discs = [mkDisc("Matemática", 20)]; // individual e grupo a 20€/h
+  const call = (aulas: Aula[], alunos: Aluno[], exp: Explicador) =>
+    calcularPagamentoExplicadores(aulas, [exp], "2026-06-01", "2026-06-30", discs, "percentagem", alunos, "fim", HOJE);
+
+  it("individual: professor recebe a percentagem do que o aluno pagou", () => {
+    const aulas = [mkAula({ id: "x1", data: PASSADO, alunoId: "a1", presencas: { a1: "presente" } })];
+    const r = call(aulas, [mkAluno("a1")], mkExp(40));
+    // aluno paga 1h×20 = 20 → professor 40% = 8
+    expect(r[0].totalPagar).toBeCloseTo(8, 2);
+    expect(r[0].aulas[0].percentagem).toBe(40);
+    expect(r[0].aulas[0].baseReceita).toBeCloseTo(20, 2);
+  });
+
+  it("grupo: percentagem incide sobre o total dos alunos cobráveis (3×20)", () => {
+    const aulas = [mkAula({
+      id: "x1", data: PASSADO, alunoId: "a1", tipo: "grupo",
+      alunoIds: ["a1", "a2", "a3"], presencas: { a1: "presente", a2: "presente", a3: "presente" },
+    })];
+    const r = call(aulas, [mkAluno("a1"), mkAluno("a2"), mkAluno("a3")], mkExp(40));
+    // 3×20 = 60 → 40% = 24
+    expect(r[0].aulas[0].baseReceita).toBeCloseTo(60, 2);
+    expect(r[0].totalPagar).toBeCloseTo(24, 2);
+  });
+
+  it("falta não cobrada (cobrarFalta=false) não conta para a base", () => {
+    const aulas = [mkAula({
+      id: "x1", data: PASSADO, alunoId: "a1", tipo: "grupo",
+      alunoIds: ["a1", "a2"],
+      presencas: { a1: "presente", a2: "falta_injustificada" },
+      presencaInfo: { a2: { cobrarFalta: false } },
+    })];
+    const r = call(aulas, [mkAluno("a1"), mkAluno("a2")], mkExp(50));
+    // só a1 conta: 20 → 50% = 10 (a2 não gerou receita)
+    expect(r[0].aulas[0].baseReceita).toBeCloseTo(20, 2);
+    expect(r[0].totalPagar).toBeCloseTo(10, 2);
+  });
+
+  it("sem percentagem definida → 0 (não recebe); aula não contabilizada", () => {
+    const aulas = [mkAula({ id: "x1", data: PASSADO, alunoId: "a1", presencas: { a1: "presente" } })];
+    const r = call(aulas, [mkAluno("a1")], mkExp(undefined));
+    expect(r[0].totalPagar).toBeCloseTo(0, 2);
+  });
+});
+
 describe("precoHoraIndividualParaDuracao", () => {
   const escaloes = [
     { duracaoMin: 2, precoHora: 17.75 },

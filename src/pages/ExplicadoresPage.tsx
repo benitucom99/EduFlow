@@ -198,6 +198,7 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
   const [valorHora, setValorHora] = useState("15");
+  const [percentagem, setPercentagem] = useState("");
   const [selectedDisc, setSelectedDisc] = useState<string[]>([]);
   const [disciplinaValores, setDisciplinaValores] = useState<Record<string, number>>({});
   const [iban, setIban] = useState("");
@@ -210,6 +211,7 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
       setEmail(explicador?.email || "");
       setTelefone(explicador?.telefone || "");
       setValorHora(String(explicador?.valorHora || 15));
+      setPercentagem(explicador?.percentagemReceita != null ? String(explicador.percentagemReceita) : "");
       setSelectedDisc(explicador?.disciplinas || []);
       setDisciplinaValores(explicador?.disciplinaValores ?? {});
       setIban(explicador?.iban || "");
@@ -227,12 +229,17 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) e.email = "Email inválido";
     if (selectedDisc.length === 0) e.disc = "Selecione pelo menos 1";
     if (nif && !/^\d{9}$/.test(nif)) e.nif = "NIF deve ter 9 dígitos";
+    if (modoPag === "percentagem" && percentagem !== "") {
+      const p = Number(percentagem);
+      if (!Number.isInteger(p) || p < 0 || p > 100) e.percentagem = "0 a 100";
+    }
     setErrors(e);
     if (Object.keys(e).length > 0) return;
     onSave({
       nome: nome.trim(), email: email.trim(), telefone,
       habilitacoes: explicador?.habilitacoes || "",
       valorHora: parseFloat(valorHora),
+      percentagemReceita: percentagem === "" ? null : Number(percentagem),
       disciplinas: selectedDisc,
       disciplinaValores,
       iban: iban || undefined,
@@ -270,6 +277,19 @@ function ExplicadorModal({ open, onClose, explicador, onSave }: {
               <div>
                 <Label>Valor/Hora (€)</Label>
                 <Input type="number" value={valorHora} onChange={e => setValorHora(e.target.value)} />
+              </div>
+            )}
+            {modoPag === "percentagem" && (
+              <div>
+                <Label>Percentagem da receita (%)</Label>
+                <Input
+                  type="number" min="0" max="100" step="1"
+                  placeholder="ex: 40"
+                  value={percentagem}
+                  onChange={e => setPercentagem(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground mt-0.5">Percentagem do valor cobrado ao aluno que o explicador recebe por aula. Vazio = 0%.</p>
+                {errors.percentagem && <p className="text-xs text-destructive mt-1">{errors.percentagem}</p>}
               </div>
             )}
             <div>

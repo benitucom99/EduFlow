@@ -195,6 +195,7 @@ export default function ConfiguracoesCentroPage() {
                   <SelectContent>
                     <SelectItem value="base">Valor/hora base (igual para todas as disciplinas)</SelectItem>
                     <SelectItem value="por_disciplina">Por disciplina (valor/hora diferente por disciplina)</SelectItem>
+                    <SelectItem value="percentagem">Percentagem da receita do aluno</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

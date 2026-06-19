@@ -13,12 +13,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { folhasAgrupadas } from "@/lib/disciplinas";
-import { parseDurationHours } from "@/lib/faturacao";
+import { parseDurationHours, valorCobradoAlunosAula } from "@/lib/faturacao";
 
 export default function ExplicadorDetalhePage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { explicadores, updateExplicador, inviteExplicador, aulas, disciplinas, centroConfig } = useData();
+  const { explicadores, updateExplicador, inviteExplicador, aulas, alunos, disciplinas, centroConfig } = useData();
   const { toast } = useToast();
   const exp = explicadores.find(e => e.id === id);
   const [editOpen, setEditOpen] = useState(false);
@@ -54,11 +54,19 @@ export default function ExplicadorDetalhePage() {
     const aulasExp = aulas.filter(a => a.explicadorId === id && a.estado !== "cancelada");
     const alunosAtivos = new Set(aulasExp.flatMap(a => a.alunoIds)).size;
     const discByNome = new Map(disciplinas.map(d => [d.nome, d]));
+    const alunoMap = new Map(alunos.map(a => [a.id, a]));
+    const modo = centroConfig.modoPagamentoProfessor;
     let valorEstimado = 0;
     for (const aula of aulasExp) {
+      // Percentagem: % da receita cobrada aos alunos na aula (mesma base da faturação).
+      if (modo === "percentagem") {
+        const base = valorCobradoAlunosAula(aula, alunoMap, discByNome.get(aula.disciplina), centroConfig.momentoPagamento);
+        valorEstimado += base * ((exp?.percentagemReceita ?? 0) / 100);
+        continue;
+      }
       const duracao = parseDurationHours(aula.horaInicio, aula.horaFim);
       let valorHora = exp?.valorHora ?? 0;
-      if (centroConfig.modoPagamentoProfessor === "por_disciplina" && exp?.disciplinaValores) {
+      if (modo === "por_disciplina" && exp?.disciplinaValores) {
         const disc = discByNome.get(aula.disciplina);
         if (disc) {
           const vd = exp.disciplinaValores[disc.id];
@@ -68,7 +76,7 @@ export default function ExplicadorDetalhePage() {
       valorEstimado += duracao * valorHora;
     }
     return { esteMes: aulasExp.length, alunosAtivos, valorEstimado };
-  }, [aulas, id, exp, disciplinas, centroConfig]);
+  }, [aulas, alunos, id, exp, disciplinas, centroConfig]);
 
   if (!exp) return <div className="p-6">Explicador não encontrado</div>;
 
@@ -88,7 +96,9 @@ export default function ExplicadorDetalhePage() {
               <p className="text-3xl font-bold text-primary mt-3">
                 {centroConfig.modoPagamentoProfessor === "por_disciplina"
                   ? <span className="text-base font-normal text-muted-foreground">valor por disciplina</span>
-                  : <>{exp.valorHora}€<span className="text-sm font-normal text-muted-foreground">/hora</span></>}
+                  : centroConfig.modoPagamentoProfessor === "percentagem"
+                    ? <>{exp.percentagemReceita ?? 0}<span className="text-sm font-normal text-muted-foreground">% da receita</span></>
+                    : <>{exp.valorHora}€<span className="text-sm font-normal text-muted-foreground">/hora</span></>}
               </p>
             </div>
             <div className="space-y-3 pt-4 border-t">
@@ -222,6 +232,7 @@ function EditExplicadorModal({ open, onClose, explicador, onSave }: {
   const [telefone, setTelefone] = useState("");
   const [habilitacoes, setHabilitacoes] = useState("");
   const [valorHora, setValorHora] = useState("15");
+  const [percentagem, setPercentagem] = useState("");
   const [selectedDisc, setSelectedDisc] = useState<string[]>([]);
   const [disciplinaValores, setDisciplinaValores] = useState<Record<string, number>>({});
   const [iban, setIban] = useState("");
@@ -235,6 +246,7 @@ function EditExplicadorModal({ open, onClose, explicador, onSave }: {
       setTelefone(explicador.telefone);
       setHabilitacoes(explicador.habilitacoes);
       setValorHora(String(explicador.valorHora));
+      setPercentagem(explicador.percentagemReceita != null ? String(explicador.percentagemReceita) : "");
       setSelectedDisc(explicador.disciplinas);
       setDisciplinaValores(explicador.disciplinaValores ?? {});
       setIban(explicador.iban || "");
@@ -248,11 +260,16 @@ function EditExplicadorModal({ open, onClose, explicador, onSave }: {
     if (!nome.trim()) e.nome = "Obrigatório";
     if (selectedDisc.length === 0) e.disc = "Selecione pelo menos 1";
     if (nif && !/^\d{9}$/.test(nif)) e.nif = "NIF deve ter 9 dígitos";
+    if (modoPag === "percentagem" && percentagem !== "") {
+      const p = Number(percentagem);
+      if (!Number.isInteger(p) || p < 0 || p > 100) e.percentagem = "0 a 100";
+    }
     setErrors(e);
     if (Object.keys(e).length > 0) return;
     onSave({
       nome, email, telefone, habilitacoes,
       valorHora: parseFloat(valorHora),
+      percentagemReceita: percentagem === "" ? null : Number(percentagem),
       disciplinas: selectedDisc,
       disciplinaValores,
       iban: iban || undefined,
@@ -278,6 +295,14 @@ function EditExplicadorModal({ open, onClose, explicador, onSave }: {
             <div><Label>Habilitações</Label><Textarea value={habilitacoes} onChange={e => setHabilitacoes(e.target.value)} /></div>
             {modoPag === "base" && (
               <div><Label>Valor/Hora (€)</Label><Input type="number" value={valorHora} onChange={e => setValorHora(e.target.value)} /></div>
+            )}
+            {modoPag === "percentagem" && (
+              <div>
+                <Label>Percentagem da receita (%)</Label>
+                <Input type="number" min="0" max="100" step="1" placeholder="ex: 40" value={percentagem} onChange={e => setPercentagem(e.target.value)} />
+                <p className="text-xs text-muted-foreground mt-0.5">Percentagem do valor cobrado ao aluno que o explicador recebe por aula. Vazio = 0%.</p>
+                {errors.percentagem && <p className="text-xs text-destructive mt-1">{errors.percentagem}</p>}
+              </div>
             )}
             <div>
               <Label>Disciplinas leccionadas *</Label>
