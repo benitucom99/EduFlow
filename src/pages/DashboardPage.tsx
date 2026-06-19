@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useData, Presenca, ReposicaoEstado } from "@/contexts/DataContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +34,7 @@ function relativeDay(dateStr: string): string {
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const isExplicador = user?.role === "explicador";
   const { alunos, aulas, explicadores, salas, disciplinas, setPresenca } = useData();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -100,6 +101,8 @@ export default function DashboardPage() {
     return aulas
       .filter(a => {
         if (a.estado === "cancelada") return false;
+        // Vista do professor: apenas as próprias aulas.
+        if (isExplicador && a.explicadorId !== user?.id) return false;
         try {
           const [h, m] = a.horaFim.split(":").map(Number);
           const fim = parseISO(a.data);
@@ -112,7 +115,7 @@ export default function DashboardPage() {
         return diff !== 0 ? diff : a.horaInicio.localeCompare(b.horaInicio);
       })
       .slice(0, 5);
-  }, [aulas, now]);
+  }, [aulas, now, isExplicador, user?.id]);
 
   // Faltas justificadas com reposição por agendar (reposicaoEstado === "pendente").
   const reposicoesPendentes = useMemo(() => {
@@ -120,6 +123,7 @@ export default function DashboardPage() {
     const lista: { aulaId: string; alunoId: string; data: string; alunoNome: string; disciplina: string }[] = [];
     for (const aula of aulas) {
       if (aula.estado === "cancelada") continue;
+      if (isExplicador && aula.explicadorId !== user?.id) continue;
       for (const alunoId of aula.alunoIds) {
         if (aula.presencaInfo[alunoId]?.reposicaoEstado === "pendente") {
           lista.push({
@@ -133,7 +137,7 @@ export default function DashboardPage() {
       }
     }
     return lista.sort((a, b) => b.data.localeCompare(a.data));
-  }, [aulas, alunos]);
+  }, [aulas, alunos, isExplicador, user?.id]);
 
   // Presenças por registar: aulas que JÁ terminaram mas têm alunos sem
   // presença marcada (presencas[alunoId] nulo/indefinido).
@@ -143,6 +147,7 @@ export default function DashboardPage() {
     const lista: FaltaPendente[] = [];
     for (const aula of aulas) {
       if (aula.estado === "cancelada") continue;
+      if (isExplicador && aula.explicadorId !== user?.id) continue;
       let terminou = false;
       try {
         const [h, m] = aula.horaFim.split(":").map(Number);
@@ -166,7 +171,7 @@ export default function DashboardPage() {
       }
     }
     return lista.sort((a, b) => b.data.localeCompare(a.data) || a.horaInicio.localeCompare(b.horaInicio));
-  }, [aulas, alunos, explicadores, now]);
+  }, [aulas, alunos, explicadores, now, isExplicador, user?.id]);
 
   // ── Registo de presença a partir do Dashboard (mesma lógica da pág. Presenças) ─
   const updatePresenca = async (
@@ -222,30 +227,30 @@ export default function DashboardPage() {
     { label: "Taxa de Assiduidade", value: `${stats.assiduidade}%`, icon: CheckCircle2, iconBg: "bg-violet-100", iconColor: "text-violet-500" },
   ];
 
-  // Explicadores não têm Dashboard — entram diretamente no calendário.
-  if (user?.role === "explicador") return <Navigate to="/calendario" replace />;
-
   return (
     <div className="space-y-6 animate-fade-in">
       <h1 className="text-2xl font-bold">Dashboard</h1>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {kpis.map(kpi => (
-          <Card key={kpi.label} className="rounded-2xl shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-sm text-muted-foreground font-sans">{kpi.label}</p>
-                  <p className="font-heading font-bold text-3xl mt-2 tracking-tight">{kpi.value}</p>
+      {/* KPIs só para staff (admin/receção); o professor vê apenas as listas. */}
+      {!isExplicador && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {kpis.map(kpi => (
+            <Card key={kpi.label} className="rounded-2xl shadow-sm">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm text-muted-foreground font-sans">{kpi.label}</p>
+                    <p className="font-heading font-bold text-3xl mt-2 tracking-tight">{kpi.value}</p>
+                  </div>
+                  <div className={`h-11 w-11 shrink-0 rounded-xl flex items-center justify-center ${kpi.iconBg} ${kpi.iconColor}`}>
+                    <kpi.icon className="h-5 w-5" strokeWidth={2.25} />
+                  </div>
                 </div>
-                <div className={`h-11 w-11 shrink-0 rounded-xl flex items-center justify-center ${kpi.iconBg} ${kpi.iconColor}`}>
-                  <kpi.icon className="h-5 w-5" strokeWidth={2.25} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Reposições pendentes + presenças em falta (1/2 largura cada). */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">

@@ -92,7 +92,6 @@ const App = () => (
                   </Route>
                   {/* admin + rececionista */}
                   <Route element={<ProtectedRoute allowedRoles={["admin", "rececionista"]}><Outlet /></ProtectedRoute>}>
-                    <Route path="/dashboard" element={<DashboardPage />} />
                     <Route path="/configuracoes/definicoes" element={<ConfiguracoesDefinicoesPage />} />
                     <Route path="/alunos" element={<AlunosPage />} />
                     <Route path="/alunos/:id" element={<AlunoDetalhePage />} />
@@ -101,6 +100,7 @@ const App = () => (
                     <Route path="/salas" element={<SalasPage />} />
                   </Route>
                   {/* all roles */}
+                  <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/calendario" element={<CalendarioPage />} />
                   <Route path="/presencas" element={<PresencasPage />} />
                   <Route path="/configuracoes" element={<ConfiguracoesPage />} />
