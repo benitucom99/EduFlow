@@ -80,7 +80,7 @@ export default function ExplicadoresPage() {
             <TableHeader><TableRow>
               <TableHead>Nome</TableHead>
               <TableHead>Disciplinas leccionadas</TableHead>
-              <TableHead>Valor/Hora</TableHead>
+              <TableHead>{centroConfig.modoPagamentoProfessor === "percentagem" ? "% a pagar" : "Valor/Hora"}</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
@@ -96,7 +96,9 @@ export default function ExplicadoresPage() {
                   <TableCell className="font-medium">
                     {centroConfig.modoPagamentoProfessor === "por_disciplina"
                       ? <span className="text-xs text-muted-foreground">por disciplina</span>
-                      : `${exp.valorHora}€`}
+                      : centroConfig.modoPagamentoProfessor === "percentagem"
+                        ? `${exp.percentagemReceita ?? 0}%`
+                        : `${exp.valorHora}€`}
                   </TableCell>
                   <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">
@@ -129,7 +131,9 @@ export default function ExplicadoresPage() {
                 <p className="text-2xl font-bold text-primary mb-4">
                   {centroConfig.modoPagamentoProfessor === "por_disciplina"
                     ? <span className="text-base font-normal text-muted-foreground">valor por disciplina</span>
-                    : <>{exp.valorHora}€<span className="text-sm font-normal text-muted-foreground">/hora</span></>}
+                    : centroConfig.modoPagamentoProfessor === "percentagem"
+                      ? <>{exp.percentagemReceita ?? 0}<span className="text-sm font-normal text-muted-foreground">% a pagar</span></>
+                      : <>{exp.valorHora}€<span className="text-sm font-normal text-muted-foreground">/hora</span></>}
                 </p>
                 <div className="flex gap-2" onClick={e => e.stopPropagation()}>
                   <Button variant="outline" className="flex-1" onClick={() => navigate(`/explicadores/${exp.id}`)}>Ver perfil</Button>
