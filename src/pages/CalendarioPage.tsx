@@ -216,31 +216,36 @@ export default function CalendarioPage() {
 
   return (
     <div className="flex flex-col gap-4 animate-fade-in h-full print:h-auto">
-      {/* ── Header ─────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Calendário</h1>
+      {/* ── Header / Toolbar ───────────────────────────────────────────
+          Duas zonas: à esquerda o seletor de período (destaque principal);
+          à direita os controlos secundários (vista, filtros, exportar, nova aula). */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 print:hidden">
+        {/* Zona Esquerda — Navegação de Período (elemento dominante).
+            Setas navegam; o bloco central mostra o intervalo + descritor relativo
+            e, ao clicar, volta a "hoje". */}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" className="h-12 w-10 shrink-0" onClick={() => navigate(-1)}>
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+          <button
+            type="button"
+            onClick={() => setCurrentDate(new Date())}
+            title="Ir para hoje"
+            className="flex flex-1 lg:flex-none flex-col items-center justify-center px-6 h-12 min-w-[200px] rounded-xl border bg-card shadow-sm hover:bg-muted transition-colors"
+          >
+            <span className="text-base font-bold capitalize leading-tight">{dateLabel}</span>
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground leading-tight mt-0.5">{relativeLabel}</span>
+          </button>
+          <Button variant="outline" size="icon" className="h-12 w-10 shrink-0" onClick={() => navigate(1)}>
+            <ChevronRight className="h-5 w-5" />
+          </Button>
         </div>
-        <div className="flex items-center gap-2 flex-wrap print:hidden">
-          {/* Seletor de período: setas navegam; o centro mostra o intervalo + descritor
-              relativo e, ao clicar, volta a "hoje". */}
-          <div className="flex items-center gap-1">
-            <Button variant="outline" size="icon" onClick={() => navigate(-1)}><ChevronLeft className="h-4 w-4" /></Button>
-            <button
-              type="button"
-              onClick={() => setCurrentDate(new Date())}
-              title="Ir para hoje"
-              className="flex flex-col items-center justify-center px-3 h-9 min-w-[170px] rounded-lg border bg-background hover:bg-muted transition-colors"
-            >
-              <span className="text-sm font-semibold capitalize leading-tight">{dateLabel}</span>
-              <span className="text-[10px] uppercase tracking-wide text-muted-foreground leading-tight">{relativeLabel}</span>
-            </button>
-            <Button variant="outline" size="icon" onClick={() => navigate(1)}><ChevronRight className="h-4 w-4" /></Button>
-          </div>
 
-          {/* View selector */}
+        {/* Zona Direita — Controlos secundários */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* View selector (pill): Dia | Semana | Mês — do mais granular ao mais geral */}
           <div className="flex border rounded-lg overflow-hidden text-sm">
-            {(["mes", "semana", "dia"] as const).map(v => (
+            {(["dia", "semana", "mes"] as const).map(v => (
               <button
                 key={v}
                 onClick={() => setView(v)}
@@ -260,7 +265,7 @@ export default function CalendarioPage() {
           </Button>
 
           <Button size="sm" variant="outline" onClick={() => window.print()}>
-            <Printer className="h-4 w-4 mr-1" /> Exportar PDF
+            <Printer className="h-4 w-4 mr-1" /> Exportar
           </Button>
 
           <Button size="sm" onClick={() => { setEditingAula(null); setModalOpen(true); }}>
