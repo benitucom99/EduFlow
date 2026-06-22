@@ -96,6 +96,8 @@ export default function CalendarioPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [expFilter, setExpFilter] = useState("todos");
   const [salaFilter, setSalaFilter] = useState("todas");
+  const [alunoFilter, setAlunoFilter] = useState("todos");
+  const [alunoFilterOpen, setAlunoFilterOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAula, setEditingAula] = useState<Aula | null>(null);
   const [prefill, setPrefill] = useState<{ data: string; horaInicio: string } | null>(null);
@@ -131,14 +133,20 @@ export default function CalendarioPage() {
     else setCurrentDate(d => addDays(d, dir));
   };
 
+  // Alunos ativos para o filtro de aluno (com pesquisa).
+  const alunosAtivos = useMemo(() => alunos.filter(a => a.estado === "ativo"), [alunos]);
+  const alunoFiltrado = alunosAtivos.find(a => a.id === alunoFilter);
+
   const filteredAulas = useMemo(() => aulas.filter(a => {
     if (a.estado === "cancelada") return false;
     // Explicador só vê as próprias aulas.
     if (isExplicador && a.explicadorId !== user?.id) return false;
     if (expFilter !== "todos" && a.explicadorId !== expFilter) return false;
     if (salaFilter !== "todas" && a.salaId !== salaFilter) return false;
+    // Filtro por aluno: mostra só aulas em que o aluno participa.
+    if (alunoFilter !== "todos" && !a.alunoIds.includes(alunoFilter)) return false;
     return true;
-  }), [aulas, expFilter, salaFilter, isExplicador, user?.id]);
+  }), [aulas, expFilter, salaFilter, alunoFilter, isExplicador, user?.id]);
 
   const getAulasForDate = (dateStr: string) => filteredAulas.filter(a => a.data === dateStr);
 
@@ -190,7 +198,7 @@ export default function CalendarioPage() {
           <h1 className="text-2xl font-bold">Calendário</h1>
           <p className="text-sm text-muted-foreground capitalize">{dateLabel}</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap print:hidden">
+        <div className="flex items-end gap-2 flex-wrap print:hidden">
           {/* Navigation */}
           <div className="flex items-center gap-1">
             <Button variant="outline" size="icon" onClick={() => navigate(-1)}><ChevronLeft className="h-4 w-4" /></Button>
@@ -211,30 +219,81 @@ export default function CalendarioPage() {
             ))}
           </div>
 
-          {/* Filters */}
+          {/* Filters (com título visível por cima de cada um) */}
           {!isExplicador && (
-            <Select value={expFilter} onValueChange={setExpFilter}>
-              <SelectTrigger className="w-[140px] h-9"><SelectValue placeholder="Explicador" /></SelectTrigger>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs text-muted-foreground px-0.5">Explicador</Label>
+              <Select value={expFilter} onValueChange={setExpFilter}>
+                <SelectTrigger className="w-[140px] h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  {explicadores.map(e => (
+                    <SelectItem key={e.id} value={e.id}>
+                      <span className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: getProfPalette(e.id, explicadores).border }} />
+                        {e.nome}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs text-muted-foreground px-0.5">Sala</Label>
+            <Select value={salaFilter} onValueChange={setSalaFilter}>
+              <SelectTrigger className="w-[110px] h-9"><SelectValue placeholder="Todas" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                {explicadores.map(e => (
-                  <SelectItem key={e.id} value={e.id}>
-                    <span className="flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: getProfPalette(e.id, explicadores).border }} />
-                      {e.nome}
-                    </span>
-                  </SelectItem>
-                ))}
+                <SelectItem value="todas">Todas</SelectItem>
+                {salas.map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
               </SelectContent>
             </Select>
-          )}
-          <Select value={salaFilter} onValueChange={setSalaFilter}>
-            <SelectTrigger className="w-[110px] h-9"><SelectValue placeholder="Sala" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todas">Todas</SelectItem>
-              {salas.map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs text-muted-foreground px-0.5">Aluno</Label>
+            <Popover open={alunoFilterOpen} onOpenChange={setAlunoFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={alunoFilterOpen}
+                  className="w-[180px] h-9 justify-between font-normal"
+                >
+                  <span className={cn("truncate", !alunoFiltrado && "text-muted-foreground")}>
+                    {alunoFiltrado ? alunoFiltrado.nome : "Todos"}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[220px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Pesquisar aluno..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhum aluno encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="Todos"
+                        onSelect={() => { setAlunoFilter("todos"); setAlunoFilterOpen(false); }}
+                      >
+                        <Check className={cn("mr-2 h-4 w-4", alunoFilter === "todos" ? "opacity-100" : "opacity-0")} />
+                        Todos
+                      </CommandItem>
+                      {alunosAtivos.map(a => (
+                        <CommandItem
+                          key={a.id}
+                          value={a.nome}
+                          onSelect={() => { setAlunoFilter(a.id); setAlunoFilterOpen(false); }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", alunoFilter === a.id ? "opacity-100" : "opacity-0")} />
+                          {a.nome}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
 
           <Button size="sm" variant="outline" onClick={() => window.print()}>
             <Printer className="h-4 w-4 mr-1" /> Exportar PDF
