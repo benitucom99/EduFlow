@@ -216,14 +216,17 @@ export default function CalendarioPage() {
 
   return (
     <div className="flex flex-col gap-4 animate-fade-in h-full print:h-auto">
-      {/* ── Header / Toolbar ───────────────────────────────────────────
-          Duas zonas: à esquerda o seletor de período (destaque principal);
-          à direita os controlos secundários (vista, filtros, exportar, nova aula). */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 print:hidden">
+      {/* ── Título + Toolbar ───────────────────────────────────────────
+          O título mantém-se como header da página. A toolbar tem duas zonas:
+          à esquerda o seletor de período (destaque principal); à direita os
+          controlos secundários (vista, filtros, exportar, nova aula). */}
+      <div className="flex flex-col gap-3 print:hidden">
+        <h1 className="text-2xl font-bold">Calendário</h1>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         {/* Zona Esquerda — Navegação de Período (elemento dominante).
             Setas navegam; o bloco central mostra o intervalo + descritor relativo
             e, ao clicar, volta a "hoje". */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 lg:pl-2">
           <Button variant="outline" size="icon" className="h-12 w-10 shrink-0" onClick={() => navigate(-1)}>
             <ChevronLeft className="h-5 w-5" />
           </Button>
@@ -271,6 +274,7 @@ export default function CalendarioPage() {
           <Button size="sm" onClick={() => { setEditingAula(null); setModalOpen(true); }}>
             <Plus className="h-4 w-4 mr-1" /> Nova Aula
           </Button>
+        </div>
         </div>
       </div>
 
