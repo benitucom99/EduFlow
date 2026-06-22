@@ -16,7 +16,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-import { addDays, startOfWeek, startOfMonth, format, isToday, addWeeks, subWeeks, addMonths, subMonths, isSameMonth, parseISO } from "date-fns";
+import { addDays, startOfWeek, startOfMonth, format, isToday, addWeeks, subWeeks, addMonths, subMonths, isSameMonth, parseISO, differenceInCalendarWeeks, differenceInCalendarDays, differenceInCalendarMonths } from "date-fns";
 import { pt } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -157,10 +157,36 @@ export default function CalendarioPage() {
   const viewDays = view === "semana" ? weekDays : [currentDate];
 
   const dateLabel = view === "semana"
-    ? `${format(weekDays[0], "d MMM", { locale: pt })} – ${format(weekDays[6], "d MMM yyyy", { locale: pt })}`
+    ? (isSameMonth(weekDays[0], weekDays[6])
+        ? `${format(weekDays[0], "d", { locale: pt })} – ${format(weekDays[6], "d MMMM yyyy", { locale: pt })}`
+        : `${format(weekDays[0], "d MMM", { locale: pt })} – ${format(weekDays[6], "d MMM yyyy", { locale: pt })}`)
     : view === "mes"
     ? format(currentDate, "MMMM yyyy", { locale: pt })
     : format(currentDate, "EEEE, d MMMM yyyy", { locale: pt });
+
+  // Descritor relativo (ex.: "Esta semana", "Próxima semana") para o seletor de período.
+  const relativeLabel = (() => {
+    const hoje = new Date();
+    if (view === "semana") {
+      const d = differenceInCalendarWeeks(currentDate, hoje, { weekStartsOn: 1 });
+      if (d === 0) return "Esta semana";
+      if (d === 1) return "Próxima semana";
+      if (d === -1) return "Semana passada";
+      return d > 0 ? `Daqui a ${d} semanas` : `Há ${Math.abs(d)} semanas`;
+    }
+    if (view === "mes") {
+      const d = differenceInCalendarMonths(currentDate, hoje);
+      if (d === 0) return "Este mês";
+      if (d === 1) return "Próximo mês";
+      if (d === -1) return "Mês passado";
+      return d > 0 ? `Daqui a ${d} meses` : `Há ${Math.abs(d)} meses`;
+    }
+    const d = differenceInCalendarDays(currentDate, hoje);
+    if (d === 0) return "Hoje";
+    if (d === 1) return "Amanhã";
+    if (d === -1) return "Ontem";
+    return d > 0 ? `Daqui a ${d} dias` : `Há ${Math.abs(d)} dias`;
+  })();
 
   const handleDayClick = (e: React.MouseEvent<HTMLDivElement>, dateStr: string) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -194,13 +220,21 @@ export default function CalendarioPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Calendário</h1>
-          <p className="text-sm text-muted-foreground capitalize">{dateLabel}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap print:hidden">
-          {/* Navigation */}
+          {/* Seletor de período: setas navegam; o centro mostra o intervalo + descritor
+              relativo e, ao clicar, volta a "hoje". */}
           <div className="flex items-center gap-1">
             <Button variant="outline" size="icon" onClick={() => navigate(-1)}><ChevronLeft className="h-4 w-4" /></Button>
-            <Button variant="outline" size="sm" className="px-3" onClick={() => setCurrentDate(new Date())}>Hoje</Button>
+            <button
+              type="button"
+              onClick={() => setCurrentDate(new Date())}
+              title="Ir para hoje"
+              className="flex flex-col items-center justify-center px-3 h-9 min-w-[170px] rounded-lg border bg-background hover:bg-muted transition-colors"
+            >
+              <span className="text-sm font-semibold capitalize leading-tight">{dateLabel}</span>
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground leading-tight">{relativeLabel}</span>
+            </button>
             <Button variant="outline" size="icon" onClick={() => navigate(1)}><ChevronRight className="h-4 w-4" /></Button>
           </div>
 

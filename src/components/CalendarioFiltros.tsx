@@ -17,8 +17,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
 } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { Check, X } from "lucide-react";
+import { Check, ChevronsUpDown, X } from "lucide-react";
 
 // Filtros do calendário. `explicadorId`/`salaId` vazios = "todos"; arrays vazios = sem filtro.
 export interface CalFilters {
@@ -57,6 +58,7 @@ export function CalendarioFiltros({
 
   // Rascunho — ressincroniza com os filtros aplicados sempre que o painel abre.
   const [draft, setDraft] = useState<CalFilters>(valor);
+  const [alunoOpen, setAlunoOpen] = useState(false);
   useEffect(() => {
     if (open) setDraft(valor);
   }, [open, valor]);
@@ -99,23 +101,33 @@ export function CalendarioFiltros({
                   ))}
                 </div>
               )}
-              <Command className="border rounded-md">
-                <CommandInput placeholder="Procurar aluno..." />
-                <CommandList className="max-h-44">
-                  <CommandEmpty>Nenhum aluno encontrado.</CommandEmpty>
-                  <CommandGroup>
-                    {alunosAtivos.map(a => {
-                      const sel = draft.alunoIds.includes(a.id);
-                      return (
-                        <CommandItem key={a.id} value={a.nome} onSelect={() => toggleAluno(a.id)}>
-                          <Check className={cn("mr-2 h-4 w-4", sel ? "opacity-100" : "opacity-0")} />
-                          {a.nome}
-                        </CommandItem>
-                      );
-                    })}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
+              <Popover open={alunoOpen} onOpenChange={setAlunoOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" role="combobox" aria-expanded={alunoOpen} className="w-full justify-between font-normal">
+                    <span className="text-muted-foreground">Procurar aluno...</span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Procurar aluno..." />
+                    <CommandList className="max-h-56">
+                      <CommandEmpty>Nenhum aluno encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        {alunosAtivos.map(a => {
+                          const sel = draft.alunoIds.includes(a.id);
+                          return (
+                            <CommandItem key={a.id} value={a.nome} onSelect={() => toggleAluno(a.id)}>
+                              <Check className={cn("mr-2 h-4 w-4", sel ? "opacity-100" : "opacity-0")} />
+                              {a.nome}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             {/* ── Explicador (single, escondido para o próprio explicador) ── */}
@@ -162,7 +174,7 @@ export function CalendarioFiltros({
                                   type="button"
                                   onClick={() => toggleDisc(f.nome)}
                                   className={cn(
-                                    "rounded-full border px-3 py-1 text-sm transition-colors",
+                                    "rounded-full border px-2.5 py-0.5 text-xs transition-colors",
                                     sel
                                       ? "bg-primary text-primary-foreground border-primary"
                                       : "bg-background hover:bg-muted border-border",
