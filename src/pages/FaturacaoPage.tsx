@@ -85,8 +85,8 @@ export default function FaturacaoPage() {
   // projeção (mensalidade avança), não um valor final.
   const ehProjecao = centroConfig.momentoPagamento === "inicio" && df > hoje;
   const resumoExplicadores = useMemo(
-    () => calcularPagamentoExplicadores(aulas, explicadores, di, df, disciplinas, centroConfig.modoPagamentoProfessor),
-    [aulas, explicadores, di, df, disciplinas, centroConfig.modoPagamentoProfessor]
+    () => calcularPagamentoExplicadores(aulas, explicadores, di, df, disciplinas, centroConfig.modoPagamentoProfessor, alunos, centroConfig.momentoPagamento, hoje),
+    [aulas, explicadores, di, df, disciplinas, centroConfig.modoPagamentoProfessor, alunos, centroConfig.momentoPagamento, hoje]
   );
 
   const totalCobrar = useMemo(() => resumoAlunos.reduce((s, r) => s + r.valorTotal, 0), [resumoAlunos]);
@@ -386,7 +386,9 @@ export default function FaturacaoPage() {
                           <td className="p-3 text-sm">
                             {centroConfig.modoPagamentoProfessor === "por_disciplina"
                               ? <span className="text-xs text-muted-foreground">por disciplina</span>
-                              : formatCurrency(r.explicador.valorHora)}
+                              : centroConfig.modoPagamentoProfessor === "percentagem"
+                                ? <span className="text-xs text-muted-foreground">{r.explicador.percentagemReceita ?? 0}% da receita</span>
+                                : formatCurrency(r.explicador.valorHora)}
                           </td>
                           <td className="p-3 font-semibold">{formatCurrency(r.totalPagar)}</td>
                           <td className="p-3 print:hidden">
@@ -425,7 +427,11 @@ export default function FaturacaoPage() {
                                           <td className="p-2">{alunoNomes}</td>
                                           <td className="p-2">{a.aula.tipo === "individual" ? "Individual" : "Grupo"}</td>
                                           <td className="p-2">{formatDuration(a.duracao)}</td>
-                                          <td className={cn("p-2", !a.contabilizado && "text-muted-foreground line-through")}>{formatCurrency(a.valorHora)}</td>
+                                          <td className={cn("p-2", !a.contabilizado && "text-muted-foreground line-through")}>
+                                            {a.percentagem != null
+                                              ? <span title="Percentagem da receita do aluno">{a.percentagem}% de {formatCurrency(a.baseReceita ?? 0)}</span>
+                                              : formatCurrency(a.valorHora)}
+                                          </td>
                                           <td className={cn("p-2", !a.contabilizado && "text-muted-foreground line-through")}>
                                             {formatCurrency(a.valorSessao)}
                                             {!a.contabilizado && <span className="text-xs text-muted-foreground ml-1">(aluno faltou — não contabilizado)</span>}

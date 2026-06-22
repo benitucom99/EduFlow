@@ -9,12 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronLeft, ChevronRight, Plus, AlertTriangle, UserRound, MapPin, Clock, Users, ChevronsUpDown, Check, Search, Trash2, Printer } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, AlertTriangle, UserRound, MapPin, Clock, Users, ChevronsUpDown, Check, Search, Trash2, Printer, SlidersHorizontal } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { CalendarioFiltros, CalFilters, FILTROS_VAZIOS, contarFiltrosAtivos } from "@/components/CalendarioFiltros";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-import { addDays, startOfWeek, startOfMonth, format, isToday, addWeeks, subWeeks, addMonths, subMonths, isSameMonth, parseISO } from "date-fns";
+import { addDays, startOfWeek, startOfMonth, format, isToday, addWeeks, subWeeks, addMonths, subMonths, isSameMonth, parseISO, differenceInCalendarWeeks, differenceInCalendarDays, differenceInCalendarMonths } from "date-fns";
 import { pt } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -94,8 +96,8 @@ export default function CalendarioPage() {
   const [reposicaoCtx, setReposicaoCtx] = useState<{ alunoId: string; aulaOriginalId: string } | null>(null);
   const [view, setView] = useState<"semana" | "dia" | "mes">("semana");
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [expFilter, setExpFilter] = useState("todos");
-  const [salaFilter, setSalaFilter] = useState("todas");
+  const [filtros, setFiltros] = useState<CalFilters>(FILTROS_VAZIOS);
+  const [filtrosOpen, setFiltrosOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAula, setEditingAula] = useState<Aula | null>(null);
   const [prefill, setPrefill] = useState<{ data: string; horaInicio: string } | null>(null);
@@ -135,10 +137,14 @@ export default function CalendarioPage() {
     if (a.estado === "cancelada") return false;
     // Explicador só vê as próprias aulas.
     if (isExplicador && a.explicadorId !== user?.id) return false;
-    if (expFilter !== "todos" && a.explicadorId !== expFilter) return false;
-    if (salaFilter !== "todas" && a.salaId !== salaFilter) return false;
+    if (filtros.explicadorId && a.explicadorId !== filtros.explicadorId) return false;
+    if (filtros.salaId && a.salaId !== filtros.salaId) return false;
+    // Aluno (multi): mostra aulas em que participa algum dos alunos selecionados.
+    if (filtros.alunoIds.length && !filtros.alunoIds.some(id => a.alunoIds.includes(id))) return false;
+    // Disciplina (multi): por nome da folha, coerente com aula.disciplina.
+    if (filtros.disciplinas.length && !filtros.disciplinas.includes(a.disciplina)) return false;
     return true;
-  }), [aulas, expFilter, salaFilter, isExplicador, user?.id]);
+  }), [aulas, filtros, isExplicador, user?.id]);
 
   const getAulasForDate = (dateStr: string) => filteredAulas.filter(a => a.data === dateStr);
 
@@ -151,10 +157,36 @@ export default function CalendarioPage() {
   const viewDays = view === "semana" ? weekDays : [currentDate];
 
   const dateLabel = view === "semana"
-    ? `${format(weekDays[0], "d MMM", { locale: pt })} – ${format(weekDays[6], "d MMM yyyy", { locale: pt })}`
+    ? (isSameMonth(weekDays[0], weekDays[6])
+        ? `${format(weekDays[0], "d", { locale: pt })} – ${format(weekDays[6], "d MMMM yyyy", { locale: pt })}`
+        : `${format(weekDays[0], "d MMM", { locale: pt })} – ${format(weekDays[6], "d MMM yyyy", { locale: pt })}`)
     : view === "mes"
     ? format(currentDate, "MMMM yyyy", { locale: pt })
     : format(currentDate, "EEEE, d MMMM yyyy", { locale: pt });
+
+  // Descritor relativo (ex.: "Esta semana", "Próxima semana") para o seletor de período.
+  const relativeLabel = (() => {
+    const hoje = new Date();
+    if (view === "semana") {
+      const d = differenceInCalendarWeeks(currentDate, hoje, { weekStartsOn: 1 });
+      if (d === 0) return "Esta semana";
+      if (d === 1) return "Próxima semana";
+      if (d === -1) return "Semana passada";
+      return d > 0 ? `Daqui a ${d} semanas` : `Há ${Math.abs(d)} semanas`;
+    }
+    if (view === "mes") {
+      const d = differenceInCalendarMonths(currentDate, hoje);
+      if (d === 0) return "Este mês";
+      if (d === 1) return "Próximo mês";
+      if (d === -1) return "Mês passado";
+      return d > 0 ? `Daqui a ${d} meses` : `Há ${Math.abs(d)} meses`;
+    }
+    const d = differenceInCalendarDays(currentDate, hoje);
+    if (d === 0) return "Hoje";
+    if (d === 1) return "Amanhã";
+    if (d === -1) return "Ontem";
+    return d > 0 ? `Daqui a ${d} dias` : `Há ${Math.abs(d)} dias`;
+  })();
 
   const handleDayClick = (e: React.MouseEvent<HTMLDivElement>, dateStr: string) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -184,23 +216,39 @@ export default function CalendarioPage() {
 
   return (
     <div className="flex flex-col gap-4 animate-fade-in h-full print:h-auto">
-      {/* ── Header ─────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Calendário</h1>
-          <p className="text-sm text-muted-foreground capitalize">{dateLabel}</p>
+      {/* ── Título + Toolbar ───────────────────────────────────────────
+          O título mantém-se como header da página. A toolbar tem duas zonas:
+          à esquerda o seletor de período (destaque principal); à direita os
+          controlos secundários (vista, filtros, exportar, nova aula). */}
+      <div className="flex flex-col gap-3 print:hidden">
+        <h1 className="text-2xl font-bold">Calendário</h1>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        {/* Zona Esquerda — Navegação de Período (elemento dominante).
+            Setas navegam; o bloco central mostra o intervalo + descritor relativo
+            e, ao clicar, volta a "hoje". */}
+        <div className="flex items-center gap-2 lg:pl-2">
+          <Button variant="outline" size="icon" className="h-12 w-10 shrink-0" onClick={() => navigate(-1)}>
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+          <button
+            type="button"
+            onClick={() => setCurrentDate(new Date())}
+            title="Ir para hoje"
+            className="flex flex-1 lg:flex-none flex-col items-center justify-center px-6 h-12 min-w-[200px] rounded-xl border bg-card shadow-sm hover:bg-muted transition-colors"
+          >
+            <span className="text-base font-bold capitalize leading-tight">{dateLabel}</span>
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground leading-tight mt-0.5">{relativeLabel}</span>
+          </button>
+          <Button variant="outline" size="icon" className="h-12 w-10 shrink-0" onClick={() => navigate(1)}>
+            <ChevronRight className="h-5 w-5" />
+          </Button>
         </div>
-        <div className="flex items-center gap-2 flex-wrap print:hidden">
-          {/* Navigation */}
-          <div className="flex items-center gap-1">
-            <Button variant="outline" size="icon" onClick={() => navigate(-1)}><ChevronLeft className="h-4 w-4" /></Button>
-            <Button variant="outline" size="sm" className="px-3" onClick={() => setCurrentDate(new Date())}>Hoje</Button>
-            <Button variant="outline" size="icon" onClick={() => navigate(1)}><ChevronRight className="h-4 w-4" /></Button>
-          </div>
 
-          {/* View selector */}
+        {/* Zona Direita — Controlos secundários */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* View selector (pill): Dia | Semana | Mês — do mais granular ao mais geral */}
           <div className="flex border rounded-lg overflow-hidden text-sm">
-            {(["mes", "semana", "dia"] as const).map(v => (
+            {(["dia", "semana", "mes"] as const).map(v => (
               <button
                 key={v}
                 onClick={() => setView(v)}
@@ -211,38 +259,22 @@ export default function CalendarioPage() {
             ))}
           </div>
 
-          {/* Filters */}
-          {!isExplicador && (
-            <Select value={expFilter} onValueChange={setExpFilter}>
-              <SelectTrigger className="w-[140px] h-9"><SelectValue placeholder="Explicador" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                {explicadores.map(e => (
-                  <SelectItem key={e.id} value={e.id}>
-                    <span className="flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: getProfPalette(e.id, explicadores).border }} />
-                      {e.nome}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          <Select value={salaFilter} onValueChange={setSalaFilter}>
-            <SelectTrigger className="w-[110px] h-9"><SelectValue placeholder="Sala" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todas">Todas</SelectItem>
-              {salas.map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          {/* Filtros — abrem só ao clicar neste botão (painel lateral) */}
+          <Button size="sm" variant="outline" onClick={() => setFiltrosOpen(true)}>
+            <SlidersHorizontal className="h-4 w-4 mr-1" /> Filtros
+            {contarFiltrosAtivos(filtros) > 0 && (
+              <Badge variant="secondary" className="ml-1.5 h-5 px-1.5">{contarFiltrosAtivos(filtros)}</Badge>
+            )}
+          </Button>
 
           <Button size="sm" variant="outline" onClick={() => window.print()}>
-            <Printer className="h-4 w-4 mr-1" /> Exportar PDF
+            <Printer className="h-4 w-4 mr-1" /> Exportar
           </Button>
 
           <Button size="sm" onClick={() => { setEditingAula(null); setModalOpen(true); }}>
             <Plus className="h-4 w-4 mr-1" /> Nova Aula
           </Button>
+        </div>
         </div>
       </div>
 
@@ -430,6 +462,15 @@ export default function CalendarioPage() {
         </div>
       </div>
       )}
+
+      {/* ── Painel de Filtros (abre só pelo botão "Filtros") ───────── */}
+      <CalendarioFiltros
+        open={filtrosOpen}
+        onOpenChange={setFiltrosOpen}
+        valor={filtros}
+        isExplicador={isExplicador}
+        onAplicar={f => { setFiltros(f); setFiltrosOpen(false); }}
+      />
 
       {/* ── Aula detail dialog ─────────────────────────────────────── */}
       <Dialog open={!!detailAula} onOpenChange={() => setDetailAula(null)}>
