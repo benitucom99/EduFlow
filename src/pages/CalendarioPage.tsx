@@ -103,6 +103,12 @@ export default function CalendarioPage() {
   const [prefill, setPrefill] = useState<{ data: string; horaInicio: string } | null>(null);
   const [detailAula, setDetailAula] = useState<Aula | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  // Duplicar aula: mini-seletor de novo dia/hora (+ recorrência) no diálogo de detalhe.
+  const [duplicarOpen, setDuplicarOpen] = useState(false);
+  const [dupData, setDupData] = useState("");
+  const [dupHora, setDupHora] = useState("");
+  const [dupRecorrencia, setDupRecorrencia] = useState<"nao" | "semanal">("nao");
+  const [dupDataFim, setDupDataFim] = useState("");
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -211,6 +217,74 @@ export default function CalendarioPage() {
     } finally {
       setConfirmCancel(false);
       setDetailAula(null);
+    }
+  };
+
+  // Fecha o diálogo de detalhe e limpa o estado do mini-seletor de duplicação.
+  const closeDetail = () => {
+    setDetailAula(null);
+    setDuplicarOpen(false);
+  };
+
+  // Abre o mini-seletor de duplicação, pré-preenchido com o dia/hora da aula.
+  const abrirDuplicar = () => {
+    if (!detailAula) return;
+    setDupData(detailAula.data);
+    setDupHora(detailAula.horaInicio);
+    setDupRecorrencia("nao");
+    setDupDataFim("");
+    setDuplicarOpen(true);
+  };
+
+  // Rótulo da opção semanal, com o dia da semana do dia escolhido (ex.: "Semanalmente à Terça-feira").
+  const dupSemanalLabel = (() => {
+    if (!dupData) return "Semanalmente";
+    const d = parseISO(dupData);
+    const artigo = (d.getDay() === 0 || d.getDay() === 6) ? "ao" : "à";
+    const dia = format(d, "EEEE", { locale: pt });
+    return `Semanalmente ${artigo} ${dia.charAt(0).toUpperCase() + dia.slice(1)}`;
+  })();
+
+  // Duplicação inválida se semanal sem data-fim válida (anterior ao dia escolhido).
+  const dupInvalido = !dupData || !dupHora ||
+    (dupRecorrencia === "semanal" && (!dupDataFim || dupDataFim < dupData));
+
+  // Cria cópia(s) da aula (mesma disciplina/alunos/professor/sala/duração) no novo
+  // dia/hora. "Semanalmente" gera uma cópia por semana até à data-fim (inclusive).
+  // Presenças não são copiadas; estado fica "agendada".
+  const handleDuplicar = async () => {
+    if (!detailAula || dupInvalido) return;
+    const dur = timeToMin(detailAula.horaFim) - timeToMin(detailAula.horaInicio);
+    const fimMin = timeToMin(dupHora) + Math.max(0, dur);
+    const horaFim = `${String(Math.floor(fimMin / 60)).padStart(2, "0")}:${String(fimMin % 60).padStart(2, "0")}`;
+
+    const datas: string[] = [];
+    if (dupRecorrencia === "semanal") {
+      let cur = parseISO(dupData);
+      const fim = parseISO(dupDataFim);
+      while (cur <= fim) { datas.push(format(cur, "yyyy-MM-dd")); cur = addDays(cur, 7); }
+    } else {
+      datas.push(dupData);
+    }
+
+    const base = {
+      tipo: detailAula.tipo,
+      disciplina: detailAula.disciplina,
+      alunoIds: detailAula.alunoIds,
+      explicadorId: detailAula.explicadorId,
+      salaId: detailAula.salaId,
+      horaInicio: dupHora,
+      horaFim,
+      recorrencia: dupRecorrencia === "semanal" ? "semanal" : "unica",
+      notas: detailAula.notas ?? "",
+      isReposicao: false,
+    };
+    try {
+      await createAulas(datas.map(d => ({ ...base, data: d })));
+      toast({ title: datas.length > 1 ? `${datas.length} aulas duplicadas` : "Aula duplicada" });
+      closeDetail();
+    } catch {
+      toast({ title: "Erro ao duplicar aula", description: "Tenta novamente.", variant: "destructive" });
     }
   };
 
@@ -473,7 +547,7 @@ export default function CalendarioPage() {
       />
 
       {/* ── Aula detail dialog ─────────────────────────────────────── */}
-      <Dialog open={!!detailAula} onOpenChange={() => setDetailAula(null)}>
+      <Dialog open={!!detailAula} onOpenChange={() => closeDetail()}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Detalhes da Aula</DialogTitle></DialogHeader>
           {detailAula && (() => {
@@ -507,6 +581,43 @@ export default function CalendarioPage() {
                     <p>{detailAula.notas}</p>
                   </div>
                 )}
+                {/* Mini-seletor de duplicação: novo dia/hora + recorrência. */}
+                {duplicarOpen && (
+                  <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
+                    <p className="text-sm font-medium">Duplicar aula</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Dia</Label>
+                        <Input type="date" value={dupData} onChange={e => setDupData(e.target.value)} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Hora</Label>
+                        <Input type="time" value={dupHora} onChange={e => setDupHora(e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Repetição</Label>
+                      <Select value={dupRecorrencia} onValueChange={v => setDupRecorrencia(v as "nao" | "semanal")}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="nao">Não repetir</SelectItem>
+                          <SelectItem value="semanal">{dupSemanalLabel}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {dupRecorrencia === "semanal" && (
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Repetir até</Label>
+                        <Input type="date" value={dupDataFim} min={dupData} onChange={e => setDupDataFim(e.target.value)} />
+                      </div>
+                    )}
+                    <div className="flex justify-end gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => setDuplicarOpen(false)}>Cancelar</Button>
+                      <Button size="sm" onClick={handleDuplicar} disabled={dupInvalido}>Duplicar aqui</Button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex justify-between items-center gap-2 pt-2">
                   <div>
                     {detailAula.estado !== "cancelada" && (
@@ -516,8 +627,9 @@ export default function CalendarioPage() {
                     )}
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setDetailAula(null)}>Fechar</Button>
-                    <Button onClick={() => { setEditingAula(detailAula); setModalOpen(true); setDetailAula(null); }}>Editar</Button>
+                    <Button onClick={() => { setEditingAula(detailAula); setModalOpen(true); closeDetail(); }}>Editar</Button>
+                    <Button variant="outline" onClick={abrirDuplicar}>Duplicar</Button>
+                    <Button variant="outline" onClick={closeDetail}>Fechar</Button>
                   </div>
                 </div>
               </div>
