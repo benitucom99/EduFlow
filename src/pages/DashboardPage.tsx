@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Users, BookOpen, Wallet, CheckCircle2, CalendarDays, UserRound, MapPin, RotateCcw } from "lucide-react";
+import SetupChecklist from "@/components/dashboard/SetupChecklist";
 
 import { isToday, isTomorrow, parseISO, startOfWeek, endOfWeek, isWithinInterval } from "date-fns";
 import { calcularCobrancaAlunos } from "@/lib/faturacao";
@@ -230,6 +231,9 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <h1 className="text-2xl font-bold">Dashboard</h1>
+
+      {/* Guia de setup: só o admin configura o centro; some quando completo. */}
+      {user?.role === "admin" && <SetupChecklist />}
 
       {/* KPIs só para staff (admin/receção); o professor vê apenas as listas. */}
       {!isExplicador && (
