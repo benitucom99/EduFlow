@@ -36,7 +36,7 @@ function relativeDay(dateStr: string): string {
 export default function DashboardPage() {
   const { user } = useAuth();
   const isExplicador = user?.role === "explicador";
-  const { alunos, aulas, explicadores, salas, disciplinas, setPresenca } = useData();
+  const { alunos, aulas, explicadores, salas, disciplinas, fechos, setPresenca } = useData();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -221,10 +221,19 @@ export default function DashboardPage() {
   const formatReceita = (v: number) =>
     v >= 1000 ? `${(v / 1000).toFixed(1)}k €` : `${Math.round(v)} €`;
 
+  // Cobranças por liquidar nos meses fechados (Faturação → Fechos & Pagamentos).
+  const porCobrar = useMemo(
+    () => fechos
+      .flatMap(f => f.linhas)
+      .filter(l => l.tipo === "cobranca")
+      .reduce((s, l) => s + Math.max(0, l.valor - l.valorPago), 0),
+    [fechos]
+  );
+
   const kpis = [
     { label: "Total de Alunos", value: stats.ativos.toLocaleString("pt-PT"), icon: Users, iconBg: "bg-slate-100", iconColor: "text-slate-600" },
     { label: "Aulas Esta Semana", value: stats.aulasEstaSemana, icon: BookOpen, iconBg: "bg-amber-100", iconColor: "text-amber-500" },
-    { label: "Receita Mensal", value: formatReceita(stats.receita), icon: Wallet, iconBg: "bg-emerald-100", iconColor: "text-emerald-500" },
+    { label: "Receita Mensal", value: formatReceita(stats.receita), sub: porCobrar > 0 ? `${formatReceita(porCobrar)} por cobrar` : undefined, icon: Wallet, iconBg: "bg-emerald-100", iconColor: "text-emerald-500" },
     { label: "Taxa de Assiduidade", value: `${stats.assiduidade}%`, icon: CheckCircle2, iconBg: "bg-violet-100", iconColor: "text-violet-500" },
   ];
 
@@ -245,6 +254,7 @@ export default function DashboardPage() {
                   <div className="min-w-0">
                     <p className="text-sm text-muted-foreground font-sans">{kpi.label}</p>
                     <p className="font-heading font-bold text-3xl mt-2 tracking-tight">{kpi.value}</p>
+                    {kpi.sub && <p className="text-xs font-medium text-red-500 mt-1">{kpi.sub}</p>}
                   </div>
                   <div className={`h-11 w-11 shrink-0 rounded-xl flex items-center justify-center ${kpi.iconBg} ${kpi.iconColor}`}>
                     <kpi.icon className="h-5 w-5" strokeWidth={2.25} />
