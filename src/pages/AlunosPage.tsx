@@ -13,11 +13,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
-import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, X, UserPlus, CalendarClock } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, X, UserPlus, CalendarClock, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Aluno } from "@/contexts/DataContext";
 import { folhas, folhasAgrupadas } from "@/lib/disciplinas";
 import { HorarioGeradorModal } from "@/components/HorarioGeradorModal";
+import { ImportAlunosModal } from "@/components/ImportAlunosModal";
 
 const ESTADO_CONFIG = {
   ativo: { label: "Ativo", dot: "bg-green-500", badge: "bg-success text-success-foreground" },
@@ -62,6 +63,7 @@ export default function AlunosPage() {
   const [anoFilter, setAnoFilter] = useState("todos");
   const [discFilter, setDiscFilter] = useState("todas");
   const [modalOpen, setModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editingAluno, setEditingAluno] = useState<Aluno | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -105,10 +107,17 @@ export default function AlunosPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold">Alunos <span className="text-muted-foreground font-normal text-lg">({filtered.length})</span></h1>
-        <Button onClick={() => { setEditingAluno(null); setModalOpen(true); }}>
-          <Plus className="h-4 w-4" /> Novo Aluno
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <Upload className="h-4 w-4" /> Importar
+          </Button>
+          <Button onClick={() => { setEditingAluno(null); setModalOpen(true); }}>
+            <Plus className="h-4 w-4" /> Novo Aluno
+          </Button>
+        </div>
       </div>
+
+      <ImportAlunosModal open={importOpen} onClose={() => setImportOpen(false)} />
 
       {/* Filters */}
       <Card>

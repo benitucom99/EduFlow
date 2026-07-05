@@ -171,6 +171,21 @@ export type DisciplinaInput = Omit<Disciplina, "id" | "precoHoraIndividual" | "p
   parentId?: string | null;
 };
 export type AlunoInput = Omit<Aluno, "id" | "estado" | "dataInscricao"> & { estado?: Aluno["estado"]; dataInscricao?: string };
+
+// Linha vinda da importação Excel/CSV de alunos. `disciplinas` são nomes crus
+// tal como escritos no ficheiro — a resolução (folha/categoria/criação) é
+// feita no importAlunos.
+export type ImportAlunoRow = {
+  nome: string;
+  anoLetivo: number | null;
+  email?: string;
+  telefone?: string;
+  escola?: string;
+  disciplinas: string[];
+  encarregadoNome?: string;
+  encarregadoTelefone?: string;
+  encarregadoEmail?: string;
+};
 export type ExplicadorInput = Omit<Explicador, "id" | "estado"> & { estado?: Explicador["estado"]; password?: string };
 export type SalaInput = Pick<Sala, "nome">;
 export type AulaInput = Omit<Aula, "id" | "estado" | "presencas"> & { estado?: Aula["estado"] };
@@ -196,6 +211,7 @@ interface DataContextType {
   updateAluno: (id: string, patch: Partial<Aluno>) => Promise<void>;
   deleteAluno: (id: string) => Promise<void>;
   updateAlunoEstado: (id: string, novoEstado: Aluno["estado"]) => Promise<void>;
+  importAlunos: (rows: ImportAlunoRow[]) => Promise<{ alunosCriados: number; disciplinasCriadas: number }>;
 
   createExplicador: (data: ExplicadorInput) => Promise<Explicador | null>;
   updateExplicador: (id: string, patch: Partial<Explicador>) => Promise<void>;
@@ -698,6 +714,102 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     await refreshAlunos();
   };
 
+  // Importação em lote (Excel/CSV). Resolve cada nome de disciplina do ficheiro:
+  // 1) folha existente com esse nome; 2) categoria existente → folha
+  // "Categoria – Xº Ano" (criada se faltar, herdando preços de um irmão);
+  // 3) nada → cria categoria + folha. Alunos e associações inserem-se em lote
+  // (2 round-trips) em vez de um createAluno por linha.
+  const importAlunos = async (rows: ImportAlunoRow[]): Promise<{ alunosCriados: number; disciplinasCriadas: number }> => {
+    const cid = ensureCentro();
+    // Snapshot local que vai crescendo com as disciplinas criadas na importação,
+    // para linhas seguintes reutilizarem em vez de duplicar.
+    const discs = [...disciplinas];
+    let disciplinasCriadas = 0;
+
+    // Normaliza para comparação: espaços colapsados, travessões unificados,
+    // minúsculas ("Matemática - 9º ano" ≡ "Matemática – 9º Ano").
+    const norm = (s: string) => s.trim().replace(/\s+/g, " ").replace(/[-–—]/g, "-").toLowerCase();
+
+    const insertDisciplina = async (row: { nome: string; parent_id: string | null; preco_hora_individual: number; preco_hora_grupo: number }) => {
+      const { data, error } = await supabase.from("disciplinas")
+        .insert({ centro_id: cid, ...row })
+        .select("id, nome, parent_id, preco_hora_individual, preco_hora_grupo")
+        .single();
+      if (error) throw error;
+      discs.push({
+        id: data.id, nome: data.nome, corHsl: null,
+        precoHoraIndividual: Number(data.preco_hora_individual ?? 0),
+        precoHoraGrupo: Number(data.preco_hora_grupo ?? 0),
+        escaloesPrecoIndividual: [], parentId: data.parent_id ?? null,
+      });
+      disciplinasCriadas++;
+      return data.id as string;
+    };
+
+    const resolveDisciplina = async (raw: string, ano: number | null): Promise<string> => {
+      const key = norm(raw);
+      // Folha existente (tem pai) com o mesmo nome.
+      const folha = discs.find(d => d.parentId != null && norm(d.nome) === key);
+      if (folha) return folha.id;
+      // Categoria existente → folha por ano (ou Geral).
+      const cat = discs.find(d => d.parentId == null && norm(d.nome) === key);
+      if (cat) {
+        const nomeFolha = ano ? `${cat.nome} – ${ano}º Ano` : `${cat.nome} – Geral`;
+        const existente = discs.find(d => d.parentId === cat.id && norm(d.nome) === norm(nomeFolha));
+        if (existente) return existente.id;
+        const irmao = discs.find(d => d.parentId === cat.id);
+        return insertDisciplina({
+          nome: nomeFolha, parent_id: cat.id,
+          preco_hora_individual: irmao?.precoHoraIndividual ?? 15,
+          preco_hora_grupo: irmao?.precoHoraGrupo ?? 10,
+        });
+      }
+      // Nome desconhecido → categoria nova + folha.
+      const catId = await insertDisciplina({ nome: raw.trim(), parent_id: null, preco_hora_individual: 0, preco_hora_grupo: 0 });
+      const nomeFolha = ano ? `${raw.trim()} – ${ano}º Ano` : `${raw.trim()} – Geral`;
+      return insertDisciplina({ nome: nomeFolha, parent_id: catId, preco_hora_individual: 15, preco_hora_grupo: 10 });
+    };
+
+    // Resolve disciplinas sequencialmente (a cache local depende da ordem).
+    const discIdsPorLinha: string[][] = [];
+    for (const r of rows) {
+      const ids: string[] = [];
+      for (const nomeCru of r.disciplinas) {
+        if (!nomeCru.trim()) continue;
+        const id = await resolveDisciplina(nomeCru, r.anoLetivo);
+        if (!ids.includes(id)) ids.push(id);
+      }
+      discIdsPorLinha.push(ids);
+    }
+
+    const hoje = new Date().toISOString().slice(0, 10);
+    const { data: created, error } = await supabase.from("alunos").insert(rows.map(r => ({
+      centro_id: cid,
+      nome: r.nome.trim(),
+      email: r.email?.trim() || null,
+      telefone: r.telefone?.trim() || null,
+      escola: r.escola?.trim() || null,
+      ano_letivo: r.anoLetivo,
+      estado: "ativo",
+      data_inscricao: hoje,
+      encarregado_nome: r.encarregadoNome?.trim() || null,
+      encarregado_email: r.encarregadoEmail?.trim() || null,
+      encarregado_telefone: r.encarregadoTelefone?.trim() || null,
+    }))).select("id");
+    if (error) throw error;
+
+    // PostgREST devolve as linhas pela ordem de inserção → mapeamento por índice.
+    const adRows: { aluno_id: string; disciplina_id: string; explicador_id: null }[] = [];
+    (created ?? []).forEach((c, i) => {
+      (discIdsPorLinha[i] ?? []).forEach(d => adRows.push({ aluno_id: c.id, disciplina_id: d, explicador_id: null }));
+    });
+    if (adRows.length) await run(supabase.from("alunos_disciplinas").insert(adRows));
+
+    const { idToName, leafIds } = await refreshDisciplinas();
+    await refreshAlunos(idToName, leafIds);
+    return { alunosCriados: (created ?? []).length, disciplinasCriadas };
+  };
+
   // ── Explicadores ─────────────────────────────────────────────────────────────
   const createExplicador = async (data: ExplicadorInput): Promise<Explicador | null> => {
     const cid = ensureCentro();
@@ -1038,7 +1150,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       alunoHorarios, saveAlunoHorario, deleteAlunoHorario,
       updateCentroConfig,
       createDisciplina, updateDisciplina, deleteDisciplina,
-      createAluno, updateAluno, deleteAluno, updateAlunoEstado,
+      createAluno, updateAluno, deleteAluno, updateAlunoEstado, importAlunos,
       createExplicador, updateExplicador, deleteExplicador, inviteExplicador,
       inviteAssistente, removeAssistente,
       createSala, updateSala, deleteSala,
