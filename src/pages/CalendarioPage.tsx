@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronLeft, ChevronRight, Plus, AlertTriangle, UserRound, MapPin, Clock, Users, ChevronsUpDown, Check, Search, Trash2, Printer, SlidersHorizontal } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, AlertTriangle, UserRound, MapPin, Clock, Users, ChevronsUpDown, Check, Search, Trash2, Printer, SlidersHorizontal } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { CalendarioFiltros, CalFilters, FILTROS_VAZIOS, contarFiltrosAtivos } from "@/components/CalendarioFiltros";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -843,6 +844,9 @@ function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onC
   const [confirmConflictsOpen, setConfirmConflictsOpen] = useState(false);
   const [alunoPopoverOpen, setAlunoPopoverOpen] = useState(false);
   const [alunoSearch, setAlunoSearch] = useState("");
+  // "Mais opções" (tipo, professor, sala, recorrência, notas, reposição) começa
+  // fechado ao criar — os defaults resolvem tudo; abre em edição/reposição.
+  const [maisOpcoes, setMaisOpcoes] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -856,6 +860,7 @@ function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onC
       setHoraInicio(aula?.horaInicio || prefill?.horaInicio || "09:00");
       setNotas(aula?.notas || "");
       setIsReposicao(!!reposicaoAlunoId);
+      setMaisOpcoes(!!aula || !!reposicaoAlunoId);
     }
   }, [open, aula, prefill, reposicaoAlunoId, isExplicador, user?.id]);
 
@@ -882,6 +887,25 @@ function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onC
     );
     if (!permitidas.has(disciplina)) setDisciplina("");
   }, [open, aula, disciplina, alunoIds, alunos]);
+
+  // Default de duração por aluno: a última aula dele diz a duração típica.
+  useEffect(() => {
+    if (!open || aula || !primeiroAluno) return;
+    const ultima = [...aulas]
+      .filter(a => a.alunoIds.includes(primeiroAluno) && a.estado !== "cancelada")
+      .sort((a, b) => b.data.localeCompare(a.data) || b.horaInicio.localeCompare(a.horaInicio))[0];
+    if (!ultima) return;
+    const [h1, m1] = ultima.horaInicio.split(":").map(Number);
+    const [h2, m2] = ultima.horaFim.split(":").map(Number);
+    const min = h2 * 60 + m2 - (h1 * 60 + m1);
+    if ([30, 60, 90, 120, 150, 180].includes(min)) setDuracao(String(min));
+  }, [open, aula, primeiroAluno, aulas]);
+
+  // A aula passa a grupo automaticamente ao selecionar um 2º aluno.
+  useEffect(() => {
+    if (!open || aula) return;
+    if (alunoIds.length > 1 && tipo === "individual") setTipo("grupo");
+  }, [open, aula, alunoIds.length, tipo]);
 
   // Alunos selecionados (objetos completos), para filtrar disciplinas/explicadores.
   const alunosSelecionados = alunoIds.map(id => alunos.find(a => a.id === id)).filter(Boolean) as typeof alunos;
@@ -930,6 +954,15 @@ function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onC
     return true;
   });
   const salasFiltradas = salas;
+
+  // Sem tutor atribuído mas só há um professor possível para a disciplina →
+  // seleciona-o automaticamente (o admin pode alterar em "Mais opções").
+  const unicoCandidatoId = expsFiltrados.length === 1 ? expsFiltrados[0].id : null;
+  useEffect(() => {
+    if (!open || aula || isExplicador) return;
+    if (!disciplina || explicadorId || !unicoCandidatoId) return;
+    setExplicadorId(unicoCandidatoId);
+  }, [open, aula, isExplicador, disciplina, explicadorId, unicoCandidatoId]);
 
   const autoSalaId = (() => {
     if (!data || !horaInicio) return "";
@@ -1016,36 +1049,10 @@ function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onC
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-8">
-          {/* ─── Detalhes da Aula ─────────────────────────────── */}
+          {/* ─── Essencial: aluno → disciplina → quando. Professor, sala,
+               tipo e recorrência resolvem-se com defaults; tudo é ajustável
+               em "Mais opções". ───────────────────────────────────────── */}
           <section className="space-y-4">
-            <h3 className="text-base font-bold font-heading">Detalhes da Aula</h3>
-
-            {/* Tipo (cartões visuais) */}
-            <div>
-              <Label className="text-sm mb-2 block">Tipo</Label>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { value: "individual", label: "Individual", Icon: UserRound },
-                  { value: "grupo", label: "Grupo", Icon: Users },
-                ].map(({ value, label, Icon }) => {
-                  const active = tipo === value;
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setTipo(value as any)}
-                      className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-colors ${
-                        active ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
-                      }`}
-                    >
-                      <Icon className={`h-7 w-7 ${active ? "text-primary" : "text-muted-foreground"}`} strokeWidth={1.75} />
-                      <span className={`text-sm font-medium ${active ? "text-primary" : "text-foreground"}`}>{label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
             {/* Aluno(s) */}
             <div>
               <Label className="text-sm">Aluno(s) <span className="text-destructive">*</span></Label>
@@ -1124,6 +1131,15 @@ function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onC
                   </div>
                 );
               })()}
+              {tipo === "individual" && !aula && (
+                <button
+                  type="button"
+                  onClick={() => setTipo("grupo")}
+                  className="mt-1.5 text-xs text-primary hover:underline"
+                >
+                  + Aula de grupo (vários alunos)
+                </button>
+              )}
             </div>
 
             {/* Disciplina */}
@@ -1144,6 +1160,111 @@ function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onC
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div>
+              <Label className="text-sm">Data</Label>
+              <Input type="date" value={data} onChange={e => setData(e.target.value)} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-sm">Hora Início</Label>
+                <Select value={horaInicio} onValueChange={setHoraInicio}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{horaOptions.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-sm">Duração</Label>
+                <Select value={duracao} onValueChange={setDuracao}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="30">30 min</SelectItem>
+                    <SelectItem value="60">1h</SelectItem>
+                    <SelectItem value="90">1h30</SelectItem>
+                    <SelectItem value="120">2h</SelectItem>
+                    <SelectItem value="150">2h30</SelectItem>
+                    <SelectItem value="180">3h</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Professor e sala resolvem-se sozinhos (tutor atribuído / sala
+                livre). Sem professor automático, o seletor aparece aqui
+                porque é obrigatório; caso contrário fica só o resumo. */}
+            {!isExplicador && !explicadorId ? (
+              <div>
+                <Label className="text-sm">Explicador <span className="text-destructive">*</span></Label>
+                <Select value={explicadorId} onValueChange={setExplicadorId}>
+                  <SelectTrigger><SelectValue placeholder="Selecionar explicador" /></SelectTrigger>
+                  <SelectContent>
+                    {expsFiltrados.map(e => (
+                      <SelectItem key={e.id} value={e.id}>
+                        <span className="flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: getProfPalette(e.id, explicadores).border }} />
+                          {e.nome}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2.5">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm min-w-0">
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <UserRound className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{explicadores.find(e => e.id === explicadorId)?.nome ?? "—"}</span>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    {salaId === "auto"
+                      ? (autoSalaNome ? `${autoSalaNome} (auto)` : "Sem sala livre")
+                      : salas.find(s => s.id === salaId)?.nome ?? "—"}
+                  </span>
+                </div>
+                {!maisOpcoes && (
+                  <Button variant="ghost" size="sm" className="shrink-0 h-7 text-xs" onClick={() => setMaisOpcoes(true)}>
+                    Alterar
+                  </Button>
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* ─── Mais opções: tipo, professor, sala, recorrência, notas ── */}
+          <Collapsible open={maisOpcoes} onOpenChange={setMaisOpcoes} className="border-t">
+            <CollapsibleTrigger className="flex w-full items-center justify-between py-4 text-base font-bold font-heading">
+              Mais opções
+              <ChevronDown className={`h-4 w-4 transition-transform ${maisOpcoes ? "rotate-180" : ""}`} />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-4 pb-2">
+            {/* Tipo (cartões visuais) */}
+            <div>
+              <Label className="text-sm mb-2 block">Tipo</Label>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { value: "individual", label: "Individual", Icon: UserRound },
+                  { value: "grupo", label: "Grupo", Icon: Users },
+                ].map(({ value, label, Icon }) => {
+                  const active = tipo === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setTipo(value as any)}
+                      className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-colors ${
+                        active ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+                      }`}
+                    >
+                      <Icon className={`h-7 w-7 ${active ? "text-primary" : "text-muted-foreground"}`} strokeWidth={1.75} />
+                      <span className={`text-sm font-medium ${active ? "text-primary" : "text-foreground"}`}>{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Explicador */}
@@ -1187,40 +1308,6 @@ function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onC
                 <p className="text-xs text-muted-foreground mt-1">Sala atribuída: {autoSalaNome}</p>
               )}
             </div>
-          </section>
-
-          {/* ─── Agendamento ──────────────────────────────────── */}
-          <section className="space-y-4 pt-6 border-t">
-            <h3 className="text-base font-bold font-heading">Agendamento</h3>
-
-            <div>
-              <Label className="text-sm">Data</Label>
-              <Input type="date" value={data} onChange={e => setData(e.target.value)} />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-sm">Hora Início</Label>
-                <Select value={horaInicio} onValueChange={setHoraInicio}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{horaOptions.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-sm">Duração</Label>
-                <Select value={duracao} onValueChange={setDuracao}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="30">30 min</SelectItem>
-                    <SelectItem value="60">1h</SelectItem>
-                    <SelectItem value="90">1h30</SelectItem>
-                    <SelectItem value="120">2h</SelectItem>
-                    <SelectItem value="150">2h30</SelectItem>
-                    <SelectItem value="180">3h</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
 
             {/* Recorrência: única | quinzenal | ano letivo */}
             <div>
@@ -1247,12 +1334,6 @@ function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onC
                 );
               })()}
             </div>
-          </section>
-
-          {/* ─── Informações Adicionais ───────────────────────── */}
-          <section className="space-y-4 pt-6 border-t">
-            <h3 className="text-base font-bold font-heading">Informações Adicionais</h3>
-
             <div>
               <Label className="text-sm">Notas</Label>
               <div className="relative">
@@ -1273,7 +1354,8 @@ function AulaModal({ open, onClose, aula, prefill, reposicaoAlunoId, onSave, onC
               <Checkbox id="is-reposicao" checked={isReposicao} onCheckedChange={v => setIsReposicao(!!v)} />
               <Label htmlFor="is-reposicao" className="text-sm font-normal cursor-pointer">Esta aula é uma Reposição</Label>
             </div>
-          </section>
+            </CollapsibleContent>
+          </Collapsible>
 
           {/* Conflitos */}
           {conflicts.length > 0 && (
