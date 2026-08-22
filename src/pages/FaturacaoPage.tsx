@@ -1,12 +1,13 @@
 import { useState, useMemo } from "react";
-import { useData } from "@/contexts/DataContext";
+import { useData, type NovaFechoLinha } from "@/contexts/DataContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Receipt, Wallet, TrendingUp, CalendarIcon, ChevronDown, ChevronUp, Download, FileText } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Receipt, Wallet, TrendingUp, CalendarIcon, ChevronDown, ChevronUp, Download, FileText, Lock } from "lucide-react";
 import { format, startOfMonth, endOfMonth, subMonths, startOfQuarter } from "date-fns";
 import { pt } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,8 @@ import {
   exportPagamentoDetalhado, exportPagamentoResumo,
   type ResumoAluno, type ResumoExplicador,
 } from "@/lib/faturacao";
+import { FechosTab } from "@/components/faturacao/FechosTab";
+import { labelPeriodo } from "@/lib/avisoCobranca";
 
 type SortKey = string;
 type SortDir = "asc" | "desc";
@@ -61,7 +64,7 @@ function SortHeader({ label, sortKey, currentSort, currentDir, onSort }: {
 }
 
 export default function FaturacaoPage() {
-  const { aulas, alunos, explicadores, disciplinas, centroConfig } = useData();
+  const { aulas, alunos, explicadores, disciplinas, centroConfig, fechos, criarFecho } = useData();
   const discColorMap = new Map(disciplinas.map(d => [d.nome, d.corHsl || "#6366f1"]));
   const now = new Date();
   const [dataInicio, setDataInicio] = useState<Date>(startOfMonth(now));
@@ -139,6 +142,66 @@ export default function FaturacaoPage() {
   const alunoMap = useMemo(() => new Map(alunos.map(a => [a.id, a])), [alunos]);
   const expMap = useMemo(() => new Map(explicadores.map(e => [e.id, e])), [explicadores]);
 
+  // ── Fechar mês ───────────────────────────────────────────────────────────────
+  const [confirmarFecho, setConfirmarFecho] = useState(false);
+  const [fechando, setFechando] = useState(false);
+  const fechoExistente = fechos.some(f => f.periodo === periodoStr);
+
+  const executarFecho = async () => {
+    setFechando(true);
+    try {
+      const linhas: NovaFechoLinha[] = [
+        ...resumoAlunos
+          .filter(r => r.aulas.length > 0)
+          .map((r): NovaFechoLinha => ({
+            tipo: "cobranca",
+            alunoId: r.aluno.id,
+            professorUserId: null,
+            entidadeNome: r.aluno.nome,
+            valor: r.valorTotal,
+            detalhe: r.aulas.map(a => ({
+              data: a.aula.data,
+              horaInicio: a.aula.horaInicio,
+              horaFim: a.aula.horaFim,
+              disciplina: a.aula.disciplina,
+              duracao: a.duracao,
+              precoPorHora: a.precoPorHora,
+              valor: a.valorSessao,
+              presenca: a.presenca,
+              cobrar: a.cobrar,
+            })),
+          })),
+        ...resumoExplicadores
+          .filter(r => r.aulas.length > 0)
+          .map((r): NovaFechoLinha => ({
+            tipo: "pagamento",
+            alunoId: null,
+            professorUserId: r.explicador.id,
+            entidadeNome: r.explicador.nome,
+            valor: r.totalPagar,
+            detalhe: r.aulas.map(a => ({
+              data: a.aula.data,
+              horaInicio: a.aula.horaInicio,
+              horaFim: a.aula.horaFim,
+              disciplina: a.aula.disciplina,
+              duracao: a.duracao,
+              precoPorHora: a.valorHora,
+              valor: a.valorSessao,
+              presenca: a.alunosPresentes ? "presente" : "falta_justificada",
+              cobrar: a.contabilizado,
+            })),
+          })),
+      ];
+      await criarFecho({ periodo: periodoStr, dataInicio: di, dataFim: df, linhas });
+      toast.success(`Mês fechado: ${labelPeriodo(periodoStr)}`);
+      setConfirmarFecho(false);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erro ao fechar o mês.");
+    } finally {
+      setFechando(false);
+    }
+  };
+
   const exportBtnClass = "border-0 bg-[#F3ECDA] text-primary hover:bg-[#EAE0C8] hover:text-primary";
 
   return (
@@ -187,6 +250,15 @@ export default function FaturacaoPage() {
               </PopoverContent>
             </Popover>
           </div>
+          <Button
+            size="sm"
+            onClick={() => setConfirmarFecho(true)}
+            disabled={fechoExistente || ehProjecao || (resumoAlunos.length === 0 && resumoExplicadores.length === 0)}
+            title={fechoExistente ? `Já existe um fecho para ${labelPeriodo(periodoStr)}` : ehProjecao ? "O período inclui datas futuras (projeção) — fecha quando o mês terminar" : undefined}
+          >
+            <Lock className="h-3.5 w-3.5 mr-1" />
+            {fechoExistente ? "Mês fechado" : "Fechar mês"}
+          </Button>
         </div>
       </div>
 
@@ -229,6 +301,7 @@ export default function FaturacaoPage() {
         <TabsList className="print:hidden">
           <TabsTrigger value="cobranca">Cobrança a Alunos</TabsTrigger>
           <TabsTrigger value="pagamento">Pagamento a Explicadores</TabsTrigger>
+          <TabsTrigger value="fechos">Fechos & Pagamentos</TabsTrigger>
         </TabsList>
 
         {/* TAB 1 — Cobrança */}
@@ -468,7 +541,37 @@ export default function FaturacaoPage() {
             </Card>
           )}
         </TabsContent>
+
+        {/* TAB 3 — Fechos & Pagamentos */}
+        <TabsContent value="fechos">
+          <FechosTab />
+        </TabsContent>
       </Tabs>
+
+      {/* Confirmação de fecho do mês */}
+      <AlertDialog open={confirmarFecho} onOpenChange={open => { if (!fechando) setConfirmarFecho(open); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Fechar {labelPeriodo(periodoStr)}?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>Os valores do período ficam congelados num snapshot e passas a registar pagamentos sobre ele.</p>
+                <div className="rounded-md bg-muted/40 p-3 text-sm text-foreground space-y-1">
+                  <p className="flex justify-between"><span>Cobrança a alunos ({resumoAlunos.length})</span><strong>{formatCurrency(totalCobrar)}</strong></p>
+                  <p className="flex justify-between"><span>Pagamento a professores ({resumoExplicadores.length})</span><strong>{formatCurrency(totalPagar)}</strong></p>
+                </div>
+                <p className="text-xs">Aulas alteradas depois do fecho não atualizam o snapshot — podes eliminar o fecho e refazê-lo.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={fechando}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction disabled={fechando} onClick={e => { e.preventDefault(); executarFecho(); }}>
+              {fechando ? "A fechar…" : "Fechar mês"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

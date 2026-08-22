@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Users, BookOpen, Wallet, CheckCircle2, CalendarDays, UserRound, MapPin, RotateCcw } from "lucide-react";
+import SetupChecklist from "@/components/dashboard/SetupChecklist";
 
 import { isToday, isTomorrow, parseISO, startOfWeek, endOfWeek, isWithinInterval } from "date-fns";
 import { calcularCobrancaAlunos } from "@/lib/faturacao";
@@ -19,6 +20,15 @@ type FaltaPendente = {
   horaInicio: string;
   alunoNome: string;
   professor: string;
+  disciplina: string;
+};
+
+// Linha de "Faltas justificadas - Aulas por repor".
+type ReposicaoPendente = {
+  aulaId: string;
+  alunoId: string;
+  data: string;
+  alunoNome: string;
   disciplina: string;
 };
 
@@ -35,12 +45,13 @@ function relativeDay(dateStr: string): string {
 export default function DashboardPage() {
   const { user } = useAuth();
   const isExplicador = user?.role === "explicador";
-  const { alunos, aulas, explicadores, salas, disciplinas, setPresenca } = useData();
+  const { alunos, aulas, explicadores, salas, disciplinas, fechos, setPresenca } = useData();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   // Pop-up "Ver mais" (lista completa) e fluxo de registo de presença.
   const [verTodasFaltas, setVerTodasFaltas] = useState(false);
+  const [verTodasReposicoes, setVerTodasReposicoes] = useState(false);
   const [registar, setRegistar] = useState<FaltaPendente | null>(null);
   const [pendingFalta, setPendingFalta] = useState<{ tipo: "justificada" | "injustificada" } | null>(null);
 
@@ -220,16 +231,28 @@ export default function DashboardPage() {
   const formatReceita = (v: number) =>
     v >= 1000 ? `${(v / 1000).toFixed(1)}k €` : `${Math.round(v)} €`;
 
+  // Cobranças por liquidar nos meses fechados (Faturação → Fechos & Pagamentos).
+  const porCobrar = useMemo(
+    () => fechos
+      .flatMap(f => f.linhas)
+      .filter(l => l.tipo === "cobranca")
+      .reduce((s, l) => s + Math.max(0, l.valor - l.valorPago), 0),
+    [fechos]
+  );
+
   const kpis = [
     { label: "Total de Alunos", value: stats.ativos.toLocaleString("pt-PT"), icon: Users, iconBg: "bg-slate-100", iconColor: "text-slate-600" },
     { label: "Aulas Esta Semana", value: stats.aulasEstaSemana, icon: BookOpen, iconBg: "bg-amber-100", iconColor: "text-amber-500" },
-    { label: "Receita Mensal", value: formatReceita(stats.receita), icon: Wallet, iconBg: "bg-emerald-100", iconColor: "text-emerald-500" },
+    { label: "Receita Mensal", value: formatReceita(stats.receita), sub: porCobrar > 0 ? `${formatReceita(porCobrar)} por cobrar` : undefined, icon: Wallet, iconBg: "bg-emerald-100", iconColor: "text-emerald-500" },
     { label: "Taxa de Assiduidade", value: `${stats.assiduidade}%`, icon: CheckCircle2, iconBg: "bg-violet-100", iconColor: "text-violet-500" },
   ];
 
   return (
     <div className="space-y-6 animate-fade-in">
       <h1 className="text-2xl font-bold">Dashboard</h1>
+
+      {/* Guia de setup: só o admin configura o centro; some quando completo. */}
+      {user?.role === "admin" && <SetupChecklist />}
 
       {/* KPIs só para staff (admin/receção); o professor vê apenas as listas. */}
       {!isExplicador && (
@@ -241,6 +264,7 @@ export default function DashboardPage() {
                   <div className="min-w-0">
                     <p className="text-sm text-muted-foreground font-sans">{kpi.label}</p>
                     <p className="font-heading font-bold text-3xl mt-2 tracking-tight">{kpi.value}</p>
+                    {kpi.sub && <p className="text-xs font-medium text-red-500 mt-1">{kpi.sub}</p>}
                   </div>
                   <div className={`h-11 w-11 shrink-0 rounded-xl flex items-center justify-center ${kpi.iconBg} ${kpi.iconColor}`}>
                     <kpi.icon className="h-5 w-5" strokeWidth={2.25} />
@@ -263,36 +287,16 @@ export default function DashboardPage() {
             {reposicoesPendentes.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Sem reposições pendentes</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left text-muted-foreground">
-                      <th className="py-2 pr-3 font-medium">Data original</th>
-                      <th className="py-2 pr-3 font-medium">Aluno</th>
-                      <th className="py-2 pr-3 font-medium">Disciplina</th>
-                      <th className="py-2 font-medium text-right">Ação</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {reposicoesPendentes.map(r => (
-                      <tr key={`${r.aulaId}-${r.alunoId}`}>
-                        <td className="py-2 pr-3 tabular-nums">{r.data.split("-").reverse().join("/")}</td>
-                        <td className="py-2 pr-3 truncate max-w-[120px]">{r.alunoNome}</td>
-                        <td className="py-2 pr-3 truncate max-w-[120px]">{r.disciplina}</td>
-                        <td className="py-2 text-right">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => navigate("/calendario", { state: { reposicao: { alunoId: r.alunoId, aulaOriginalId: r.aulaId } } })}
-                          >
-                            Marcar
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <ReposicoesTable rows={reposicoesPendentes.slice(0, 5)} onMarcar={r => navigate("/calendario", { state: { reposicao: { alunoId: r.alunoId, aulaOriginalId: r.aulaId } } })} />
+                {reposicoesPendentes.length > 5 && (
+                  <div className="mt-4 pt-3 border-t border-border">
+                    <Button variant="outline" className="w-full font-medium" onClick={() => setVerTodasReposicoes(true)}>
+                      Ver mais ({reposicoesPendentes.length})
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -329,6 +333,20 @@ export default function DashboardPage() {
             <DialogDescription>Aulas terminadas com presenças por registar.</DialogDescription>
           </DialogHeader>
           <FaltasTable rows={presencasEmFalta} onRegistar={setRegistar} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Pop-up "Ver mais" — todas as reposições pendentes */}
+      <Dialog open={verTodasReposicoes} onOpenChange={setVerTodasReposicoes}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Aulas por repor ({reposicoesPendentes.length})</DialogTitle>
+            <DialogDescription>Faltas justificadas com reposição ainda por agendar.</DialogDescription>
+          </DialogHeader>
+          <ReposicoesTable
+            rows={reposicoesPendentes}
+            onMarcar={r => { setVerTodasReposicoes(false); navigate("/calendario", { state: { reposicao: { alunoId: r.alunoId, aulaOriginalId: r.aulaId } } }); }}
+          />
         </DialogContent>
       </Dialog>
 
@@ -428,6 +446,39 @@ export default function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// Tabela de reposições pendentes: data original – aluno – disciplina + ação.
+// Reutilizada no card (limitada a 5) e no pop-up "Ver mais" (lista completa).
+function ReposicoesTable({ rows, onMarcar }: { rows: ReposicaoPendente[]; onMarcar: (r: ReposicaoPendente) => void }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border text-left text-muted-foreground">
+            <th className="py-2 pr-3 font-medium">Data original</th>
+            <th className="py-2 pr-3 font-medium">Aluno</th>
+            <th className="py-2 pr-3 font-medium">Disciplina</th>
+            <th className="py-2 font-medium text-right">Ação</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {rows.map(r => (
+            <tr key={`${r.aulaId}-${r.alunoId}`}>
+              <td className="py-2 pr-3 tabular-nums">{r.data.split("-").reverse().join("/")}</td>
+              <td className="py-2 pr-3 truncate max-w-[120px]">{r.alunoNome}</td>
+              <td className="py-2 pr-3 truncate max-w-[120px]">{r.disciplina}</td>
+              <td className="py-2 text-right">
+                <Button size="sm" variant="outline" onClick={() => onMarcar(r)}>
+                  Marcar
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

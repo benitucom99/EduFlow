@@ -171,6 +171,67 @@ export type DisciplinaInput = Omit<Disciplina, "id" | "precoHoraIndividual" | "p
   parentId?: string | null;
 };
 export type AlunoInput = Omit<Aluno, "id" | "estado" | "dataInscricao"> & { estado?: Aluno["estado"]; dataInscricao?: string };
+
+// ── Fecho do mês ──────────────────────────────────────────────────────────────
+// Snapshot imutável da faturação de um período + tracking de pagamentos.
+export type MetodoPagamento = "dinheiro" | "transferencia" | "mbway" | "outro";
+export type EstadoPagamento = "pendente" | "parcial" | "pago";
+
+// Uma aula dentro do extrato de uma linha de fecho (JSON congelado).
+export type FechoDetalheAula = {
+  data: string;
+  horaInicio: string;
+  horaFim: string;
+  disciplina: string;
+  duracao: number;
+  precoPorHora: number;
+  valor: number;
+  presenca: string | null;
+  cobrar: boolean;
+};
+
+export interface FechoLinha {
+  id: string;
+  tipo: "cobranca" | "pagamento";
+  alunoId: string | null;
+  professorUserId: string | null;
+  entidadeNome: string;
+  detalhe: FechoDetalheAula[];
+  valor: number;
+  estadoPagamento: EstadoPagamento;
+  valorPago: number;
+  metodo: MetodoPagamento | null;
+  pagoEm: string | null;
+  notas: string | null;
+}
+
+export interface FechoMensal {
+  id: string;
+  periodo: string; // "yyyy-MM"
+  dataInicio: string;
+  dataFim: string;
+  criadoEm: string;
+  totalCobrar: number;
+  totalPagar: number;
+  linhas: FechoLinha[];
+}
+
+export type NovaFechoLinha = Omit<FechoLinha, "id" | "estadoPagamento" | "valorPago" | "metodo" | "pagoEm" | "notas">;
+
+// Linha vinda da importação Excel/CSV de alunos. `disciplinas` são nomes crus
+// tal como escritos no ficheiro — a resolução (folha/categoria/criação) é
+// feita no importAlunos.
+export type ImportAlunoRow = {
+  nome: string;
+  anoLetivo: number | null;
+  email?: string;
+  telefone?: string;
+  escola?: string;
+  disciplinas: string[];
+  encarregadoNome?: string;
+  encarregadoTelefone?: string;
+  encarregadoEmail?: string;
+};
 export type ExplicadorInput = Omit<Explicador, "id" | "estado"> & { estado?: Explicador["estado"]; password?: string };
 export type SalaInput = Pick<Sala, "nome">;
 export type AulaInput = Omit<Aula, "id" | "estado" | "presencas"> & { estado?: Aula["estado"] };
@@ -196,6 +257,12 @@ interface DataContextType {
   updateAluno: (id: string, patch: Partial<Aluno>) => Promise<void>;
   deleteAluno: (id: string) => Promise<void>;
   updateAlunoEstado: (id: string, novoEstado: Aluno["estado"]) => Promise<void>;
+  importAlunos: (rows: ImportAlunoRow[]) => Promise<{ alunosCriados: number; disciplinasCriadas: number }>;
+
+  fechos: FechoMensal[];
+  criarFecho: (input: { periodo: string; dataInicio: string; dataFim: string; linhas: NovaFechoLinha[] }) => Promise<void>;
+  registarPagamentoFecho: (linhaId: string, dados: { valorPago: number; metodo: MetodoPagamento | null; pagoEm: string | null; notas?: string }) => Promise<void>;
+  eliminarFecho: (id: string) => Promise<void>;
 
   createExplicador: (data: ExplicadorInput) => Promise<Explicador | null>;
   updateExplicador: (id: string, patch: Partial<Explicador>) => Promise<void>;
@@ -357,6 +424,42 @@ async function loadSalas(centroId: string): Promise<Sala[]> {
   return (data ?? []).map((r: any) => ({ id: r.id, nome: r.nome }));
 }
 
+// Fechos mensais + linhas. RLS é admin-only: para os restantes cargos devolve
+// simplesmente 0 linhas (sem erro), por isso é seguro carregar sempre.
+async function loadFechos(centroId: string): Promise<FechoMensal[]> {
+  const { data, error } = await supabase
+    .from("fechos_mensais")
+    .select("id, periodo, data_inicio, data_fim, criado_em, total_cobrar, total_pagar, fecho_linhas(id, tipo, aluno_id, professor_user_id, entidade_nome, detalhe, valor, estado_pagamento, valor_pago, metodo, pago_em, notas)")
+    .eq("centro_id", centroId)
+    .order("periodo", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((f: any) => ({
+    id: f.id,
+    periodo: f.periodo,
+    dataInicio: f.data_inicio,
+    dataFim: f.data_fim,
+    criadoEm: f.criado_em,
+    totalCobrar: Number(f.total_cobrar ?? 0),
+    totalPagar: Number(f.total_pagar ?? 0),
+    linhas: (f.fecho_linhas ?? [])
+      .map((l: any): FechoLinha => ({
+        id: l.id,
+        tipo: l.tipo,
+        alunoId: l.aluno_id ?? null,
+        professorUserId: l.professor_user_id ?? null,
+        entidadeNome: l.entidade_nome,
+        detalhe: Array.isArray(l.detalhe) ? l.detalhe : [],
+        valor: Number(l.valor ?? 0),
+        estadoPagamento: l.estado_pagamento,
+        valorPago: Number(l.valor_pago ?? 0),
+        metodo: l.metodo ?? null,
+        pagoEm: l.pago_em ?? null,
+        notas: l.notas ?? null,
+      }))
+      .sort((a: FechoLinha, b: FechoLinha) => a.entidadeNome.localeCompare(b.entidadeNome)),
+  }));
+}
+
 async function loadAulas(centroId: string, discIdToName: Map<string, string>): Promise<Aula[]> {
   const { data, error } = await supabase
     .from("aulas")
@@ -472,6 +575,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [aulas, setAulas] = useState<Aula[]>([]);
   const [alunoHorarios, setAlunoHorarios] = useState<AlunoHorario[]>([]);
   const [assistentes, setAssistentes] = useState<Assistente[]>([]);
+  const [fechos, setFechos] = useState<FechoMensal[]>([]);
   const [centroConfig, setCentroConfig] = useState<CentroConfig>(DEFAULT_CENTRO_CONFIG);
   const [loading, setLoading] = useState(false);
   const [discMaps, setDiscMaps] = useState<{ idToName: Map<string, string>; nameToId: Map<string, string>; leafIds: Set<string> }>({ idToName: new Map(), nameToId: new Map(), leafIds: new Set() });
@@ -487,7 +591,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       const { discs, idToName, nameToId, leafIds } = await loadDisciplinas(centroId);
       setDisciplinas(discs);
       setDiscMaps({ idToName, nameToId, leafIds });
-      const [al, ex, sa, au, cfg, ast, hor] = await Promise.all([
+      const [al, ex, sa, au, cfg, ast, hor, fch] = await Promise.all([
         loadAlunos(centroId, idToName, leafIds),
         loadExplicadores(centroId, idToName, leafIds),
         loadSalas(centroId),
@@ -495,8 +599,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         loadCentroConfig(centroId),
         loadAssistentes(centroId),
         loadAlunoHorarios(centroId, idToName),
+        loadFechos(centroId),
       ]);
-      setAlunos(al); setExplicadores(ex); setSalas(sa); setAulas(au); setCentroConfig(cfg); setAssistentes(ast); setAlunoHorarios(hor);
+      setAlunos(al); setExplicadores(ex); setSalas(sa); setAulas(au); setCentroConfig(cfg); setAssistentes(ast); setAlunoHorarios(hor); setFechos(fch);
     } catch (e) {
       console.error("Data refresh failed", e);
       toast({
@@ -548,6 +653,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const refreshAssistentes = async () => {
     if (!centroId) return;
     setAssistentes(await loadAssistentes(centroId));
+  };
+  const refreshFechos = async () => {
+    if (!centroId) return;
+    setFechos(await loadFechos(centroId));
   };
   const refreshAlunoHorarios = async (idToName: Map<string, string> = discMaps.idToName) => {
     if (!centroId) return;
@@ -696,6 +805,162 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const updateAlunoEstado = async (id: string, novoEstado: Aluno["estado"]) => {
     await run(supabase.from("alunos").update({ estado: novoEstado }).eq("id", id));
     await refreshAlunos();
+  };
+
+  // Importação em lote (Excel/CSV). Resolve cada nome de disciplina do ficheiro:
+  // 1) folha existente com esse nome; 2) categoria existente → folha
+  // "Categoria – Xº Ano" (criada se faltar, herdando preços de um irmão);
+  // 3) nada → cria categoria + folha. Alunos e associações inserem-se em lote
+  // (2 round-trips) em vez de um createAluno por linha.
+  const importAlunos = async (rows: ImportAlunoRow[]): Promise<{ alunosCriados: number; disciplinasCriadas: number }> => {
+    const cid = ensureCentro();
+    // Snapshot local que vai crescendo com as disciplinas criadas na importação,
+    // para linhas seguintes reutilizarem em vez de duplicar.
+    const discs = [...disciplinas];
+    let disciplinasCriadas = 0;
+
+    // Normaliza para comparação: espaços colapsados, travessões unificados,
+    // minúsculas ("Matemática - 9º ano" ≡ "Matemática – 9º Ano").
+    const norm = (s: string) => s.trim().replace(/\s+/g, " ").replace(/[-–—]/g, "-").toLowerCase();
+
+    const insertDisciplina = async (row: { nome: string; parent_id: string | null; preco_hora_individual: number; preco_hora_grupo: number }) => {
+      const { data, error } = await supabase.from("disciplinas")
+        .insert({ centro_id: cid, ...row })
+        .select("id, nome, parent_id, preco_hora_individual, preco_hora_grupo")
+        .single();
+      if (error) throw error;
+      discs.push({
+        id: data.id, nome: data.nome, corHsl: null,
+        precoHoraIndividual: Number(data.preco_hora_individual ?? 0),
+        precoHoraGrupo: Number(data.preco_hora_grupo ?? 0),
+        escaloesPrecoIndividual: [], parentId: data.parent_id ?? null,
+      });
+      disciplinasCriadas++;
+      return data.id as string;
+    };
+
+    const resolveDisciplina = async (raw: string, ano: number | null): Promise<string> => {
+      const key = norm(raw);
+      // Folha existente (tem pai) com o mesmo nome.
+      const folha = discs.find(d => d.parentId != null && norm(d.nome) === key);
+      if (folha) return folha.id;
+      // Categoria existente → folha por ano (ou Geral).
+      const cat = discs.find(d => d.parentId == null && norm(d.nome) === key);
+      if (cat) {
+        const nomeFolha = ano ? `${cat.nome} – ${ano}º Ano` : `${cat.nome} – Geral`;
+        const existente = discs.find(d => d.parentId === cat.id && norm(d.nome) === norm(nomeFolha));
+        if (existente) return existente.id;
+        const irmao = discs.find(d => d.parentId === cat.id);
+        return insertDisciplina({
+          nome: nomeFolha, parent_id: cat.id,
+          preco_hora_individual: irmao?.precoHoraIndividual ?? 15,
+          preco_hora_grupo: irmao?.precoHoraGrupo ?? 10,
+        });
+      }
+      // Nome desconhecido → categoria nova + folha.
+      const catId = await insertDisciplina({ nome: raw.trim(), parent_id: null, preco_hora_individual: 0, preco_hora_grupo: 0 });
+      const nomeFolha = ano ? `${raw.trim()} – ${ano}º Ano` : `${raw.trim()} – Geral`;
+      return insertDisciplina({ nome: nomeFolha, parent_id: catId, preco_hora_individual: 15, preco_hora_grupo: 10 });
+    };
+
+    // Resolve disciplinas sequencialmente (a cache local depende da ordem).
+    const discIdsPorLinha: string[][] = [];
+    for (const r of rows) {
+      const ids: string[] = [];
+      for (const nomeCru of r.disciplinas) {
+        if (!nomeCru.trim()) continue;
+        const id = await resolveDisciplina(nomeCru, r.anoLetivo);
+        if (!ids.includes(id)) ids.push(id);
+      }
+      discIdsPorLinha.push(ids);
+    }
+
+    const hoje = new Date().toISOString().slice(0, 10);
+    const { data: created, error } = await supabase.from("alunos").insert(rows.map(r => ({
+      centro_id: cid,
+      nome: r.nome.trim(),
+      email: r.email?.trim() || null,
+      telefone: r.telefone?.trim() || null,
+      escola: r.escola?.trim() || null,
+      ano_letivo: r.anoLetivo,
+      estado: "ativo",
+      data_inscricao: hoje,
+      encarregado_nome: r.encarregadoNome?.trim() || null,
+      encarregado_email: r.encarregadoEmail?.trim() || null,
+      encarregado_telefone: r.encarregadoTelefone?.trim() || null,
+    }))).select("id");
+    if (error) throw error;
+
+    // PostgREST devolve as linhas pela ordem de inserção → mapeamento por índice.
+    const adRows: { aluno_id: string; disciplina_id: string; explicador_id: null }[] = [];
+    (created ?? []).forEach((c, i) => {
+      (discIdsPorLinha[i] ?? []).forEach(d => adRows.push({ aluno_id: c.id, disciplina_id: d, explicador_id: null }));
+    });
+    if (adRows.length) await run(supabase.from("alunos_disciplinas").insert(adRows));
+
+    const { idToName, leafIds } = await refreshDisciplinas();
+    await refreshAlunos(idToName, leafIds);
+    return { alunosCriados: (created ?? []).length, disciplinasCriadas };
+  };
+
+  // ── Fechos mensais ───────────────────────────────────────────────────────────
+  // "Fechar o mês": congela os cálculos da Faturação num snapshot com linhas
+  // por aluno/professor. A unique (centro_id, periodo) impede fechos duplicados.
+  const criarFecho = async (input: { periodo: string; dataInicio: string; dataFim: string; linhas: NovaFechoLinha[] }) => {
+    const cid = ensureCentro();
+    const totalCobrar = input.linhas.filter(l => l.tipo === "cobranca").reduce((s, l) => s + l.valor, 0);
+    const totalPagar = input.linhas.filter(l => l.tipo === "pagamento").reduce((s, l) => s + l.valor, 0);
+    const { data: fecho, error } = await supabase.from("fechos_mensais").insert({
+      centro_id: cid,
+      periodo: input.periodo,
+      data_inicio: input.dataInicio,
+      data_fim: input.dataFim,
+      criado_por: profile?.id ?? null,
+      total_cobrar: totalCobrar,
+      total_pagar: totalPagar,
+    }).select("id").single();
+    if (error) {
+      if (error.code === "23505") throw new Error(`Já existe um fecho para ${input.periodo}. Elimina-o primeiro para refazer.`);
+      throw error;
+    }
+    if (input.linhas.length) {
+      const { error: errLinhas } = await supabase.from("fecho_linhas").insert(input.linhas.map(l => ({
+        fecho_id: fecho.id,
+        centro_id: cid,
+        tipo: l.tipo,
+        aluno_id: l.alunoId,
+        professor_user_id: l.professorUserId,
+        entidade_nome: l.entidadeNome,
+        detalhe: l.detalhe,
+        valor: l.valor,
+      })));
+      // Se as linhas falharem, remove o cabeçalho para não deixar um fecho vazio.
+      if (errLinhas) {
+        await supabase.from("fechos_mensais").delete().eq("id", fecho.id);
+        throw errLinhas;
+      }
+    }
+    await refreshFechos();
+  };
+
+  const registarPagamentoFecho = async (linhaId: string, dados: { valorPago: number; metodo: MetodoPagamento | null; pagoEm: string | null; notas?: string }) => {
+    // Deriva o estado do valor pago vs. valor da linha (fonte de verdade local).
+    const linha = fechos.flatMap(f => f.linhas).find(l => l.id === linhaId);
+    if (!linha) throw new Error("Linha de fecho não encontrada");
+    const estado: EstadoPagamento = dados.valorPago <= 0 ? "pendente" : dados.valorPago >= linha.valor ? "pago" : "parcial";
+    await run(supabase.from("fecho_linhas").update({
+      valor_pago: dados.valorPago,
+      estado_pagamento: estado,
+      metodo: dados.metodo,
+      pago_em: dados.pagoEm,
+      notas: dados.notas ?? null,
+    }).eq("id", linhaId));
+    await refreshFechos();
+  };
+
+  const eliminarFecho = async (id: string) => {
+    await run(supabase.from("fechos_mensais").delete().eq("id", id));
+    await refreshFechos();
   };
 
   // ── Explicadores ─────────────────────────────────────────────────────────────
@@ -1038,7 +1303,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       alunoHorarios, saveAlunoHorario, deleteAlunoHorario,
       updateCentroConfig,
       createDisciplina, updateDisciplina, deleteDisciplina,
-      createAluno, updateAluno, deleteAluno, updateAlunoEstado,
+      createAluno, updateAluno, deleteAluno, updateAlunoEstado, importAlunos,
+      fechos, criarFecho, registarPagamentoFecho, eliminarFecho,
       createExplicador, updateExplicador, deleteExplicador, inviteExplicador,
       inviteAssistente, removeAssistente,
       createSala, updateSala, deleteSala,
