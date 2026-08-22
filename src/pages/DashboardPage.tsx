@@ -23,6 +23,15 @@ type FaltaPendente = {
   disciplina: string;
 };
 
+// Linha de "Faltas justificadas - Aulas por repor".
+type ReposicaoPendente = {
+  aulaId: string;
+  alunoId: string;
+  data: string;
+  alunoNome: string;
+  disciplina: string;
+};
+
 function relativeDay(dateStr: string): string {
   try {
     const d = parseISO(dateStr);
@@ -42,6 +51,7 @@ export default function DashboardPage() {
 
   // Pop-up "Ver mais" (lista completa) e fluxo de registo de presença.
   const [verTodasFaltas, setVerTodasFaltas] = useState(false);
+  const [verTodasReposicoes, setVerTodasReposicoes] = useState(false);
   const [registar, setRegistar] = useState<FaltaPendente | null>(null);
   const [pendingFalta, setPendingFalta] = useState<{ tipo: "justificada" | "injustificada" } | null>(null);
 
@@ -277,36 +287,16 @@ export default function DashboardPage() {
             {reposicoesPendentes.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Sem reposições pendentes</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left text-muted-foreground">
-                      <th className="py-2 pr-3 font-medium">Data original</th>
-                      <th className="py-2 pr-3 font-medium">Aluno</th>
-                      <th className="py-2 pr-3 font-medium">Disciplina</th>
-                      <th className="py-2 font-medium text-right">Ação</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {reposicoesPendentes.map(r => (
-                      <tr key={`${r.aulaId}-${r.alunoId}`}>
-                        <td className="py-2 pr-3 tabular-nums">{r.data.split("-").reverse().join("/")}</td>
-                        <td className="py-2 pr-3 truncate max-w-[120px]">{r.alunoNome}</td>
-                        <td className="py-2 pr-3 truncate max-w-[120px]">{r.disciplina}</td>
-                        <td className="py-2 text-right">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => navigate("/calendario", { state: { reposicao: { alunoId: r.alunoId, aulaOriginalId: r.aulaId } } })}
-                          >
-                            Marcar
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <ReposicoesTable rows={reposicoesPendentes.slice(0, 5)} onMarcar={r => navigate("/calendario", { state: { reposicao: { alunoId: r.alunoId, aulaOriginalId: r.aulaId } } })} />
+                {reposicoesPendentes.length > 5 && (
+                  <div className="mt-4 pt-3 border-t border-border">
+                    <Button variant="outline" className="w-full font-medium" onClick={() => setVerTodasReposicoes(true)}>
+                      Ver mais ({reposicoesPendentes.length})
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -343,6 +333,20 @@ export default function DashboardPage() {
             <DialogDescription>Aulas terminadas com presenças por registar.</DialogDescription>
           </DialogHeader>
           <FaltasTable rows={presencasEmFalta} onRegistar={setRegistar} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Pop-up "Ver mais" — todas as reposições pendentes */}
+      <Dialog open={verTodasReposicoes} onOpenChange={setVerTodasReposicoes}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Aulas por repor ({reposicoesPendentes.length})</DialogTitle>
+            <DialogDescription>Faltas justificadas com reposição ainda por agendar.</DialogDescription>
+          </DialogHeader>
+          <ReposicoesTable
+            rows={reposicoesPendentes}
+            onMarcar={r => { setVerTodasReposicoes(false); navigate("/calendario", { state: { reposicao: { alunoId: r.alunoId, aulaOriginalId: r.aulaId } } }); }}
+          />
         </DialogContent>
       </Dialog>
 
@@ -442,6 +446,39 @@ export default function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// Tabela de reposições pendentes: data original – aluno – disciplina + ação.
+// Reutilizada no card (limitada a 5) e no pop-up "Ver mais" (lista completa).
+function ReposicoesTable({ rows, onMarcar }: { rows: ReposicaoPendente[]; onMarcar: (r: ReposicaoPendente) => void }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border text-left text-muted-foreground">
+            <th className="py-2 pr-3 font-medium">Data original</th>
+            <th className="py-2 pr-3 font-medium">Aluno</th>
+            <th className="py-2 pr-3 font-medium">Disciplina</th>
+            <th className="py-2 font-medium text-right">Ação</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {rows.map(r => (
+            <tr key={`${r.aulaId}-${r.alunoId}`}>
+              <td className="py-2 pr-3 tabular-nums">{r.data.split("-").reverse().join("/")}</td>
+              <td className="py-2 pr-3 truncate max-w-[120px]">{r.alunoNome}</td>
+              <td className="py-2 pr-3 truncate max-w-[120px]">{r.disciplina}</td>
+              <td className="py-2 text-right">
+                <Button size="sm" variant="outline" onClick={() => onMarcar(r)}>
+                  Marcar
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
